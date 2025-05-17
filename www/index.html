@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Todo</title>
+    <!-- Tailwind CSS (production version) -->
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <!-- SortableJS for drag and drop functionality - use minified version from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <!-- Minimal styles without animations -->
+    <link rel="stylesheet" href="/r/css/todo.css">
+</head>
+<body class="bg-gray-50 text-gray-800 min-h-screen">
+    <div class="container mx-auto px-4 py-6 max-w-lg">
+        <header class="text-center mb-6">
+            <h1 class="text-3xl font-bold text-gray-700">Todo</h1>
+            <div class="flex items-center justify-center mt-3">
+                <button id="prev-day" class="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-l-md">&larr; Prev</button>
+                <div id="current-date" class="text-sm px-4 py-1 bg-gray-100">Today</div>
+                <button id="next-day" class="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-r-md">Next &rarr;</button>
+            </div>
+        </header>
+        
+        <!-- Breadcrumb navigation for focus mode -->
+        <div id="task-breadcrumb" class="mb-4 hidden">
+            <div class="flex items-center flex-wrap text-sm mb-2 breadcrumb-trail">
+                <button class="text-blue-500 hover:text-blue-700" data-level="root">All Tasks</button>
+                <div id="breadcrumb-items" class="flex items-center flex-wrap"></div>
+            </div>
+            <div id="focus-title" class="text-lg font-semibold"></div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <!-- Add task form -->
+            <form id="task-form" class="flex items-center mb-6">
+                <input 
+                    type="text" 
+                    id="task-input" 
+                    placeholder="Add a new task..." 
+                    class="flex-1 py-2 px-4 rounded-l-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                >
+                <button 
+                    type="submit" 
+                    class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-r-lg transition duration-200"
+                >
+                    Add
+                </button>
+            </form>
+            
+            <!-- Task list -->
+            <div id="tasks-container">
+                <!-- Active tasks -->
+                <div class="flex justify-end items-center mb-4">
+                    <span id="task-count" class="text-sm text-gray-500">0 tasks</span>
+                </div>
+                
+                <ul id="active-task-list" class="space-y-2 mb-6">
+                    <!-- Active tasks will be inserted here by JavaScript -->
+                </ul>
+                
+                <!-- Empty state for active tasks -->
+                <div id="empty-state" class="text-center py-6">
+                    <p class="text-gray-500">Your task list is empty</p>
+                    <p class="text-sm text-gray-400 mt-1">Add a task to get started</p>
+                </div>
+                
+                <!-- Completed tasks section -->
+                <div id="completed-section" class="mt-8 pt-6 border-t border-gray-200" style="display: none;">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-medium text-gray-600">Completed</h2>
+                        <span id="completed-count" class="text-sm text-gray-500">0 completed</span>
+                    </div>
+                    
+                    <ul id="completed-task-list" class="space-y-2">
+                        <!-- Completed tasks will be inserted here by JavaScript -->
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <footer class="mt-6 text-center text-sm text-gray-500">
+        </footer>
+    </div>
+    <script src="/r/js/todo.js"></script>
+</body>
+</html>
