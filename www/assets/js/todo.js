@@ -597,9 +597,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // Save updated tasks
         saveTasks(tasks);
         
-        // Add to DOM
-        const taskElement = createTaskElement(newTask);
-        activeTaskList.appendChild(taskElement);
+        // Render all tasks to properly update UI
+        renderTasks();
         
         return newTask;
     };
