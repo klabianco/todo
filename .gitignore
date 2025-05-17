@@ -1,0 +1,29 @@
+# Todo app data files
+www/api/data/
+www/api/data/*.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Dependency directories
+node_modules/
+vendor/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local

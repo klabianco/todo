@@ -1,0 +1,117 @@
+/**
+ * Utility functions for the Todo app
+ */
+
+// Generate a UUID
+export const generateUUID = () => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+};
+
+// Get current date in YYYY-MM-DD format
+export const getCurrentDate = () => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+};
+
+// Format date for display
+export const formatDateForDisplay = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+};
+
+// Get a date relative to another date by offset days
+export const getRelativeDay = (dateString, offsetDays) => {
+    const [year, month, day] = dateString.split('-').map(num => parseInt(num, 10));
+    const date = new Date(year, month - 1, day);
+    date.setDate(date.getDate() + offsetDays);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+};
+
+// Get previous day
+export const getPreviousDay = dateString => getRelativeDay(dateString, -1);
+
+// Get next day
+export const getNextDay = dateString => getRelativeDay(dateString, 1);
+
+// Helper to recursively make all subtasks sticky
+export const makeAllSubtasksSticky = (task, isSticky) => {
+    if (task.subtasks && task.subtasks.length > 0) {
+        for (const subtask of task.subtasks) {
+            subtask.sticky = isSticky;
+            // Recursively apply to deeper subtasks
+            if (subtask.subtasks && subtask.subtasks.length > 0) {
+                makeAllSubtasksSticky(subtask, isSticky);
+            }
+        }
+    }
+};
+
+// Helper to recursively complete/uncomplete all subtasks
+export const completeAllSubtasks = (task, completed) => {
+    if (!task.subtasks) return;
+    
+    task.subtasks.forEach(subtask => {
+        subtask.completed = completed;
+        if (subtask.subtasks && subtask.subtasks.length > 0) {
+            completeAllSubtasks(subtask, completed);
+        }
+    });
+};
+
+// Find task by ID (including in subtasks)
+export const findTaskById = (tasks, taskId) => {
+    // Check top-level tasks first
+    const task = tasks.find(t => t.id === taskId);
+    if (task) return { task };
+    
+    // Search in subtasks
+    for (const parentTask of tasks) {
+        if (parentTask.subtasks) {
+            const result = findTaskByIdInSubtasks(parentTask, taskId);
+            if (result) return result;
+        }
+    }
+    
+    return null;
+};
+
+// Helper to find task by ID within subtasks
+export const findTaskByIdInSubtasks = (parent, taskId) => {
+    if (!parent.subtasks) return null;
+    
+    const task = parent.subtasks.find(t => t.id === taskId);
+    if (task) return { task, parent };
+    
+    // Recursively search deeper
+    for (const subtask of parent.subtasks) {
+        if (subtask.subtasks) {
+            const result = findTaskByIdInSubtasks(subtask, taskId);
+            if (result) return result;
+        }
+    }
+    
+    return null;
+};
+
+// DOM helper
+export const $ = id => document.getElementById(id);
+
+// Create element with class names
+export const createElement = (tag, classNames = '', content = '') => {
+    const element = document.createElement(tag);
+    if (classNames) element.className = classNames;
+    if (content) element.textContent = content;
+    return element;
+};
+
+// Create a separator for breadcrumb
+export const createSeparator = () => {
+    const separator = document.createElement('span');
+    separator.className = 'mx-2 text-gray-500';
+    separator.textContent = '/';
+    return separator;
+};
