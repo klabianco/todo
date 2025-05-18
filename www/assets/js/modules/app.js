@@ -12,6 +12,22 @@ let taskNavigationStack = [];
 let currentFocusedTaskId = null;
 let draggedTaskId = null;
 
+// Wrappers to update UI after task modifications
+const handleToggleCompletion = async (id) => {
+    await tasks.toggleTaskCompletion(id);
+    await renderTasks();
+};
+
+const handleDeleteTask = async (id) => {
+    await tasks.deleteTask(id);
+    await renderTasks();
+};
+
+const handleToggleSticky = async (id) => {
+    await tasks.toggleTaskSticky(id);
+    await renderTasks();
+};
+
 // Initialize the application
 export const init = async () => {
     // Initialize storage state
@@ -323,10 +339,10 @@ const renderTasks = async () => {
                 const subtaskElement = ui.createTaskElement(
                     subtask, 
                     0,
-                    tasks.toggleTaskCompletion,
-                    tasks.deleteTask,
+                    handleToggleCompletion,
+                    handleDeleteTask,
                     promptForSubtask,
-                    tasks.toggleTaskSticky,
+                    handleToggleSticky,
                     focusOnTask
                 );
                 ui.domElements.activeTaskList.appendChild(subtaskElement);
@@ -337,10 +353,10 @@ const renderTasks = async () => {
                 const subtaskElement = ui.createTaskElement(
                     subtask, 
                     0,
-                    tasks.toggleTaskCompletion,
-                    tasks.deleteTask,
+                    handleToggleCompletion,
+                    handleDeleteTask,
                     promptForSubtask,
-                    tasks.toggleTaskSticky,
+                    handleToggleSticky,
                     focusOnTask
                 );
                 ui.domElements.completedTaskList.appendChild(subtaskElement);
@@ -371,10 +387,10 @@ const renderTasks = async () => {
             const taskElement = ui.createTaskElement(
                 task,
                 0,
-                tasks.toggleTaskCompletion,
-                tasks.deleteTask,
+                handleToggleCompletion,
+                handleDeleteTask,
                 promptForSubtask,
-                tasks.toggleTaskSticky,
+                handleToggleSticky,
                 focusOnTask,
                 false
             );
@@ -386,10 +402,10 @@ const renderTasks = async () => {
             const taskElement = ui.createTaskElement(
                 task,
                 0,
-                tasks.toggleTaskCompletion,
-                tasks.deleteTask,
+                handleToggleCompletion,
+                handleDeleteTask,
                 promptForSubtask,
-                tasks.toggleTaskSticky,
+                handleToggleSticky,
                 focusOnTask,
                 false
             );
