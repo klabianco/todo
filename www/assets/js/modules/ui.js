@@ -53,7 +53,16 @@ export const toggleSubtaskSection = (taskId, taskElement) => {
 };
 
 // Create HTML for a task item
-export const createTaskElement = (task, level = 0, onCheckboxChange, onDelete, onAddSubtask, onToggleSticky, onTaskClick) => {
+export const createTaskElement = (
+    task,
+    level = 0,
+    onCheckboxChange,
+    onDelete,
+    onAddSubtask,
+    onToggleSticky,
+    onTaskClick,
+    showSubtasks = true
+) => {
     const li = document.createElement('li');
     li.dataset.id = task.id;
     li.dataset.level = level;
@@ -186,8 +195,8 @@ export const createTaskElement = (task, level = 0, onCheckboxChange, onDelete, o
     // Add task row to the list item
     li.appendChild(taskRow);
     
-    // Add subtasks section
-    if (task.subtasks && task.subtasks.length > 0) {
+    // Add subtasks section (only when allowed)
+    if (showSubtasks && task.subtasks && task.subtasks.length > 0) {
         const subtaskCount = task.subtasks.length;
         const activeSubtasks = task.subtasks.filter(st => !st.completed).length;
         
@@ -217,13 +226,14 @@ export const createTaskElement = (task, level = 0, onCheckboxChange, onDelete, o
         // For each subtask, create a nested task element (with level+1)
         task.subtasks.forEach(subtask => {
             const subtaskElement = createTaskElement(
-                subtask, 
+                subtask,
                 level + 1,
                 onCheckboxChange,
                 onDelete,
                 onAddSubtask,
                 onToggleSticky,
-                onTaskClick
+                onTaskClick,
+                showSubtasks
             );
             subtaskList.appendChild(subtaskElement);
         });
