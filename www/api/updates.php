@@ -3,6 +3,8 @@
 header('Content-Type: text/event-stream');
 header('Cache-Control: no-cache');
 header('Connection: keep-alive');
+// Allow cross-origin requests like the REST API
+header('Access-Control-Allow-Origin: *');
 
 // Ensure script doesn't timeout
 set_time_limit(0);
