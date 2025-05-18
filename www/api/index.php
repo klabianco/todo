@@ -56,6 +56,37 @@ function get_task_file_path($share_id) {
     return $data_dir . '/' . $share_id . '.json';
 }
 
+// ----- User-specific helpers -----
+function get_user_id() {
+    if (isset($_COOKIE['todoUserId'])) {
+        return $_COOKIE['todoUserId'];
+    }
+    $id = bin2hex(random_bytes(16));
+    setcookie('todoUserId', $id, time() + 31536000, '/'); // 1 year
+    return $id;
+}
+
+function get_user_dir($user_id) {
+    global $data_dir;
+    $dir = $data_dir . '/users/' . $user_id;
+    if (!file_exists($dir)) {
+        mkdir($dir, 0755, true);
+    }
+    return $dir;
+}
+
+function get_user_tasks_path($user_id, $date) {
+    return get_user_dir($user_id) . '/' . $date . '.json';
+}
+
+function get_user_sticky_path($user_id) {
+    return get_user_dir($user_id) . '/sticky.json';
+}
+
+function get_user_data_path($user_id, $name) {
+    return get_user_dir($user_id) . '/' . $name . '.json';
+}
+
 // Determine and handle the request
 switch ($resource) {
     case 'lists':
@@ -129,6 +160,91 @@ switch ($resource) {
         }
         break;
         
+    case 'user':
+        $sub = isset($api_parts[1]) ? $api_parts[1] : null;
+        $subid = isset($api_parts[2]) ? $api_parts[2] : null;
+        $userId = get_user_id();
+        switch ($sub) {
+            case 'tasks':
+                if (!$subid) {
+                    http_response_code(400);
+                    echo json_encode(['error' => 'Date is required']);
+                    break;
+                }
+                $tasksPath = get_user_tasks_path($userId, $subid);
+                $stickyPath = get_user_sticky_path($userId);
+                switch ($_SERVER['REQUEST_METHOD']) {
+                    case 'GET':
+                        $tasks = file_exists($tasksPath) ? json_decode(file_get_contents($tasksPath), true) : [];
+                        $sticky = file_exists($stickyPath) ? json_decode(file_get_contents($stickyPath), true) : [];
+                        echo json_encode(['tasks' => array_merge($tasks, $sticky)]);
+                        break;
+                    case 'PUT':
+                        $data = json_decode(file_get_contents('php://input'), true);
+                        $incoming = isset($data['tasks']) ? $data['tasks'] : [];
+                        $stickyTasks = [];
+                        $nonSticky = [];
+                        foreach ($incoming as $t) {
+                            if (isset($t['sticky']) && $t['sticky']) {
+                                $stickyTasks[] = $t;
+                            } else {
+                                $nonSticky[] = $t;
+                            }
+                        }
+                        file_put_contents($tasksPath, json_encode($nonSticky));
+                        file_put_contents($stickyPath, json_encode($stickyTasks));
+                        echo json_encode(['success' => true]);
+                        break;
+                    default:
+                        http_response_code(405);
+                        echo json_encode(['error' => 'Method not allowed']);
+                }
+                break;
+
+            case 'subscriptions':
+                $path = get_user_data_path($userId, 'subscribed');
+                switch ($_SERVER['REQUEST_METHOD']) {
+                    case 'GET':
+                        $lists = file_exists($path) ? json_decode(file_get_contents($path), true) : [];
+                        echo json_encode(['lists' => $lists]);
+                        break;
+                    case 'PUT':
+                        $data = json_decode(file_get_contents('php://input'), true);
+                        $lists = isset($data['lists']) ? $data['lists'] : [];
+                        file_put_contents($path, json_encode($lists));
+                        echo json_encode(['success' => true]);
+                        break;
+                    default:
+                        http_response_code(405);
+                        echo json_encode(['error' => 'Method not allowed']);
+                }
+                break;
+
+            case 'owned':
+                $path = get_user_data_path($userId, 'owned');
+                switch ($_SERVER['REQUEST_METHOD']) {
+                    case 'GET':
+                        $lists = file_exists($path) ? json_decode(file_get_contents($path), true) : [];
+                        echo json_encode(['lists' => $lists]);
+                        break;
+                    case 'PUT':
+                        $data = json_decode(file_get_contents('php://input'), true);
+                        $lists = isset($data['lists']) ? $data['lists'] : [];
+                        file_put_contents($path, json_encode($lists));
+                        echo json_encode(['success' => true]);
+                        break;
+                    default:
+                        http_response_code(405);
+                        echo json_encode(['error' => 'Method not allowed']);
+                }
+                break;
+
+            default:
+                http_response_code(404);
+                echo json_encode(['error' => 'User resource not found']);
+        }
+        break;
+
     default:
         http_response_code(404);
         echo json_encode(['error' => 'Resource not found']);
