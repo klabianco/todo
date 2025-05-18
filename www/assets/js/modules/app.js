@@ -12,6 +12,17 @@ let taskNavigationStack = [];
 let currentFocusedTaskId = null;
 let draggedTaskId = null;
 
+// Update the focus parameter in the URL
+const updateFocusParam = (taskId) => {
+    const url = new URL(window.location.href);
+    if (taskId) {
+        url.searchParams.set('focus', taskId);
+    } else {
+        url.searchParams.delete('focus');
+    }
+    window.history.replaceState({}, '', url);
+};
+
 // Wrappers to update UI after task modifications
 const handleToggleCompletion = async (id) => {
     await tasks.toggleTaskCompletion(id);
@@ -57,6 +68,17 @@ export const init = async () => {
     
     // Render initial task list
     await renderTasks();
+
+    // Check if the URL specifies a task to focus on
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('focus')) {
+        const focusId = urlParams.get('focus');
+        const allTasks = await storage.loadTasks();
+        const result = utils.findTaskById(allTasks, focusId);
+        if (result && result.task) {
+            focusOnTask(focusId, result.task.task);
+        }
+    }
 };
 
 // Handle clicking on a subscribed shared list
@@ -184,8 +206,11 @@ const handleShareButtonClick = async () => {
             // Create shared list on server
             const newShareId = await storage.createSharedList(allTasks);
             
-            // Generate share URL
-            const shareUrl = `${window.location.origin}${window.location.pathname}?share=${newShareId}`;
+            // Generate share URL and include focus parameter if in focus mode
+            let shareUrl = `${window.location.origin}${window.location.pathname}?share=${newShareId}`;
+            if (currentFocusedTaskId) {
+                shareUrl += `&focus=${currentFocusedTaskId}`;
+            }
             
             // Display share URL
             ui.domElements.shareUrlInput.value = shareUrl;
@@ -224,7 +249,8 @@ const switchToDate = async (newDate) => {
     taskNavigationStack = [];
     currentFocusedTaskId = null;
     ui.domElements.taskBreadcrumb.classList.add('hidden');
-    
+    updateFocusParam(null);
+
     await renderTasks();
 };
 
@@ -236,6 +262,7 @@ const jumpToBreadcrumb = (index) => {
         currentFocusedTaskId = null;
         ui.domElements.taskBreadcrumb.classList.add('hidden');
         ui.domElements.focusTitle.textContent = '';
+        updateFocusParam(null);
         renderTasks();
         return;
     }
@@ -250,7 +277,8 @@ const jumpToBreadcrumb = (index) => {
         
         taskNavigationStack = newStack;
         currentFocusedTaskId = lastItem.id;
-        
+        updateFocusParam(currentFocusedTaskId);
+
         updateBreadcrumbTrail();
         renderTasks();
     }
@@ -282,6 +310,7 @@ const focusOnTask = (taskId, taskTitle) => {
 
             currentFocusedTaskId = taskId;
             ui.domElements.taskBreadcrumb.classList.remove('hidden');
+            updateFocusParam(taskId);
 
             updateBreadcrumbTrail();
             renderTasks();
