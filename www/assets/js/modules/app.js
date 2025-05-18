@@ -37,6 +37,9 @@ export const init = async () => {
     
     // Initialize storage system
     await storage.initializeStorage();
+
+    // Always load the user's lists so subscriptions are accurate
+    await storage.loadUserLists();
     
     // Setup UI for shared list if needed
     ui.setupSharedUI(isOwner);
@@ -44,20 +47,15 @@ export const init = async () => {
     // Set up event listeners
     setupEventListeners();
     
-    // Setup subscribed lists UI if not in a shared list
+    // Setup subscribed lists or auto-subscribe when visiting a shared list
     if (!isSharedList) {
         const subscribedLists = storage.getSubscribedLists();
         if (subscribedLists.length > 0) {
             ui.addSubscribedListsUI(subscribedLists, handleSubscribedListClick);
         }
     } else {
-        if (isOwner) {
-            ui.hideSubscribeButton();
-        } else {
-            // Check if current shared list is already in subscriptions
-            const subscribedLists = storage.getSubscribedLists();
-            const isAlreadySubscribed = subscribedLists.some(list => list.id === shareId);
-            ui.updateSubscribeButtonState(isAlreadySubscribed);
+        if (!isOwner) {
+            await autoSubscribeSharedList(shareId);
         }
     }
     
@@ -85,6 +83,26 @@ export const init = async () => {
 // Handle clicking on a subscribed shared list
 const handleSubscribedListClick = (list) => {
     window.location.href = list.url;
+};
+
+// Automatically subscribe to a shared list when visiting via share link
+const autoSubscribeSharedList = async (shareId) => {
+    if (!shareId) return;
+
+    const subscribedLists = storage.getSubscribedLists();
+    const isAlreadySubscribed = subscribedLists.some(list => list.id === shareId);
+    if (isAlreadySubscribed) return;
+
+    // Determine a title for the subscription based on tasks
+    const allTasks = await storage.loadTasks();
+    let listTitle = 'Shared List';
+    const firstActiveTask = allTasks.find(task => !task.completed);
+    if (firstActiveTask) {
+        listTitle = firstActiveTask.task;
+    }
+
+    const shareUrl = window.location.href;
+    storage.subscribeToSharedList(shareId, listTitle, shareUrl);
 };
 
 // Handle subscribing to a shared list
