@@ -369,13 +369,14 @@ const renderTasks = async () => {
         // Add active tasks
         activeTopLevelTasks.forEach(task => {
             const taskElement = ui.createTaskElement(
-                task, 
+                task,
                 0,
                 tasks.toggleTaskCompletion,
                 tasks.deleteTask,
                 promptForSubtask,
                 tasks.toggleTaskSticky,
-                focusOnTask
+                focusOnTask,
+                false
             );
             ui.domElements.activeTaskList.appendChild(taskElement);
         });
@@ -383,13 +384,14 @@ const renderTasks = async () => {
         // Add completed tasks
         completedTopLevelTasks.forEach(task => {
             const taskElement = ui.createTaskElement(
-                task, 
+                task,
                 0,
                 tasks.toggleTaskCompletion,
                 tasks.deleteTask,
                 promptForSubtask,
                 tasks.toggleTaskSticky,
-                focusOnTask
+                focusOnTask,
+                false
             );
             ui.domElements.completedTaskList.appendChild(taskElement);
         });
