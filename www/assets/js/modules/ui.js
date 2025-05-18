@@ -272,12 +272,8 @@ export const setupSharedUI = (isOwner = isOwnedList(getShareId())) => {
         domElements.currentDateDisplay.textContent = '';
         domElements.currentDateDisplay.className = 'hidden';
 
-        // Show subscribe button only if not owner
-        if (!isOwner) {
-            domElements.subscribeButton.classList.remove('hidden');
-        } else {
-            domElements.subscribeButton.classList.add('hidden');
-        }
+        // The subscribe button is no longer shown in shared view
+        domElements.subscribeButton.classList.add('hidden');
 
         // Show button to return to personal lists
         domElements.backToPersonalButton.classList.remove('hidden');
