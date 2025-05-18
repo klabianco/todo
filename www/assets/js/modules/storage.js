@@ -343,59 +343,39 @@ export const saveTasks = async (tasks) => {
     }
 };
 
-// ----- Real-time updates via Server-Sent Events -----
-let sseSource = null;
-let retryTimeoutId = null;
-const baseRetryDelay = 3000; // 3 seconds
-let retryDelay = baseRetryDelay;
+// ----- Real-time updates via polling -----
+let pollingIntervalId = null;
+let lastModified = null;
 
 export const connectToUpdates = (onUpdate) => {
     if (!isSharedList || !shareId) return;
 
-    if (sseSource) {
-        sseSource.close();
+    if (pollingIntervalId) {
+        clearInterval(pollingIntervalId);
     }
 
-    if (retryTimeoutId) {
-        clearTimeout(retryTimeoutId);
-        retryTimeoutId = null;
-    }
-
-    sseSource = new EventSource(`/api/updates.php?share=${shareId}`);
-
-    sseSource.onmessage = (event) => {
-        if (!event.data) return;
+    const poll = async () => {
         try {
-            const data = JSON.parse(event.data);
-            retryDelay = baseRetryDelay; // reset delay on successful message
-            if (onUpdate) onUpdate(data);
+            const res = await fetch(`/api/lists/${shareId}`, { cache: 'no-cache' });
+            if (!res.ok) return;
+            const data = await res.json();
+            if (lastModified !== data.lastModified) {
+                lastModified = data.lastModified;
+                if (onUpdate) onUpdate(data);
+            }
         } catch (err) {
-            console.error('Failed to parse update', err);
+            console.error('Polling error', err);
         }
     };
 
-    sseSource.onerror = (err) => {
-        console.error('SSE connection error', err);
-        if (sseSource) {
-            sseSource.close();
-            sseSource = null;
-        }
-        // Attempt to reconnect with exponential backoff
-        retryTimeoutId = setTimeout(() => {
-            connectToUpdates(onUpdate);
-        }, retryDelay);
-        retryDelay = Math.min(retryDelay * 2, 60000); // cap at 60s
-    };
+    poll();
+    pollingIntervalId = setInterval(poll, 5000);
 };
 
 export const disconnectUpdates = () => {
-    if (sseSource) {
-        sseSource.close();
-        sseSource = null;
+    if (pollingIntervalId) {
+        clearInterval(pollingIntervalId);
+        pollingIntervalId = null;
     }
-    if (retryTimeoutId) {
-        clearTimeout(retryTimeoutId);
-        retryTimeoutId = null;
-    }
-    retryDelay = baseRetryDelay;
+    lastModified = null;
 };
