@@ -184,6 +184,22 @@ export const syncOwnedListForDate = async (date) => {
     await savePersonalTasksToServer(date, tasks);
 };
 
+// Push local tasks to the shared list if this date corresponds to an owned share
+export const updateOwnedListForDate = async (date, tasks) => {
+    const entry = getOwnedListByDate(date);
+    if (!entry) return;
+
+    try {
+        await fetch(`/api/lists/${entry.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tasks })
+        });
+    } catch (err) {
+        console.error('Failed to update owned shared list', err);
+    }
+};
+
 // Initialize storage
 export const initializeStorage = async () => {
     if (isSharedList) {
@@ -262,6 +278,8 @@ async function savePersonalTasksToServer(date, tasks) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ tasks })
         });
+        // If these tasks belong to a shared list we own, update that list too
+        await updateOwnedListForDate(date, tasks);
     } catch (e) {
         console.error('Failed to save personal tasks', e);
     }
