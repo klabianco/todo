@@ -33,12 +33,13 @@ const handleToggleSticky = async (id) => {
 export const init = async () => {
     // Initialize storage state
     const { isSharedList, shareId } = storage.initializeStorageState();
+    const isOwner = isSharedList && storage.isOwnedList(shareId);
     
     // Initialize storage system
     await storage.initializeStorage();
     
     // Setup UI for shared list if needed
-    ui.setupSharedUI();
+    ui.setupSharedUI(isOwner);
     
     // Set up event listeners
     setupEventListeners();
@@ -50,7 +51,7 @@ export const init = async () => {
             ui.addSubscribedListsUI(subscribedLists, handleSubscribedListClick);
         }
     } else {
-        if (storage.isOwnedList(shareId)) {
+        if (isOwner) {
             ui.hideSubscribeButton();
         } else {
             // Check if current shared list is already in subscriptions
@@ -216,7 +217,7 @@ const handleShareButtonClick = async () => {
             // Update app state
             storage.setupSharing(newShareId);
             storage.addOwnedList(newShareId);
-            ui.setupSharedUI();
+            ui.setupSharedUI(true);
             // Do not show the "Save to My Lists" button when creating a share
             ui.hideSubscribeButton();
         } catch (error) {
