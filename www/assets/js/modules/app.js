@@ -86,8 +86,29 @@ const handleBackToPersonalList = () => {
     window.location.href = url.href;
 };
 
+// Handle reset app data
+const handleResetAppData = () => {
+    const confirmReset = confirm('This will clear all your todo lists and app settings. Are you sure you want to continue?');
+    if (confirmReset) {
+        // Clear all localStorage data
+        for (let key in localStorage) {
+            if (key.startsWith('todo') || key === 'todoSubscribedLists') {
+                localStorage.removeItem(key);
+            }
+        }
+        // Reload the page
+        window.location.reload();
+    }
+};
+
 // Set up all event listeners
 const setupEventListeners = () => {
+    // Reset app data button
+    const resetButton = document.getElementById('reset-app-data');
+    if (resetButton) {
+        resetButton.addEventListener('click', handleResetAppData);
+    }
+    
     // Back to personal list button
     ui.domElements.backToPersonalButton.addEventListener('click', handleBackToPersonalList);
     
