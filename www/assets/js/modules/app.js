@@ -201,6 +201,8 @@ const handleShareButtonClick = async () => {
             // Update app state
             storage.setupSharing(newShareId);
             ui.setupSharedUI();
+            // Do not show the "Save to My Lists" button when creating a share
+            ui.hideSubscribeButton();
         } catch (error) {
             console.error('Error sharing list:', error);
             alert('Failed to create share link. Please try again.');

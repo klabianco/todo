@@ -271,11 +271,16 @@ export const setupSharedUI = () => {
         domElements.nextDayButton.classList.add('hidden');
         domElements.currentDateDisplay.textContent = 'Shared List';
         domElements.currentDateDisplay.className = 'text-sm px-4 py-1 bg-gray-100 rounded-md'; // Add rounded corners when not between buttons
-        
+
         // Show subscribe button and back button
         domElements.subscribeButton.classList.remove('hidden');
         domElements.backToPersonalButton.classList.remove('hidden');
     }
+};
+
+// Hide the subscribe button
+export const hideSubscribeButton = () => {
+    domElements.subscribeButton.classList.add('hidden');
 };
 
 // Update subscribe button state based on whether the list is already subscribed
