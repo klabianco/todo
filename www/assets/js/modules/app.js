@@ -57,6 +57,18 @@ export const init = async () => {
     
     // Render initial task list
     await renderTasks();
+
+    // For shared lists, automatically focus on the task stored with the list
+    if (isSharedList) {
+        const focusId = storage.getShareFocusId();
+        if (focusId) {
+            const allTasks = await storage.loadTasks();
+            const result = utils.findTaskById(allTasks, focusId);
+            if (result && result.task) {
+                focusOnTask(focusId, result.task.task);
+            }
+        }
+    }
 };
 
 // Handle clicking on a subscribed shared list
@@ -181,9 +193,9 @@ const handleShareButtonClick = async () => {
             // Get current tasks
             const allTasks = await storage.loadTasks();
             
-            // Create shared list on server
-            const newShareId = await storage.createSharedList(allTasks);
-            
+            // Create shared list on server and store focused task if any
+            const newShareId = await storage.createSharedList(allTasks, currentFocusedTaskId);
+
             // Generate share URL
             const shareUrl = `${window.location.origin}${window.location.pathname}?share=${newShareId}`;
             
@@ -199,7 +211,7 @@ const handleShareButtonClick = async () => {
             window.history.pushState({}, '', shareUrl);
             
             // Update app state
-            storage.setupSharing(newShareId);
+            storage.setupSharing(newShareId, currentFocusedTaskId);
             ui.setupSharedUI();
             // Do not show the "Save to My Lists" button when creating a share
             ui.hideSubscribeButton();
@@ -224,7 +236,7 @@ const switchToDate = async (newDate) => {
     taskNavigationStack = [];
     currentFocusedTaskId = null;
     ui.domElements.taskBreadcrumb.classList.add('hidden');
-    
+
     await renderTasks();
 };
 
@@ -250,7 +262,7 @@ const jumpToBreadcrumb = (index) => {
         
         taskNavigationStack = newStack;
         currentFocusedTaskId = lastItem.id;
-        
+
         updateBreadcrumbTrail();
         renderTasks();
     }

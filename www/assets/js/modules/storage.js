@@ -7,6 +7,7 @@ import { getCurrentDate } from './utils.js';
 // Storage state
 let isSharedList = false;
 let shareId = null;
+let shareFocusId = null;
 let activeDate = getCurrentDate();
 
 // Initialize the storage state based on URL parameters
@@ -15,6 +16,7 @@ export const initializeStorageState = () => {
     if (urlParams.has('share')) {
         shareId = urlParams.get('share');
         isSharedList = true;
+        shareFocusId = null;
         return { isSharedList, shareId };
     }
     return { isSharedList, shareId };
@@ -34,10 +36,14 @@ export const getIsSharedList = () => isSharedList;
 // Get the share ID
 export const getShareId = () => shareId;
 
+// Get the focus task ID for a shared list
+export const getShareFocusId = () => shareFocusId;
+
 // Set up for sharing (update state variables)
-export const setupSharing = (newShareId) => {
+export const setupSharing = (newShareId, focusId = null) => {
     shareId = newShareId;
     isSharedList = true;
+    shareFocusId = focusId;
 };
 
 // Get subscribed shared lists
@@ -111,6 +117,7 @@ export const loadTasksFromServer = async () => {
             throw new Error(`Server responded with ${response.status}: ${await response.text()}`);
         }
         const data = await response.json();
+        shareFocusId = data.focusId || null;
         return data.tasks || [];
     } catch (error) {
         console.error('Error loading shared tasks:', error);
@@ -142,7 +149,7 @@ export const saveTasksToServer = async (tasks) => {
 };
 
 // Create a shared list on the server
-export const createSharedList = async (tasks) => {
+export const createSharedList = async (tasks, focusId = null) => {
     try {
         console.log('Creating shared list with API endpoint: /api/lists');
         console.log('Tasks to be shared:', tasks);
@@ -152,7 +159,7 @@ export const createSharedList = async (tasks) => {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ tasks })
+            body: JSON.stringify(focusId ? { tasks, focusId } : { tasks })
         });
         
         if (!response.ok) {

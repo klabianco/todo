@@ -65,6 +65,7 @@ switch ($resource) {
                 $data = json_decode(file_get_contents('php://input'), true);
                 $share_id = generate_share_id();
                 $tasks = isset($data['tasks']) ? $data['tasks'] : [];
+                $focus_id = isset($data['focusId']) ? $data['focusId'] : null;
                 
                 $list_data = [
                     'id' => $share_id,
@@ -72,6 +73,9 @@ switch ($resource) {
                     'created' => date('c'),
                     'lastModified' => date('c')
                 ];
+                if ($focus_id) {
+                    $list_data['focusId'] = $focus_id;
+                }
                 
                 file_put_contents(get_task_file_path($share_id), json_encode($list_data));
                 echo json_encode(['shareId' => $share_id]);
