@@ -41,3 +41,17 @@
 .drag-over {
     background-color: #e0f2fe;
 }
+/* Dark mode overrides */
+html.dark body {
+    background-color: #111827;
+    color: #e5e7eb;
+}
+html.dark .dark\:bg-gray-700 { background-color: #374151 !important; }
+html.dark .dark\:bg-gray-800 { background-color: #1f2937 !important; }
+html.dark .dark\:bg-gray-600 { background-color: #4b5563 !important; }
+html.dark .dark\:hover\:bg-gray-600:hover { background-color: #4b5563 !important; }
+html.dark .dark\:hover\:bg-gray-500:hover { background-color: #6b7280 !important; }
+html.dark .dark\:text-gray-200 { color: #e5e7eb !important; }
+html.dark .dark\:text-gray-300 { color: #d1d5db !important; }
+html.dark .dark\:text-gray-400 { color: #9ca3af !important; }
+html.dark .dark\:text-gray-500 { color: #6b7280 !important; }
