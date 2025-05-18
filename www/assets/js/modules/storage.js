@@ -95,17 +95,68 @@ const saveOwnedLists = (lists) => {
     localStorage.setItem('todoOwnedLists', JSON.stringify(lists));
 };
 
-export const addOwnedList = (id) => {
+// Add a new owned list with optional date metadata
+export const addOwnedList = (id, date = null) => {
     const lists = getOwnedLists();
-    if (!lists.includes(id)) {
-        lists.push(id);
+
+    // Support legacy format where the list was just an array of IDs
+    if (lists.length > 0 && typeof lists[0] !== 'object') {
+        const converted = lists.map(existingId => ({ id: existingId, date: null }));
+        lists.length = 0;
+        lists.push(...converted);
+    }
+
+    if (!lists.some(list => list.id === id)) {
+        lists.push({ id, date });
         saveOwnedLists(lists);
     }
 };
 
+// Check if a list ID is owned by the current user
 export const isOwnedList = (id) => {
     const lists = getOwnedLists();
+    if (lists.length > 0 && typeof lists[0] === 'object') {
+        return lists.some(list => list.id === id);
+    }
     return lists.includes(id);
+};
+
+// Get owned list entry for a specific date
+export const getOwnedListByDate = (date) => {
+    const lists = getOwnedLists();
+    if (lists.length > 0 && typeof lists[0] === 'object') {
+        return lists.find(list => list.date === date) || null;
+    }
+    return null;
+};
+
+// Fetch tasks for a specific shared list ID
+const fetchTasksForOwnedList = async (id) => {
+    try {
+        const response = await fetch(`/api/lists/${id}`);
+        if (!response.ok) return null;
+        const data = await response.json();
+        return data.tasks || null;
+    } catch (err) {
+        console.error('Failed to fetch owned list', err);
+        return null;
+    }
+};
+
+// Sync tasks from an owned list into local storage for the given date
+export const syncOwnedListForDate = async (date) => {
+    const entry = getOwnedListByDate(date);
+    if (!entry) return;
+
+    const tasks = await fetchTasksForOwnedList(entry.id);
+    if (!tasks) return;
+
+    const tasksKey = `todoTasks_${date}`;
+    const stickyTasks = tasks.filter(t => t.sticky);
+    const nonStickyTasks = tasks.filter(t => !t.sticky);
+
+    localStorage.setItem(tasksKey, JSON.stringify(nonStickyTasks));
+    localStorage.setItem('todoStickyTasks', JSON.stringify(stickyTasks));
 };
 
 // Initialize storage
@@ -126,10 +177,13 @@ export const initializeStorage = async () => {
         if (!localStorage.getItem(tasksKey)) {
             localStorage.setItem(tasksKey, '[]');
         }
-        
+
         if (!localStorage.getItem('todoStickyTasks')) {
             localStorage.setItem('todoStickyTasks', '[]');
         }
+
+        // If this date corresponds to an owned shared list, sync it from server
+        await syncOwnedListForDate(activeDate);
     }
 };
 

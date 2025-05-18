@@ -216,7 +216,8 @@ const handleShareButtonClick = async () => {
             
             // Update app state
             storage.setupSharing(newShareId);
-            storage.addOwnedList(newShareId);
+            // Remember which date this shared list belongs to
+            storage.addOwnedList(newShareId, storage.getActiveDate());
             ui.setupSharedUI(true);
             // Do not show the "Save to My Lists" button when creating a share
             ui.hideSubscribeButton();
