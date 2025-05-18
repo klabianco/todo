@@ -264,7 +264,7 @@ export const updateBreadcrumbTrail = (taskNavigationStack, onJumpToBreadcrumb) =
 };
 
 // Setup UI for shared list
-export const setupSharedUI = () => {
+export const setupSharedUI = (isOwner = isOwnedList(getShareId())) => {
     if (getIsSharedList()) {
         // Hide date navigation for shared lists - completely remove instead of just disabling
         domElements.prevDayButton.classList.add('hidden');
@@ -273,7 +273,7 @@ export const setupSharedUI = () => {
         domElements.currentDateDisplay.className = 'text-sm px-4 py-1 bg-gray-100 rounded-md'; // Add rounded corners when not between buttons
 
         // Show back button and subscribe button only if not owner
-        if (!isOwnedList(getShareId())) {
+        if (!isOwner) {
             domElements.subscribeButton.classList.remove('hidden');
         } else {
             domElements.subscribeButton.classList.add('hidden');
