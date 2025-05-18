@@ -248,7 +248,6 @@ const jumpToBreadcrumb = (index) => {
         
         taskNavigationStack = newStack;
         currentFocusedTaskId = lastItem.id;
-        ui.domElements.focusTitle.textContent = lastItem.title;
         
         updateBreadcrumbTrail();
         renderTasks();
@@ -278,11 +277,10 @@ const focusOnTask = (taskId, taskTitle) => {
                 id: taskId,
                 title: taskTitle
             });
-            
+
             currentFocusedTaskId = taskId;
             ui.domElements.taskBreadcrumb.classList.remove('hidden');
-            ui.domElements.focusTitle.textContent = taskTitle;
-            
+
             updateBreadcrumbTrail();
             renderTasks();
         }
