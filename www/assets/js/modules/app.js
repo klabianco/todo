@@ -34,6 +34,17 @@ export const init = async () => {
     // Initialize storage state
     const { isSharedList, shareId } = storage.initializeStorageState();
 
+    // Check if we're returning from a shared list and need to refresh the lists UI
+    const urlParams = new URLSearchParams(window.location.search);
+    const shouldRefreshLists = urlParams.has('refreshLists');
+    
+    // Remove the refresh parameter if it exists
+    if (shouldRefreshLists) {
+        urlParams.delete('refreshLists');
+        const newUrl = window.location.pathname + (urlParams.toString() ? '?' + urlParams.toString() : '');
+        window.history.replaceState({}, document.title, newUrl);
+    }
+
     // Initialize storage system
     await storage.initializeStorage();
 
@@ -52,7 +63,7 @@ export const init = async () => {
     // Setup subscribed lists or auto-subscribe when visiting a shared list
     if (!isSharedList) {
         const subscribedLists = storage.getSubscribedLists();
-        if (subscribedLists.length > 0) {
+        if (subscribedLists.length > 0 || shouldRefreshLists) {
             ui.addSubscribedListsUI(subscribedLists, handleSubscribedListClick);
         }
     } else {
@@ -90,11 +101,10 @@ const handleSubscribedListClick = (list) => {
 // Automatically subscribe to a shared list when visiting via share link
 const autoSubscribeSharedList = async (shareId) => {
     if (!shareId) return;
-
-    const subscribedLists = storage.getSubscribedLists();
-    const isAlreadySubscribed = subscribedLists.some(list => list.id === shareId);
-    if (isAlreadySubscribed) return;
-
+    
+    // Even if already subscribed, refresh subscription data to ensure it's current
+    // This helps with the issue where lists aren't showing up
+    
     // Determine a title for the subscription based on tasks
     const allTasks = await storage.loadTasks();
     let listTitle = 'Shared List';
@@ -102,9 +112,15 @@ const autoSubscribeSharedList = async (shareId) => {
     if (firstActiveTask) {
         listTitle = firstActiveTask.task;
     }
-
+    
     const shareUrl = window.location.href;
-    storage.subscribeToSharedList(shareId, listTitle, shareUrl);
+    const updatedLists = storage.subscribeToSharedList(shareId, listTitle, shareUrl);
+    
+    // Force a save to ensure changes are persisted
+    storage.saveSubscribedLists(updatedLists);
+    
+    console.log('Auto-subscribed to shared list:', shareId, 'Title:', listTitle);
+    return updatedLists;
 };
 
 
@@ -114,6 +130,11 @@ const handleBackToPersonalList = () => {
     storage.disconnectUpdates();
     const url = new URL(window.location.href);
     url.searchParams.delete('share');
+    
+    // Add a flag to indicate we're coming back from a shared list
+    // This will help us ensure the subscribed lists are refreshed
+    url.searchParams.set('refreshLists', 'true');
+    
     window.location.href = url.href;
 };
 

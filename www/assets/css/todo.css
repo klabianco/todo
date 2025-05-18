@@ -43,7 +43,7 @@
 }
 /* Dark mode overrides */
 html.dark body {
-    background-color: #111827;
+    background-color: #000000;
     color: #e5e7eb;
 }
 
@@ -109,4 +109,17 @@ html.dark #theme-toggle .moon-icon {
 /* Make the theme toggle hover effect more visible in dark mode */
 html.dark #theme-toggle {
     color: #e5e7eb; /* Light color for visibility */
+}
+
+/* Override all blue colors in dark mode with gray */
+html.dark .text-blue-500 {
+    color: #d1d5db !important; /* gray-300 */
+}
+
+html.dark .hover\:text-blue-700:hover {
+    color: #ffffff !important;
+}
+
+html.dark .focus\:ring-blue-500:focus {
+    --tw-ring-color: rgba(107, 114, 128, 0.5) !important; /* gray-500 with opacity */
 }
