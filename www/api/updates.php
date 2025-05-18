@@ -29,6 +29,9 @@ if (!file_exists($filepath)) {
 }
 
 $lastModified = filemtime($filepath);
+// Send a comment every so often so Cloudflare doesn't close the connection
+$lastPing = time();
+$pingInterval = 25; // seconds
 
 // Keep connection open and send updates when file changes
 while (true) {
@@ -43,6 +46,13 @@ while (true) {
         echo "data: $data\n\n";
         ob_flush();
         flush();
+        $lastPing = time();
+    }
+    if (time() - $lastPing >= $pingInterval) {
+        echo ": ping\n\n";
+        ob_flush();
+        flush();
+        $lastPing = time();
     }
     sleep(2);
 }
