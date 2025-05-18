@@ -116,6 +116,20 @@
             <button id="reset-app-data" class="text-xs text-gray-400 hover:text-gray-600 underline">Reset App Data</button>
         </footer>
     </div>
-    <script type="module" src="/assets/js/main.js"></script>
+    <script type="module" src="/assets/js/main.js?v=20250517"></script>
+    <script>
+    // Simple utility to clear app data if needed
+    document.getElementById('reset-app-data').addEventListener('click', function() {
+        if (confirm('This will clear all your todo lists and app settings. Are you sure?')) {
+            Object.keys(localStorage).forEach(function(key) {
+                if (key.startsWith('todo')) {
+                    localStorage.removeItem(key);
+                }
+            });
+            alert('App data cleared! The page will now reload.');
+            window.location.reload();
+        }
+    });
+    </script>
 </body>
 </html>
