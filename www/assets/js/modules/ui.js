@@ -2,7 +2,7 @@
  * UI-related functions for the Todo app
  */
 import { $, createSeparator } from './utils.js';
-import { getShareId, getIsSharedList, isOwnedList } from './storage.js';
+import { getShareId, getIsSharedList, isOwnedList, unsubscribeFromSharedList, saveSubscribedLists } from './storage.js';
 
 // DOM elements
 export const domElements = {
@@ -288,12 +288,12 @@ export const hideSubscribeButton = () => {
 // Update subscribe button state based on whether the list is already subscribed
 export const updateSubscribeButtonState = (isSubscribed) => {
     if (isSubscribed) {
-        domElements.subscribeText.textContent = 'Saved to My Lists';
+        domElements.subscribeText.textContent = 'Remove from My Lists';
         domElements.subscribeButton.classList.remove('bg-green-500', 'hover:bg-green-600');
-        domElements.subscribeButton.classList.add('bg-gray-500', 'hover:bg-gray-600');
+        domElements.subscribeButton.classList.add('bg-red-500', 'hover:bg-red-600');
     } else {
         domElements.subscribeText.textContent = 'Save to My Lists';
-        domElements.subscribeButton.classList.remove('bg-gray-500', 'hover:bg-gray-600');
+        domElements.subscribeButton.classList.remove('bg-red-500', 'hover:bg-red-600');
         domElements.subscribeButton.classList.add('bg-green-500', 'hover:bg-green-600');
     }
 };
@@ -337,7 +337,7 @@ export const addSubscribedListsUI = (subscribedLists, onListClick) => {
     subscribedLists.forEach(list => {
         const listItem = document.createElement('li');
         listItem.className = 'flex items-center justify-between';
-        
+
         const listLink = document.createElement('a');
         listLink.href = list.url;
         listLink.className = 'text-sm text-blue-500 hover:text-blue-700 flex-grow';
@@ -346,11 +346,21 @@ export const addSubscribedListsUI = (subscribedLists, onListClick) => {
             e.preventDefault();
             if (onListClick) onListClick(list);
         });
-        
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'text-xs text-red-500 hover:text-red-700 ml-2 flex-shrink-0';
+        removeBtn.textContent = 'Remove';
+        removeBtn.addEventListener('click', () => {
+            const updated = unsubscribeFromSharedList(list.id);
+            saveSubscribedLists(updated);
+            addSubscribedListsUI(updated, onListClick);
+        });
+
         listItem.appendChild(listLink);
+        listItem.appendChild(removeBtn);
         listElement.appendChild(listItem);
     });
-};
+}; 
 
 // Setup share button functionality
 export const setupShareButton = (onShareButtonClick) => {
