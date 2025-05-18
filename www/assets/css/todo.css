@@ -123,3 +123,19 @@ html.dark .hover\:text-blue-700:hover {
 html.dark .focus\:ring-blue-500:focus {
     --tw-ring-color: rgba(107, 114, 128, 0.5) !important; /* gray-500 with opacity */
 }
+
+/* Notification styles */
+#copied-notification {
+    animation: fade-in 0.3s ease forwards;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+html.dark #copied-notification {
+    background-color: #1f2937; /* dark-gray-800 */
+    color: #f3f4f6; /* gray-100 */
+}
+
+@keyframes fade-in {
+    0% { opacity: 0; transform: translateY(10px); }
+    100% { opacity: 1; transform: translateY(0); }
+}

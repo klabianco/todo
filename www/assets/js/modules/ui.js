@@ -361,12 +361,17 @@ export const setupShareButton = (onShareButtonClick) => {
             domElements.shareUrlInput.select();
             document.execCommand('copy');
 
-            // Show copied feedback
+            // Show copied feedback on the button
             const originalText = domElements.copyShareUrlButton.textContent;
             domElements.copyShareUrlButton.textContent = 'Copied!';
             setTimeout(() => {
                 domElements.copyShareUrlButton.textContent = originalText;
             }, 2000);
+            
+            // Also show the notification if the function exists
+            if (typeof window.showCopiedNotification === 'function') {
+                window.showCopiedNotification();
+            }
         });
     }
     

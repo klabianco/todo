@@ -126,6 +126,36 @@ const autoSubscribeSharedList = async (shareId) => {
 };
 
 
+// Show notification when URL is copied - make globally available
+window.showCopiedNotification = () => {
+    // First, check if there's already a notification and remove it
+    const existingNotification = document.getElementById('copied-notification');
+    if (existingNotification) {
+        existingNotification.remove();
+    }
+    
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.id = 'copied-notification';
+    notification.className = 'fixed bottom-4 right-4 bg-gray-800 text-white px-4 py-2 rounded-md shadow-lg z-50 flex items-center';
+    notification.innerHTML = `
+        <svg class="h-5 w-5 mr-2 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+        </svg>
+        <span>Share URL copied to clipboard</span>
+    `;
+    
+    // Add to document
+    document.body.appendChild(notification);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+        notification.classList.add('opacity-0');
+        notification.style.transition = 'opacity 0.5s ease';
+        setTimeout(() => notification.remove(), 500);
+    }, 3000);
+};
+
 // Handle returning to personal list from shared list
 const handleBackToPersonalList = () => {
     // Clear the share parameter from URL and reload
@@ -221,6 +251,13 @@ const handleShareButtonClick = async () => {
         ui.domElements.shareUrlContainer.classList.remove('hidden');
         // Hide the share button
         ui.domElements.shareButton.classList.add('hidden');
+        
+        // Automatically copy to clipboard
+        ui.domElements.shareUrlInput.select();
+        document.execCommand('copy');
+        
+        // Show copied notification
+        showCopiedNotification();
     } else {
         // Create a new shared list
         try {
@@ -244,6 +281,13 @@ const handleShareButtonClick = async () => {
             ui.domElements.shareButton.classList.add('hidden');
             ui.domElements.shareButton.textContent = 'Share List';
             ui.domElements.shareButton.disabled = false;
+            
+            // Automatically copy to clipboard
+            ui.domElements.shareUrlInput.select();
+            document.execCommand('copy');
+            
+            // Show copied notification
+            showCopiedNotification();
             
             // Update URL without refreshing
             window.history.pushState({}, '', shareUrl);
