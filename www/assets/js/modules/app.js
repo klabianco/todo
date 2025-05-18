@@ -64,6 +64,13 @@ export const init = async () => {
     // Render initial task list
     await renderTasks();
 
+    // Real-time updates for shared lists
+    if (isSharedList) {
+        storage.connectToUpdates(() => {
+            renderTasks();
+        });
+    }
+
     // Auto focus on shared list's saved focus task
     const focusId = storage.getSharedListFocusId();
     if (focusId) {
@@ -113,6 +120,7 @@ const handleSubscribeButtonClick = async () => {
 // Handle returning to personal list from shared list
 const handleBackToPersonalList = () => {
     // Clear the share parameter from URL and reload
+    storage.disconnectUpdates();
     const url = new URL(window.location.href);
     url.searchParams.delete('share');
     window.location.href = url.href;

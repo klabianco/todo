@@ -294,3 +294,30 @@ export const saveTasks = async (tasks) => {
         localStorage.setItem('todoStickyTasks', JSON.stringify(stickyTasks));
     }
 };
+
+// ----- Real-time updates via Server-Sent Events -----
+let sseSource = null;
+
+export const connectToUpdates = (onUpdate) => {
+    if (!isSharedList || !shareId) return;
+    if (sseSource) {
+        sseSource.close();
+    }
+    sseSource = new EventSource(`/api/updates.php?share=${shareId}`);
+    sseSource.onmessage = (event) => {
+        if (!event.data) return;
+        try {
+            const data = JSON.parse(event.data);
+            if (onUpdate) onUpdate(data);
+        } catch (err) {
+            console.error('Failed to parse update', err);
+        }
+    };
+};
+
+export const disconnectUpdates = () => {
+    if (sseSource) {
+        sseSource.close();
+        sseSource = null;
+    }
+};
