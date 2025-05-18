@@ -50,10 +50,14 @@ export const init = async () => {
             ui.addSubscribedListsUI(subscribedLists, handleSubscribedListClick);
         }
     } else {
-        // Check if current shared list is already in subscriptions
-        const subscribedLists = storage.getSubscribedLists();
-        const isAlreadySubscribed = subscribedLists.some(list => list.id === shareId);
-        ui.updateSubscribeButtonState(isAlreadySubscribed);
+        if (storage.isOwnedList(shareId)) {
+            ui.hideSubscribeButton();
+        } else {
+            // Check if current shared list is already in subscriptions
+            const subscribedLists = storage.getSubscribedLists();
+            const isAlreadySubscribed = subscribedLists.some(list => list.id === shareId);
+            ui.updateSubscribeButtonState(isAlreadySubscribed);
+        }
     }
     
     // Render initial task list
@@ -211,6 +215,7 @@ const handleShareButtonClick = async () => {
             
             // Update app state
             storage.setupSharing(newShareId);
+            storage.addOwnedList(newShareId);
             ui.setupSharedUI();
             // Do not show the "Save to My Lists" button when creating a share
             ui.hideSubscribeButton();
