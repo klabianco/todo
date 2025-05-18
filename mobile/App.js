@@ -7,7 +7,6 @@ import {
   Button,
   FlatList,
   TouchableOpacity,
-  StyleSheet,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -125,11 +124,11 @@ export default function App() {
   };
 
   const renderItem = ({ item }) => (
-    <View style={styles.taskItem}>
-      <TouchableOpacity onPress={() => toggleTask(item.id)} style={styles.taskTextWrap}>
-        <Text style={item.completed ? styles.completed : styles.taskText}>{item.text}</Text>
+    <View className="flex-row justify-between items-center py-2 border-b border-gray-200">
+      <TouchableOpacity onPress={() => toggleTask(item.id)} className="flex-1">
+        <Text className={item.completed ? 'text-base line-through text-gray-400' : 'text-base'}>{item.text}</Text>
       </TouchableOpacity>
-      <View style={styles.actions}>
+      <View className="flex-row items-center">
         <Button
           title={item.sticky ? 'Unpin' : 'Pin'}
           onPress={() => toggleSticky(item.id)}
@@ -141,16 +140,16 @@ export default function App() {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView className="flex-1 p-4 bg-gray-100">
       {currentParentId && (
-        <View style={styles.breadcrumb}>
+        <View className="flex-row items-center mb-3">
           <Button title="Back" onPress={goBack} />
-          <Text style={styles.title}>{currentTitle}</Text>
+          <Text className="ml-2 text-base font-semibold">{currentTitle}</Text>
         </View>
       )}
-      <View style={styles.inputRow}>
+      <View className="flex-row mb-4">
         <TextInput
-          style={styles.input}
+          className="flex-1 border border-gray-300 rounded mr-2 px-2 h-10"
           placeholder="Add a new task..."
           value={input}
           onChangeText={setInput}
@@ -161,67 +160,9 @@ export default function App() {
         data={currentTasks}
         keyExtractor={item => item.id}
         renderItem={renderItem}
-        ListEmptyComponent={<Text style={styles.empty}>Your task list is empty</Text>}
+        ListEmptyComponent={<Text className="text-center mt-8 text-gray-500">Your task list is empty</Text>}
       />
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 16,
-    backgroundColor: '#F3F4F6',
-  },
-  inputRow: {
-    flexDirection: 'row',
-    marginBottom: 16,
-  },
-  input: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 4,
-    marginRight: 8,
-    paddingHorizontal: 8,
-    height: 40,
-  },
-  taskItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  actions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  taskTextWrap: {
-    flex: 1,
-  },
-  taskText: {
-    fontSize: 16,
-  },
-  completed: {
-    fontSize: 16,
-    textDecorationLine: 'line-through',
-    color: '#9ca3af',
-  },
-  empty: {
-    textAlign: 'center',
-    marginTop: 32,
-    color: '#6b7280',
-  },
-  breadcrumb: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  title: {
-    marginLeft: 8,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});
