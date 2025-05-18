@@ -46,6 +46,35 @@ html.dark body {
     background-color: #111827;
     color: #e5e7eb;
 }
+
+/* Task item dark mode styles */
+html.dark .task-item {
+    border-color: #4b5563;
+}
+
+html.dark .task-item.bg-white {
+    background-color: #2d3748 !important;
+    color: #e5e7eb;
+}
+
+html.dark .task-item.completed.bg-gray-50 {
+    background-color: #1f2937 !important;
+    color: #9ca3af;
+}
+
+/* Make checkbox and interactions more visible in dark mode */
+html.dark .task-item input[type="checkbox"] {
+    border-color: #6b7280;
+    background-color: #374151;
+}
+
+html.dark .task-item .drag-handle {
+    color: #6b7280;
+}
+
+html.dark .task-item .drag-handle:hover {
+    color: #60a5fa !important;
+}
 html.dark .dark\:bg-gray-700 { background-color: #374151 !important; }
 html.dark .dark\:bg-gray-800 { background-color: #1f2937 !important; }
 html.dark .dark\:bg-gray-600 { background-color: #4b5563 !important; }
@@ -55,3 +84,29 @@ html.dark .dark\:text-gray-200 { color: #e5e7eb !important; }
 html.dark .dark\:text-gray-300 { color: #d1d5db !important; }
 html.dark .dark\:text-gray-400 { color: #9ca3af !important; }
 html.dark .dark\:text-gray-500 { color: #6b7280 !important; }
+
+/* Theme toggle button styling */
+#theme-toggle {
+    transition: opacity 0.2s ease;
+}
+
+/* Light mode: display moon, hide sun */
+#theme-toggle .sun-icon {
+    display: none;
+}
+#theme-toggle .moon-icon {
+    display: block;
+}
+
+/* Dark mode: display sun, hide moon */
+html.dark #theme-toggle .sun-icon {
+    display: block;
+}
+html.dark #theme-toggle .moon-icon {
+    display: none;
+}
+
+/* Make the theme toggle hover effect more visible in dark mode */
+html.dark #theme-toggle {
+    color: #e5e7eb; /* Light color for visibility */
+}

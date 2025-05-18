@@ -65,7 +65,7 @@ export const createTaskElement = (
     const li = document.createElement('li');
     li.dataset.id = task.id;
     li.dataset.level = level;
-    li.className = `task-item ${level > 0 ? 'ml-' + (level * 4) : ''} mb-2 border rounded-lg ${task.completed ? 'completed bg-gray-50' : 'bg-white'} ${task.sticky ? 'border-amber-400' : ''}`;
+    li.className = `task-item ${level > 0 ? 'ml-' + (level * 4) : ''} mb-2 border rounded-lg ${task.completed ? 'completed bg-gray-50 dark:bg-gray-800' : 'bg-white dark:bg-gray-700'} ${task.sticky ? 'border-amber-400' : 'dark:border-gray-600'}`;
     
     // Main task row with controls
     const taskRow = document.createElement('div');
@@ -103,7 +103,7 @@ export const createTaskElement = (
     });
     
     const span = document.createElement('span');
-    span.className = task.completed ? 'line-through text-gray-500' : '';
+    span.className = task.completed ? 'line-through text-gray-500 dark:text-gray-400' : 'dark:text-gray-100';
     span.textContent = task.task;
     span.draggable = true;
     
