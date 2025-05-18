@@ -278,29 +278,33 @@ export const setupSharedUI = (isOwner = isOwnedList(getShareId())) => {
 // Add UI for accessing subscribed lists
 export const addSubscribedListsUI = (subscribedLists, onListClick) => {
     // Check if there are no subscribed lists
-    if (!subscribedLists || subscribedLists.length === 0) return;
-    
-    // Check if the container already exists
     let subscribedListsContainer = document.getElementById('subscribed-lists-container');
-    
+    if (!subscribedLists || subscribedLists.length === 0) {
+        if (subscribedListsContainer) {
+            subscribedListsContainer.remove();
+        }
+        return;
+    }
+
+    // Check if the container already exists
     if (!subscribedListsContainer) {
         // Create a new container for subscribed lists
         subscribedListsContainer = document.createElement('div');
         subscribedListsContainer.id = 'subscribed-lists-container';
         subscribedListsContainer.className = 'mt-4 p-3 border border-gray-200 rounded-md';
-        
+
         // Create a heading
         const heading = document.createElement('h3');
         heading.className = 'text-sm font-medium text-gray-700 mb-2';
         heading.textContent = 'My Shared Lists';
         subscribedListsContainer.appendChild(heading);
-        
+
         // Create a list
         const listElement = document.createElement('ul');
         listElement.id = 'subscribed-lists';
         listElement.className = 'space-y-1';
         subscribedListsContainer.appendChild(listElement);
-        
+
         // Add the container after the breadcrumb
         const taskBreadcrumb = document.getElementById('task-breadcrumb');
         taskBreadcrumb.parentNode.insertBefore(subscribedListsContainer, taskBreadcrumb.nextSibling);
