@@ -248,7 +248,14 @@ const switchToDate = async (newDate) => {
 // Jump to a specific breadcrumb level
 const jumpToBreadcrumb = (index) => {
     if (index === 'root') {
-        // Go back to root level (all tasks)
+        // If we're the owner viewing a shared list, going to the root should
+        // return to the personal list which shows the date navigation.
+        if (storage.getIsSharedList() && storage.isOwnedList(storage.getShareId())) {
+            handleBackToPersonalList();
+            return;
+        }
+
+        // Otherwise, go back to the root level of the current list
         taskNavigationStack = [];
         currentFocusedTaskId = null;
         ui.domElements.taskBreadcrumb.classList.add('hidden');
