@@ -58,7 +58,6 @@ export const createTaskElement = (
     level = 0,
     onCheckboxChange,
     onDelete,
-    onAddSubtask,
     onToggleSticky,
     onTaskClick,
     showSubtasks = true
@@ -152,20 +151,6 @@ export const createTaskElement = (
         if (onToggleSticky) onToggleSticky(task.id);
     });
     
-    const addSubtaskButton = document.createElement('button');
-    addSubtaskButton.className = 'text-gray-400 hover:text-blue-500 mr-2';
-    addSubtaskButton.innerHTML = `
-        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-        </svg>
-    `;
-    addSubtaskButton.title = 'Add subtask';
-    
-    // Add event listener to add subtask button
-    addSubtaskButton.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (onAddSubtask) onAddSubtask(task.id);
-    });
     
     // Delete button
     const deleteButton = document.createElement('button');
@@ -185,7 +170,6 @@ export const createTaskElement = (
     
     // Add buttons to actions div
     actionsDiv.appendChild(stickyButton);
-    actionsDiv.appendChild(addSubtaskButton);
     actionsDiv.appendChild(deleteButton);
     
     // Add both sides to the task row
@@ -230,7 +214,6 @@ export const createTaskElement = (
                 level + 1,
                 onCheckboxChange,
                 onDelete,
-                onAddSubtask,
                 onToggleSticky,
                 onTaskClick,
                 showSubtasks

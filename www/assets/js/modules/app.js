@@ -337,11 +337,10 @@ const renderTasks = async () => {
             // Add active subtasks
             activeSubtasks.forEach(subtask => {
                 const subtaskElement = ui.createTaskElement(
-                    subtask, 
+                    subtask,
                     0,
                     handleToggleCompletion,
                     handleDeleteTask,
-                    promptForSubtask,
                     handleToggleSticky,
                     focusOnTask
                 );
@@ -351,11 +350,10 @@ const renderTasks = async () => {
             // Add completed subtasks
             completedSubtasks.forEach(subtask => {
                 const subtaskElement = ui.createTaskElement(
-                    subtask, 
+                    subtask,
                     0,
                     handleToggleCompletion,
                     handleDeleteTask,
-                    promptForSubtask,
                     handleToggleSticky,
                     focusOnTask
                 );
@@ -389,7 +387,6 @@ const renderTasks = async () => {
                 0,
                 handleToggleCompletion,
                 handleDeleteTask,
-                promptForSubtask,
                 handleToggleSticky,
                 focusOnTask,
                 false
@@ -404,7 +401,6 @@ const renderTasks = async () => {
                 0,
                 handleToggleCompletion,
                 handleDeleteTask,
-                promptForSubtask,
                 handleToggleSticky,
                 focusOnTask,
                 false
@@ -444,14 +440,6 @@ const renderTasks = async () => {
     }
 };
 
-// Prompt for adding a subtask
-const promptForSubtask = (parentId) => {
-    const subtaskText = prompt('Enter subtask:');
-    if (subtaskText && subtaskText.trim()) {
-        tasks.addSubtask(parentId, subtaskText.trim())
-            .then(() => renderTasks());
-    }
-};
 
 // Handle sorting of active tasks
 const handleActiveSortEnd = async function(evt) {
