@@ -4,19 +4,44 @@ function App() {
   const [tasks, setTasks] = useState([]);
   const [input, setInput] = useState('');
   const [currentParentId, setCurrentParentId] = useState(null);
+  const [isSharedList, setIsSharedList] = useState(false);
+  const [shareId, setShareId] = useState(null);
+  const [shareUrl, setShareUrl] = useState('');
+  const [showShareUrl, setShowShareUrl] = useState(false);
 
-  // Load tasks from localStorage on mount
+  // Load tasks from localStorage or server on mount
   useEffect(() => {
-    const stored = localStorage.getItem('reactTodoTasksV2');
-    if (stored) {
-      setTasks(JSON.parse(stored));
+    const params = new URLSearchParams(window.location.search);
+    const shareParam = params.get('share');
+    if (shareParam) {
+      setIsSharedList(true);
+      setShareId(shareParam);
+      setShareUrl(`${window.location.origin}${window.location.pathname}?share=${shareParam}`);
+      setShowShareUrl(true);
+      fetch(`/api/lists/${shareParam}`)
+        .then(res => res.ok ? res.json() : Promise.reject(res.status))
+        .then(data => setTasks(data.tasks || []))
+        .catch(err => console.error('Failed to load shared list', err));
+    } else {
+      const stored = localStorage.getItem('reactTodoTasksV2');
+      if (stored) {
+        setTasks(JSON.parse(stored));
+      }
     }
   }, []);
 
-  // Save tasks to localStorage whenever they change
+  // Save tasks to localStorage or server whenever they change
   useEffect(() => {
-    localStorage.setItem('reactTodoTasksV2', JSON.stringify(tasks));
-  }, [tasks]);
+    if (isSharedList && shareId) {
+      fetch(`/api/lists/${shareId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tasks })
+      }).catch(err => console.error('Failed to save shared list', err));
+    } else {
+      localStorage.setItem('reactTodoTasksV2', JSON.stringify(tasks));
+    }
+  }, [tasks, isSharedList, shareId]);
 
   const findTaskById = (list, id) => {
     for (const t of list) {
@@ -109,6 +134,26 @@ function App() {
     setCurrentParentId(parent);
   };
 
+  const shareList = async () => {
+    try {
+      const response = await fetch('/api/lists', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tasks })
+      });
+      const data = await response.json();
+      const id = data.shareId;
+      const url = `${window.location.origin}${window.location.pathname}?share=${id}`;
+      setShareId(id);
+      setIsSharedList(true);
+      setShareUrl(url);
+      setShowShareUrl(true);
+      window.history.pushState({}, '', url);
+    } catch (err) {
+      console.error('Failed to share list', err);
+    }
+  };
+
   const renderTask = task => (
     <li key={task.id} className="flex items-center justify-between task-item border-b border-gray-200 py-2">
       <div className="flex items-center">
@@ -138,6 +183,31 @@ function App() {
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
+      <div className="flex justify-end mb-4">
+        <button
+          onClick={shareList}
+          className="text-sm bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded"
+        >
+          Share
+        </button>
+      </div>
+      {showShareUrl && (
+        <div className="mb-4">
+          <input
+            type="text"
+            readOnly
+            value={shareUrl}
+            className="w-full border rounded px-2 py-1 text-sm mb-2"
+          />
+          <button
+            type="button"
+            onClick={() => navigator.clipboard.writeText(shareUrl)}
+            className="text-xs text-blue-500"
+          >
+            Copy
+          </button>
+        </div>
+      )}
       {currentParentId && (
         <div className="flex items-center mb-4">
           <button
