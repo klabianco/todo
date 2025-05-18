@@ -229,6 +229,10 @@ const handleShareButtonClick = async () => {
             ui.setupSharedUI(true);
             // Do not show the "Save to My Lists" button when creating a share
             ui.hideSubscribeButton();
+            // Start listening for updates without requiring a page reload
+            storage.connectToUpdates(() => {
+                renderTasks();
+            });
         } catch (error) {
             console.error('Error sharing list:', error);
             alert('Failed to create share link. Please try again.');

@@ -313,6 +313,9 @@ export const connectToUpdates = (onUpdate) => {
             console.error('Failed to parse update', err);
         }
     };
+    sseSource.onerror = (err) => {
+        console.error('SSE connection error', err);
+    };
 };
 
 export const disconnectUpdates = () => {
