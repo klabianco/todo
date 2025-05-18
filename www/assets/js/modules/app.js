@@ -219,6 +219,8 @@ const handleShareButtonClick = async () => {
         // Already a shared list, just show the current URL
         ui.domElements.shareUrlInput.value = window.location.href;
         ui.domElements.shareUrlContainer.classList.remove('hidden');
+        // Hide the share button
+        ui.domElements.shareButton.classList.add('hidden');
     } else {
         // Create a new shared list
         try {
@@ -238,7 +240,8 @@ const handleShareButtonClick = async () => {
             ui.domElements.shareUrlInput.value = shareUrl;
             ui.domElements.shareUrlContainer.classList.remove('hidden');
             
-            // Update UI
+            // Update UI and hide the share button
+            ui.domElements.shareButton.classList.add('hidden');
             ui.domElements.shareButton.textContent = 'Share List';
             ui.domElements.shareButton.disabled = false;
             

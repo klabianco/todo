@@ -23,6 +23,7 @@ export const domElements = {
     shareUrlContainer: $('share-url-container'),
     shareUrlInput: $('share-url'),
     copyShareUrlButton: $('copy-share-url'),
+    closeShareUrlButton: $('close-share-url'),
     backToPersonalButton: $('back-to-personal-button')
 };
 
@@ -366,6 +367,16 @@ export const setupShareButton = (onShareButtonClick) => {
             setTimeout(() => {
                 domElements.copyShareUrlButton.textContent = originalText;
             }, 2000);
+        });
+    }
+    
+    // Handle close button click
+    if (domElements.closeShareUrlButton) {
+        domElements.closeShareUrlButton.addEventListener('click', () => {
+            // Hide the share URL container
+            domElements.shareUrlContainer.classList.add('hidden');
+            // Show the share button again
+            domElements.shareButton.classList.remove('hidden');
         });
     }
 };
