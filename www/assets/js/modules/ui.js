@@ -279,8 +279,8 @@ export const setupSharedUI = (isOwner = isOwnedList(getShareId())) => {
             domElements.subscribeButton.classList.add('hidden');
         }
 
-        // Back to My List button is no longer needed for shared lists
-        domElements.backToPersonalButton.classList.add('hidden');
+        // Show button to return to personal lists
+        domElements.backToPersonalButton.classList.remove('hidden');
     }
 };
 
