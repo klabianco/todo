@@ -303,6 +303,12 @@ const promoteTask = async (taskId) => {
     await renderTasks();
 };
 
+// Helper function to handle sticky toggle with UI update
+const handleToggleSticky = async (taskId) => {
+    await tasks.toggleTaskSticky(taskId);
+    await renderTasks();
+};
+
 // Render all tasks
 const renderTasks = async () => {
     // Load tasks
@@ -345,7 +351,7 @@ const renderTasks = async () => {
                     tasks.toggleTaskCompletion,
                     tasks.deleteTask,
                     promptForSubtask,
-                    tasks.toggleTaskSticky,
+                    handleToggleSticky,
                     focusOnTask
                 );
                 ui.domElements.activeTaskList.appendChild(subtaskElement);
@@ -359,7 +365,7 @@ const renderTasks = async () => {
                     tasks.toggleTaskCompletion,
                     tasks.deleteTask,
                     promptForSubtask,
-                    tasks.toggleTaskSticky,
+                    handleToggleSticky,
                     focusOnTask
                 );
                 ui.domElements.completedTaskList.appendChild(subtaskElement);
@@ -393,7 +399,7 @@ const renderTasks = async () => {
                 tasks.toggleTaskCompletion,
                 tasks.deleteTask,
                 promptForSubtask,
-                tasks.toggleTaskSticky,
+                handleToggleSticky,
                 focusOnTask
             );
             ui.domElements.activeTaskList.appendChild(taskElement);
@@ -407,7 +413,7 @@ const renderTasks = async () => {
                 tasks.toggleTaskCompletion,
                 tasks.deleteTask,
                 promptForSubtask,
-                tasks.toggleTaskSticky,
+                handleToggleSticky,
                 focusOnTask
             );
             ui.domElements.completedTaskList.appendChild(taskElement);
@@ -447,11 +453,16 @@ const renderTasks = async () => {
 
 // Prompt for adding a subtask
 const promptForSubtask = (parentId) => {
-    const subtaskText = prompt('Enter subtask:');
-    if (subtaskText && subtaskText.trim()) {
-        tasks.addSubtask(parentId, subtaskText.trim())
-            .then(() => renderTasks());
-    }
+    // Instead of prompting, just focus on the task to show subtasks interface
+    storage.loadTasks().then(tasks => {
+        const result = utils.findTaskById(tasks, parentId);
+        if (result && result.task) {
+            // Get the task title
+            const taskTitle = result.task.text;
+            // Focus on the task directly
+            focusOnTask(parentId, taskTitle);
+        }
+    });
 };
 
 // Handle sorting of active tasks

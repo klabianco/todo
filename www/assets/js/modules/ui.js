@@ -138,24 +138,12 @@ export const createTaskElement = (task, level = 0, onCheckboxChange, onDelete, o
     stickyButton.title = task.sticky ? 'Unpin task (will no longer appear on all days)' : 'Pin task (will appear on all days)';
     
     // Add event listener to sticky button
-    stickyButton.addEventListener('click', (e) => {
+    stickyButton.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (onToggleSticky) onToggleSticky(task.id);
-    });
-    
-    const addSubtaskButton = document.createElement('button');
-    addSubtaskButton.className = 'text-gray-400 hover:text-blue-500 mr-2';
-    addSubtaskButton.innerHTML = `
-        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-        </svg>
-    `;
-    addSubtaskButton.title = 'Add subtask';
-    
-    // Add event listener to add subtask button
-    addSubtaskButton.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (onAddSubtask) onAddSubtask(task.id);
+        if (onToggleSticky) {
+            await onToggleSticky(task.id);
+            // The parent component should handle re-rendering the tasks
+        }
     });
     
     // Delete button
@@ -176,7 +164,7 @@ export const createTaskElement = (task, level = 0, onCheckboxChange, onDelete, o
     
     // Add buttons to actions div
     actionsDiv.appendChild(stickyButton);
-    actionsDiv.appendChild(addSubtaskButton);
+    // add subtask button removed
     actionsDiv.appendChild(deleteButton);
     
     // Add both sides to the task row
