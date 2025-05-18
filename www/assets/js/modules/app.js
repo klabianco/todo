@@ -249,9 +249,9 @@ const switchToDate = async (newDate) => {
 // Jump to a specific breadcrumb level
 const jumpToBreadcrumb = (index) => {
     if (index === 'root') {
-        // If we're the owner viewing a shared list, going to the root should
+        // If we're viewing a shared list, going to the root should
         // return to the personal list which shows the date navigation.
-        if (storage.getIsSharedList() && storage.isOwnedList(storage.getShareId())) {
+        if (storage.getIsSharedList()) {
             handleBackToPersonalList();
             return;
         }
