@@ -88,6 +88,8 @@ export const init = async () => {
         const allTasks = await storage.loadTasks();
         const result = utils.findTaskById(allTasks, focusId);
         if (result && result.task) {
+            // Update page title immediately without waiting for the focus effect
+            document.title = `${result.task.task} - Todo`;
             focusOnTask(focusId, result.task.task);
         }
     }
@@ -292,6 +294,10 @@ const jumpToBreadcrumb = (index) => {
         currentFocusedTaskId = null;
         ui.domElements.taskBreadcrumb.classList.add('hidden');
         ui.domElements.focusTitle.textContent = '';
+        
+        // Reset the page title back to default
+        document.title = 'Todo';
+        
         renderTasks();
         return;
     }
@@ -339,6 +345,14 @@ const focusOnTask = (taskId, taskTitle) => {
             currentFocusedTaskId = taskId;
             ui.domElements.taskBreadcrumb.classList.remove('hidden');
 
+            // Update the page title to show the focused task
+            document.title = `${taskTitle} - Todo`;
+            
+            // Save the focus ID for shared lists
+            if (storage.getIsSharedList()) {
+                storage.saveTasks(tasks, taskId);
+            }
+            
             updateBreadcrumbTrail();
             renderTasks();
         }
