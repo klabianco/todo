@@ -345,18 +345,22 @@ export const addSubscribedListsUI = (subscribedLists, onListClick) => {
 
 // Setup share button functionality
 export const setupShareButton = (onShareButtonClick) => {
-    domElements.shareButton.addEventListener('click', onShareButtonClick);
-    
+    if (domElements.shareButton) {
+        domElements.shareButton.addEventListener('click', onShareButtonClick);
+    }
+
     // Handle copy button click
-    domElements.copyShareUrlButton.addEventListener('click', () => {
-        domElements.shareUrlInput.select();
-        document.execCommand('copy');
-        
-        // Show copied feedback
-        const originalText = domElements.copyShareUrlButton.textContent;
-        domElements.copyShareUrlButton.textContent = 'Copied!';
-        setTimeout(() => {
-            domElements.copyShareUrlButton.textContent = originalText;
-        }, 2000);
-    });
+    if (domElements.copyShareUrlButton) {
+        domElements.copyShareUrlButton.addEventListener('click', () => {
+            domElements.shareUrlInput.select();
+            document.execCommand('copy');
+
+            // Show copied feedback
+            const originalText = domElements.copyShareUrlButton.textContent;
+            domElements.copyShareUrlButton.textContent = 'Copied!';
+            setTimeout(() => {
+                domElements.copyShareUrlButton.textContent = originalText;
+            }, 2000);
+        });
+    }
 };

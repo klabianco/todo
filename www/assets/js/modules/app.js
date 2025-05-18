@@ -120,62 +120,74 @@ const handleBackToPersonalList = () => {
 
 // Set up all event listeners
 const setupEventListeners = () => {
-    
+
     // Back to personal list button
-    ui.domElements.backToPersonalButton.addEventListener('click', handleBackToPersonalList);
-    
+    if (ui.domElements.backToPersonalButton) {
+        ui.domElements.backToPersonalButton.addEventListener('click', handleBackToPersonalList);
+    }
+
     // Task form submission
-    ui.domElements.taskForm.addEventListener('submit', async e => {
+    if (ui.domElements.taskForm) {
+        ui.domElements.taskForm.addEventListener('submit', async e => {
         e.preventDefault();
         const taskText = ui.domElements.taskInput.value.trim();
-        
+
         if (taskText) {
             await tasks.addTask(taskText, currentFocusedTaskId);
             await renderTasks();
             ui.domElements.taskInput.value = '';
             ui.domElements.taskInput.focus();
         }
-    });
+        });
+    }
     
     // Date navigation
-    ui.domElements.prevDayButton.addEventListener('click', () => {
-        const currentDate = storage.getActiveDate();
-        const newDate = utils.getPreviousDay(currentDate);
-        switchToDate(newDate);
-    });
-    
-    ui.domElements.nextDayButton.addEventListener('click', () => {
-        const currentDate = storage.getActiveDate();
-        const newDate = utils.getNextDay(currentDate);
-        switchToDate(newDate);
-    });
+    if (ui.domElements.prevDayButton) {
+        ui.domElements.prevDayButton.addEventListener('click', () => {
+            const currentDate = storage.getActiveDate();
+            const newDate = utils.getPreviousDay(currentDate);
+            switchToDate(newDate);
+        });
+    }
+
+    if (ui.domElements.nextDayButton) {
+        ui.domElements.nextDayButton.addEventListener('click', () => {
+            const currentDate = storage.getActiveDate();
+            const newDate = utils.getNextDay(currentDate);
+            switchToDate(newDate);
+        });
+    }
     
     // Root breadcrumb navigation
-    document.querySelector('.breadcrumb-trail button[data-level="root"]')
-        .addEventListener('click', () => jumpToBreadcrumb('root'));
+    const rootBreadcrumb = document.querySelector('.breadcrumb-trail button[data-level="root"]');
+    if (rootBreadcrumb) {
+        rootBreadcrumb.addEventListener('click', () => jumpToBreadcrumb('root'));
+    }
     
     // Set up share button
     ui.setupShareButton(handleShareButtonClick);
-    
+
     // Handle drag and drop on breadcrumb for task promotion
-    ui.domElements.taskBreadcrumb.addEventListener('dragover', e => {
-        e.preventDefault();
-        ui.domElements.taskBreadcrumb.classList.add('drag-over');
-    });
-    
-    ui.domElements.taskBreadcrumb.addEventListener('dragleave', () => {
-        ui.domElements.taskBreadcrumb.classList.remove('drag-over');
-    });
-    
-    ui.domElements.taskBreadcrumb.addEventListener('drop', e => {
-        e.preventDefault();
-        ui.domElements.taskBreadcrumb.classList.remove('drag-over');
-        const id = draggedTaskId || e.dataTransfer.getData('text/plain');
-        if (id) {
-            promoteTask(id);
-            draggedTaskId = null;
-        }
-    });
+    if (ui.domElements.taskBreadcrumb) {
+        ui.domElements.taskBreadcrumb.addEventListener('dragover', e => {
+            e.preventDefault();
+            ui.domElements.taskBreadcrumb.classList.add('drag-over');
+        });
+
+        ui.domElements.taskBreadcrumb.addEventListener('dragleave', () => {
+            ui.domElements.taskBreadcrumb.classList.remove('drag-over');
+        });
+
+        ui.domElements.taskBreadcrumb.addEventListener('drop', e => {
+            e.preventDefault();
+            ui.domElements.taskBreadcrumb.classList.remove('drag-over');
+            const id = draggedTaskId || e.dataTransfer.getData('text/plain');
+            if (id) {
+                promoteTask(id);
+                draggedTaskId = null;
+            }
+        });
+    }
 };
 
 // Handle share button click
