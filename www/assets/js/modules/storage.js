@@ -345,24 +345,46 @@ export const saveTasks = async (tasks) => {
 
 // ----- Real-time updates via Server-Sent Events -----
 let sseSource = null;
+let retryTimeoutId = null;
+const baseRetryDelay = 3000; // 3 seconds
+let retryDelay = baseRetryDelay;
 
 export const connectToUpdates = (onUpdate) => {
     if (!isSharedList || !shareId) return;
+
     if (sseSource) {
         sseSource.close();
     }
+
+    if (retryTimeoutId) {
+        clearTimeout(retryTimeoutId);
+        retryTimeoutId = null;
+    }
+
     sseSource = new EventSource(`/api/updates.php?share=${shareId}`);
+
     sseSource.onmessage = (event) => {
         if (!event.data) return;
         try {
             const data = JSON.parse(event.data);
+            retryDelay = baseRetryDelay; // reset delay on successful message
             if (onUpdate) onUpdate(data);
         } catch (err) {
             console.error('Failed to parse update', err);
         }
     };
+
     sseSource.onerror = (err) => {
         console.error('SSE connection error', err);
+        if (sseSource) {
+            sseSource.close();
+            sseSource = null;
+        }
+        // Attempt to reconnect with exponential backoff
+        retryTimeoutId = setTimeout(() => {
+            connectToUpdates(onUpdate);
+        }, retryDelay);
+        retryDelay = Math.min(retryDelay * 2, 60000); // cap at 60s
     };
 };
 
@@ -371,4 +393,9 @@ export const disconnectUpdates = () => {
         sseSource.close();
         sseSource = null;
     }
+    if (retryTimeoutId) {
+        clearTimeout(retryTimeoutId);
+        retryTimeoutId = null;
+    }
+    retryDelay = baseRetryDelay;
 };
