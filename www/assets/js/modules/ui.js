@@ -23,8 +23,6 @@ export const domElements = {
     shareUrlContainer: $('share-url-container'),
     shareUrlInput: $('share-url'),
     copyShareUrlButton: $('copy-share-url'),
-    subscribeButton: $('subscribe-button'),
-    subscribeText: $('subscribe-text'),
     backToPersonalButton: $('back-to-personal-button')
 };
 
@@ -272,29 +270,8 @@ export const setupSharedUI = (isOwner = isOwnedList(getShareId())) => {
         domElements.currentDateDisplay.textContent = '';
         domElements.currentDateDisplay.className = 'hidden';
 
-        // The subscribe button is no longer shown in shared view
-        domElements.subscribeButton.classList.add('hidden');
-
         // Show button to return to personal lists
         domElements.backToPersonalButton.classList.remove('hidden');
-    }
-};
-
-// Hide the subscribe button
-export const hideSubscribeButton = () => {
-    domElements.subscribeButton.classList.add('hidden');
-};
-
-// Update subscribe button state based on whether the list is already subscribed
-export const updateSubscribeButtonState = (isSubscribed) => {
-    if (isSubscribed) {
-        domElements.subscribeText.textContent = 'Remove from My Lists';
-        domElements.subscribeButton.classList.remove('bg-green-500', 'hover:bg-green-600');
-        domElements.subscribeButton.classList.add('bg-red-500', 'hover:bg-red-600');
-    } else {
-        domElements.subscribeText.textContent = 'Save to My Lists';
-        domElements.subscribeButton.classList.remove('bg-red-500', 'hover:bg-red-600');
-        domElements.subscribeButton.classList.add('bg-green-500', 'hover:bg-green-600');
     }
 };
 
