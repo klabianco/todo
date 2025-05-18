@@ -1,15 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { SafeAreaView, View, Text, TextInput, Button, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
+import {
+  SafeAreaView,
+  View,
+  Text,
+  TextInput,
+  Button,
+  FlatList,
+  TouchableOpacity,
+  StyleSheet,
+} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function App() {
   const [tasks, setTasks] = useState([]);
   const [input, setInput] = useState('');
+  const [currentParentId, setCurrentParentId] = useState(null);
 
   useEffect(() => {
     async function load() {
       try {
-        const stored = await AsyncStorage.getItem('rnTodoTasks');
+        const stored = await AsyncStorage.getItem('rnTodoTasksV2');
         if (stored) {
           setTasks(JSON.parse(stored));
         }
@@ -21,21 +31,97 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    AsyncStorage.setItem('rnTodoTasks', JSON.stringify(tasks));
+    AsyncStorage.setItem('rnTodoTasksV2', JSON.stringify(tasks));
   }, [tasks]);
+
+  const findTaskById = (list, id) => {
+    for (const task of list) {
+      if (task.id === id) return task;
+      if (task.subtasks && task.subtasks.length > 0) {
+        const found = findTaskById(task.subtasks, id);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  const updateTaskById = (list, id, updater) => {
+    return list.map(task => {
+      if (task.id === id) {
+        return updater(task);
+      }
+      if (task.subtasks && task.subtasks.length > 0) {
+        return { ...task, subtasks: updateTaskById(task.subtasks, id, updater) };
+      }
+      return task;
+    });
+  };
+
+  const removeTaskById = (list, id) => {
+    return list
+      .filter(t => t.id !== id)
+      .map(t => ({
+        ...t,
+        subtasks: t.subtasks ? removeTaskById(t.subtasks, id) : [],
+      }));
+  };
+
+  const addSubtask = (list, parentId, subtask) => {
+    return list.map(t => {
+      if (t.id === parentId) {
+        const subs = t.subtasks ? [...t.subtasks, subtask] : [subtask];
+        return { ...t, subtasks: subs };
+      }
+      if (t.subtasks && t.subtasks.length > 0) {
+        return { ...t, subtasks: addSubtask(t.subtasks, parentId, subtask) };
+      }
+      return t;
+    });
+  };
 
   const addTask = () => {
     if (!input.trim()) return;
-    setTasks([...tasks, { id: Date.now().toString(), text: input.trim(), completed: false }]);
+
+    const newTask = {
+      id: Date.now().toString(),
+      text: input.trim(),
+      completed: false,
+      sticky: false,
+      subtasks: [],
+      parentId: currentParentId,
+    };
+
+    if (currentParentId) {
+      setTasks(prev => addSubtask(prev, currentParentId, newTask));
+    } else {
+      setTasks(prev => [...prev, newTask]);
+    }
+
     setInput('');
   };
 
-  const toggleTask = (id) => {
-    setTasks(tasks.map(t => t.id === id ? { ...t, completed: !t.completed } : t));
+  const toggleTask = id => {
+    setTasks(prev => updateTaskById(prev, id, t => ({ ...t, completed: !t.completed })));
   };
 
-  const deleteTask = (id) => {
-    setTasks(tasks.filter(t => t.id !== id));
+  const toggleSticky = id => {
+    setTasks(prev => updateTaskById(prev, id, t => ({ ...t, sticky: !t.sticky })));
+  };
+
+  const deleteTask = id => {
+    setTasks(prev => removeTaskById(prev, id));
+  };
+
+  const currentTasks = currentParentId
+    ? findTaskById(tasks, currentParentId)?.subtasks || []
+    : tasks;
+
+  const currentTitle = currentParentId ? findTaskById(tasks, currentParentId)?.text : null;
+
+  const goBack = () => {
+    if (!currentParentId) return;
+    const parent = findTaskById(tasks, currentParentId)?.parentId || null;
+    setCurrentParentId(parent);
   };
 
   const renderItem = ({ item }) => (
@@ -43,12 +129,25 @@ export default function App() {
       <TouchableOpacity onPress={() => toggleTask(item.id)} style={styles.taskTextWrap}>
         <Text style={item.completed ? styles.completed : styles.taskText}>{item.text}</Text>
       </TouchableOpacity>
-      <Button title="Delete" onPress={() => deleteTask(item.id)} />
+      <View style={styles.actions}>
+        <Button
+          title={item.sticky ? 'Unpin' : 'Pin'}
+          onPress={() => toggleSticky(item.id)}
+        />
+        <Button title="Open" onPress={() => setCurrentParentId(item.id)} />
+        <Button title="Del" onPress={() => deleteTask(item.id)} />
+      </View>
     </View>
   );
 
   return (
     <SafeAreaView style={styles.container}>
+      {currentParentId && (
+        <View style={styles.breadcrumb}>
+          <Button title="Back" onPress={goBack} />
+          <Text style={styles.title}>{currentTitle}</Text>
+        </View>
+      )}
       <View style={styles.inputRow}>
         <TextInput
           style={styles.input}
@@ -59,7 +158,7 @@ export default function App() {
         <Button title="Add" onPress={addTask} />
       </View>
       <FlatList
-        data={tasks}
+        data={currentTasks}
         keyExtractor={item => item.id}
         renderItem={renderItem}
         ListEmptyComponent={<Text style={styles.empty}>Your task list is empty</Text>}
@@ -95,6 +194,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
   },
+  actions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   taskTextWrap: {
     flex: 1,
   },
@@ -110,5 +213,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 32,
     color: '#6b7280',
+  },
+  breadcrumb: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  title: {
+    marginLeft: 8,
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
