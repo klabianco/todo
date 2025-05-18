@@ -269,8 +269,8 @@ export const setupSharedUI = (isOwner = isOwnedList(getShareId())) => {
         // Hide date navigation for shared lists - completely remove instead of just disabling
         domElements.prevDayButton.classList.add('hidden');
         domElements.nextDayButton.classList.add('hidden');
-        domElements.currentDateDisplay.textContent = 'Shared List';
-        domElements.currentDateDisplay.className = 'text-sm px-4 py-1 bg-gray-100 rounded-md'; // Add rounded corners when not between buttons
+        domElements.currentDateDisplay.textContent = '';
+        domElements.currentDateDisplay.className = 'hidden';
 
         // Show subscribe button only if not owner
         if (!isOwner) {
