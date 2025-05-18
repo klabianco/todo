@@ -113,6 +113,19 @@
         </div>
         
     </div>
-    <script type="module" src="/assets/js/main.js?v=20250517"></script>
+    <script>
+        function loadMain(version) {
+            const script = document.createElement('script');
+            script.type = 'module';
+            script.src = `/assets/js/main.js?v=${version}`;
+            document.head.appendChild(script);
+        }
+
+        fetch('/assets/js/main.js', { method: 'HEAD', cache: 'no-cache' })
+            .then(r => r.headers.get('Last-Modified'))
+            .then(t => t ? new Date(t).getTime() : Date.now())
+            .then(loadMain)
+            .catch(() => loadMain(Date.now()));
+    </script>
 </body>
 </html>
