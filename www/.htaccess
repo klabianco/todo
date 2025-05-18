@@ -4,6 +4,10 @@
         Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
         Header set Pragma "no-cache"
         Header set Expires "0"
+        # Cloudflare specific
+        Header set CF-Cache-Status "BYPASS"
+        Header set CDN-Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+        Header set Edge-Control "no-store"
     </FilesMatch>
 
     # Cache control for JavaScript files
@@ -11,5 +15,33 @@
         Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
         Header set Pragma "no-cache"
         Header set Expires "0"
+        # Cloudflare specific
+        Header set CF-Cache-Status "BYPASS"
+        Header set CDN-Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+        Header set Edge-Control "no-store"
+    </FilesMatch>
+</IfModule>
+
+# Cloudflare specific cache control
+<IfModule mod_headers.c>
+    # Disable Cloudflare Rocket Loader
+    Header always set CF-AR "0"
+    
+    # Bypass Cloudflare's cache
+    Header always set CF-Cache-Status "BYPASS"
+    
+    # Edge cache control
+    Header always set Edge-Control "no-store"
+    
+    # Prevent Cloudflare from caching HTML
+    <FilesMatch "\.(html|htm)$">
+        Header set CF-Cache-Status "BYPASS"
+        Header set CDN-Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+    </FilesMatch>
+    
+    # Prevent Cloudflare from caching JS/CSS
+    <FilesMatch "\.(js|css|mjs)$">
+        Header set CF-Cache-Status "BYPASS"
+        Header set CDN-Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
     </FilesMatch>
 </IfModule>
