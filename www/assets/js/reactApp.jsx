@@ -1,22 +1,43 @@
 const { useState, useEffect } = React;
 
+// Utility functions for dates
+const getToday = () => {
+  const now = new Date();
+  return now.toISOString().split('T')[0];
+};
+
+const getRelativeDay = (dateStr, offset) => {
+  const date = new Date(dateStr);
+  date.setDate(date.getDate() + offset);
+  return date.toISOString().split('T')[0];
+};
+
+const formatDate = (dateStr) => {
+  const today = getToday();
+  if (dateStr === today) return 'Today';
+  return new Date(dateStr).toLocaleDateString();
+};
+
 function App() {
+  const [currentDate, setCurrentDate] = useState(getToday());
   const [tasks, setTasks] = useState([]);
   const [input, setInput] = useState('');
   const [currentParentId, setCurrentParentId] = useState(null);
 
-  // Load tasks from localStorage on mount
+  // Load tasks for the current date
   useEffect(() => {
-    const stored = localStorage.getItem('reactTodoTasksV2');
+    const stored = localStorage.getItem(`reactTodoTasksV2_${currentDate}`);
     if (stored) {
       setTasks(JSON.parse(stored));
+    } else {
+      setTasks([]);
     }
-  }, []);
+  }, [currentDate]);
 
-  // Save tasks to localStorage whenever they change
+  // Save tasks whenever they change
   useEffect(() => {
-    localStorage.setItem('reactTodoTasksV2', JSON.stringify(tasks));
-  }, [tasks]);
+    localStorage.setItem(`reactTodoTasksV2_${currentDate}`, JSON.stringify(tasks));
+  }, [tasks, currentDate]);
 
   const findTaskById = (list, id) => {
     for (const t of list) {
@@ -109,6 +130,11 @@ function App() {
     setCurrentParentId(parent);
   };
 
+  const changeDay = offset => {
+    setCurrentParentId(null);
+    setCurrentDate(prev => getRelativeDay(prev, offset));
+  };
+
   const renderTask = task => (
     <li key={task.id} className="flex items-center justify-between task-item border-b border-gray-200 py-2">
       <div className="flex items-center">
@@ -138,6 +164,21 @@ function App() {
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
+      <div className="flex items-center justify-between mb-4">
+        <button
+          onClick={() => changeDay(-1)}
+          className="text-sm bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded"
+        >
+          &lt;
+        </button>
+        <span className="font-semibold">{formatDate(currentDate)}</span>
+        <button
+          onClick={() => changeDay(1)}
+          className="text-sm bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded"
+        >
+          &gt;
+        </button>
+      </div>
       {currentParentId && (
         <div className="flex items-center mb-4">
           <button

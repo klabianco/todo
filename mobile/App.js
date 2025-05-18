@@ -10,7 +10,20 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+// Date helpers
+const getToday = () => {
+  const now = new Date();
+  return now.toISOString().split('T')[0];
+};
+
+const getRelativeDay = (dateStr, offset) => {
+  const date = new Date(dateStr);
+  date.setDate(date.getDate() + offset);
+  return date.toISOString().split('T')[0];
+};
+
 export default function App() {
+  const [currentDate, setCurrentDate] = useState(getToday());
   const [tasks, setTasks] = useState([]);
   const [input, setInput] = useState('');
   const [currentParentId, setCurrentParentId] = useState(null);
@@ -18,20 +31,22 @@ export default function App() {
   useEffect(() => {
     async function load() {
       try {
-        const stored = await AsyncStorage.getItem('rnTodoTasksV2');
+        const stored = await AsyncStorage.getItem(`rnTodoTasksV2_${currentDate}`);
         if (stored) {
           setTasks(JSON.parse(stored));
+        } else {
+          setTasks([]);
         }
       } catch (err) {
         console.error(err);
       }
     }
     load();
-  }, []);
+  }, [currentDate]);
 
   useEffect(() => {
-    AsyncStorage.setItem('rnTodoTasksV2', JSON.stringify(tasks));
-  }, [tasks]);
+    AsyncStorage.setItem(`rnTodoTasksV2_${currentDate}`, JSON.stringify(tasks));
+  }, [tasks, currentDate]);
 
   const findTaskById = (list, id) => {
     for (const task of list) {
@@ -123,6 +138,11 @@ export default function App() {
     setCurrentParentId(parent);
   };
 
+  const changeDay = offset => {
+    setCurrentParentId(null);
+    setCurrentDate(prev => getRelativeDay(prev, offset));
+  };
+
   const renderItem = ({ item }) => (
     <View className="flex-row justify-between items-center py-2 border-b border-gray-200">
       <TouchableOpacity onPress={() => toggleTask(item.id)} className="flex-1">
@@ -141,6 +161,11 @@ export default function App() {
 
   return (
     <SafeAreaView className="flex-1 p-4 bg-gray-100">
+      <View className="flex-row justify-between items-center mb-4">
+        <Button title="Prev" onPress={() => changeDay(-1)} />
+        <Text className="text-base font-semibold">{currentDate}</Text>
+        <Button title="Next" onPress={() => changeDay(1)} />
+      </View>
       {currentParentId && (
         <View className="flex-row items-center mb-3">
           <Button title="Back" onPress={goBack} />
