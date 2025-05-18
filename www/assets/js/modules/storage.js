@@ -84,6 +84,30 @@ export const unsubscribeFromSharedList = (id) => {
     return updatedLists;
 };
 
+// ----- Owned shared lists helpers -----
+
+export const getOwnedLists = () => {
+    const lists = localStorage.getItem('todoOwnedLists');
+    return lists ? JSON.parse(lists) : [];
+};
+
+const saveOwnedLists = (lists) => {
+    localStorage.setItem('todoOwnedLists', JSON.stringify(lists));
+};
+
+export const addOwnedList = (id) => {
+    const lists = getOwnedLists();
+    if (!lists.includes(id)) {
+        lists.push(id);
+        saveOwnedLists(lists);
+    }
+};
+
+export const isOwnedList = (id) => {
+    const lists = getOwnedLists();
+    return lists.includes(id);
+};
+
 // Initialize storage
 export const initializeStorage = async () => {
     if (isSharedList) {

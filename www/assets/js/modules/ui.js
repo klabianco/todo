@@ -2,7 +2,7 @@
  * UI-related functions for the Todo app
  */
 import { $, createSeparator } from './utils.js';
-import { getShareId, getIsSharedList } from './storage.js';
+import { getShareId, getIsSharedList, isOwnedList } from './storage.js';
 
 // DOM elements
 export const domElements = {
@@ -272,8 +272,12 @@ export const setupSharedUI = () => {
         domElements.currentDateDisplay.textContent = 'Shared List';
         domElements.currentDateDisplay.className = 'text-sm px-4 py-1 bg-gray-100 rounded-md'; // Add rounded corners when not between buttons
 
-        // Show subscribe button and back button
-        domElements.subscribeButton.classList.remove('hidden');
+        // Show back button and subscribe button only if not owner
+        if (!isOwnedList(getShareId())) {
+            domElements.subscribeButton.classList.remove('hidden');
+        } else {
+            domElements.subscribeButton.classList.add('hidden');
+        }
         domElements.backToPersonalButton.classList.remove('hidden');
     }
 };
