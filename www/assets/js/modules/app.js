@@ -26,12 +26,74 @@ export const init = async () => {
     // Set up event listeners
     setupEventListeners();
     
+    // Setup subscribed lists UI if not in a shared list
+    if (!isSharedList) {
+        const subscribedLists = storage.getSubscribedLists();
+        if (subscribedLists.length > 0) {
+            ui.addSubscribedListsUI(subscribedLists, handleSubscribedListClick);
+        }
+    } else {
+        // Check if current shared list is already in subscriptions
+        const subscribedLists = storage.getSubscribedLists();
+        const isAlreadySubscribed = subscribedLists.some(list => list.id === shareId);
+        ui.updateSubscribeButtonState(isAlreadySubscribed);
+    }
+    
     // Render initial task list
     await renderTasks();
 };
 
+// Handle clicking on a subscribed shared list
+const handleSubscribedListClick = (list) => {
+    window.location.href = list.url;
+};
+
+// Handle subscribing to a shared list
+const handleSubscribeButtonClick = async () => {
+    const shareId = storage.getShareId();
+    if (!shareId) return;
+    
+    // Get current tasks to use as the list title
+    const allTasks = await storage.loadTasks();
+    
+    // Find a suitable title - use the first non-completed task or default
+    let listTitle = 'Shared List';
+    const firstActiveTask = allTasks.find(task => !task.completed);
+    if (firstActiveTask) {
+        listTitle = firstActiveTask.task;
+    }
+    
+    const subscribedLists = storage.getSubscribedLists();
+    const isAlreadySubscribed = subscribedLists.some(list => list.id === shareId);
+    
+    if (isAlreadySubscribed) {
+        // Already subscribed, remove from subscriptions
+        storage.unsubscribeFromSharedList(shareId);
+        ui.updateSubscribeButtonState(false);
+    } else {
+        // Add to subscriptions
+        const shareUrl = window.location.href;
+        storage.subscribeToSharedList(shareId, listTitle, shareUrl);
+        ui.updateSubscribeButtonState(true);
+    }
+};
+
+// Handle returning to personal list from shared list
+const handleBackToPersonalList = () => {
+    // Clear the share parameter from URL and reload
+    const url = new URL(window.location.href);
+    url.searchParams.delete('share');
+    window.location.href = url.href;
+};
+
 // Set up all event listeners
 const setupEventListeners = () => {
+    // Back to personal list button
+    ui.domElements.backToPersonalButton.addEventListener('click', handleBackToPersonalList);
+    
+    // Subscribe button (for shared lists)
+    ui.domElements.subscribeButton.addEventListener('click', handleSubscribeButtonClick);
+    
     // Task form submission
     ui.domElements.taskForm.addEventListener('submit', async e => {
         e.preventDefault();
@@ -177,13 +239,20 @@ const jumpToBreadcrumb = (index) => {
 
 // Focus on a specific task and its subtasks
 const focusOnTask = (taskId, taskTitle) => {
-    // Only focus if the task has subtasks
+    // Allow focusing on any task, even if it doesn't have subtasks yet
     storage.loadTasks().then(tasks => {
         const result = utils.findTaskById(tasks, taskId);
-        if (result && result.task && result.task.subtasks && result.task.subtasks.length > 0) {
+        if (result && result.task) {
             if (currentFocusedTaskId === taskId) {
                 // Already focused on this task, do nothing
                 return;
+            }
+            
+            // Initialize subtasks array if it doesn't exist
+            if (!result.task.subtasks) {
+                result.task.subtasks = [];
+                // Save the updated task with the empty subtasks array
+                storage.saveTasks(tasks);
             }
             
             // Add to navigation stack

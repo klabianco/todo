@@ -22,7 +22,10 @@ export const domElements = {
     shareButton: $('share-button'),
     shareUrlContainer: $('share-url-container'),
     shareUrlInput: $('share-url'),
-    copyShareUrlButton: $('copy-share-url')
+    copyShareUrlButton: $('copy-share-url'),
+    subscribeButton: $('subscribe-button'),
+    subscribeText: $('subscribe-text'),
+    backToPersonalButton: $('back-to-personal-button')
 };
 
 // Variables for Sortable instances
@@ -270,11 +273,83 @@ export const updateBreadcrumbTrail = (taskNavigationStack, onJumpToBreadcrumb) =
 // Setup UI for shared list
 export const setupSharedUI = () => {
     if (getIsSharedList()) {
-        // Hide date navigation for shared lists
-        domElements.prevDayButton.disabled = true;
-        domElements.nextDayButton.disabled = true;
+        // Hide date navigation for shared lists - completely remove instead of just disabling
+        domElements.prevDayButton.classList.add('hidden');
+        domElements.nextDayButton.classList.add('hidden');
         domElements.currentDateDisplay.textContent = 'Shared List';
+        domElements.currentDateDisplay.className = 'text-sm px-4 py-1 bg-gray-100 rounded-md'; // Add rounded corners when not between buttons
+        
+        // Show subscribe button and back button
+        domElements.subscribeButton.classList.remove('hidden');
+        domElements.backToPersonalButton.classList.remove('hidden');
     }
+};
+
+// Update subscribe button state based on whether the list is already subscribed
+export const updateSubscribeButtonState = (isSubscribed) => {
+    if (isSubscribed) {
+        domElements.subscribeText.textContent = 'Saved to My Lists';
+        domElements.subscribeButton.classList.remove('bg-green-500', 'hover:bg-green-600');
+        domElements.subscribeButton.classList.add('bg-gray-500', 'hover:bg-gray-600');
+    } else {
+        domElements.subscribeText.textContent = 'Save to My Lists';
+        domElements.subscribeButton.classList.remove('bg-gray-500', 'hover:bg-gray-600');
+        domElements.subscribeButton.classList.add('bg-green-500', 'hover:bg-green-600');
+    }
+};
+
+// Add UI for accessing subscribed lists
+export const addSubscribedListsUI = (subscribedLists, onListClick) => {
+    // Check if there are no subscribed lists
+    if (!subscribedLists || subscribedLists.length === 0) return;
+    
+    // Check if the container already exists
+    let subscribedListsContainer = document.getElementById('subscribed-lists-container');
+    
+    if (!subscribedListsContainer) {
+        // Create a new container for subscribed lists
+        subscribedListsContainer = document.createElement('div');
+        subscribedListsContainer.id = 'subscribed-lists-container';
+        subscribedListsContainer.className = 'mt-4 p-3 border border-gray-200 rounded-md';
+        
+        // Create a heading
+        const heading = document.createElement('h3');
+        heading.className = 'text-sm font-medium text-gray-700 mb-2';
+        heading.textContent = 'My Shared Lists';
+        subscribedListsContainer.appendChild(heading);
+        
+        // Create a list
+        const listElement = document.createElement('ul');
+        listElement.id = 'subscribed-lists';
+        listElement.className = 'space-y-1';
+        subscribedListsContainer.appendChild(listElement);
+        
+        // Add the container after the breadcrumb
+        const taskBreadcrumb = document.getElementById('task-breadcrumb');
+        taskBreadcrumb.parentNode.insertBefore(subscribedListsContainer, taskBreadcrumb.nextSibling);
+    }
+    
+    // Get the list element and clear it
+    const listElement = document.getElementById('subscribed-lists');
+    listElement.innerHTML = '';
+    
+    // Add each subscribed list
+    subscribedLists.forEach(list => {
+        const listItem = document.createElement('li');
+        listItem.className = 'flex items-center justify-between';
+        
+        const listLink = document.createElement('a');
+        listLink.href = list.url;
+        listLink.className = 'text-sm text-blue-500 hover:text-blue-700 flex-grow';
+        listLink.textContent = list.title || 'Shared List';
+        listLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (onListClick) onListClick(list);
+        });
+        
+        listItem.appendChild(listLink);
+        listElement.appendChild(listItem);
+    });
 };
 
 // Setup share button functionality

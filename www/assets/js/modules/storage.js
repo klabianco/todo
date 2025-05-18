@@ -40,6 +40,44 @@ export const setupSharing = (newShareId) => {
     isSharedList = true;
 };
 
+// Get subscribed shared lists
+export const getSubscribedLists = () => {
+    const lists = localStorage.getItem('todoSubscribedLists');
+    return lists ? JSON.parse(lists) : [];
+};
+
+// Save subscribed shared lists
+export const saveSubscribedLists = (lists) => {
+    localStorage.setItem('todoSubscribedLists', JSON.stringify(lists));
+};
+
+// Add a shared list to subscriptions
+export const subscribeToSharedList = (id, title, url) => {
+    const lists = getSubscribedLists();
+    
+    // Check if already subscribed
+    const existingIndex = lists.findIndex(list => list.id === id);
+    
+    if (existingIndex >= 0) {
+        // Update existing subscription
+        lists[existingIndex] = { id, title, url, lastAccessed: new Date().toISOString() };
+    } else {
+        // Add new subscription
+        lists.push({ id, title, url, lastAccessed: new Date().toISOString() });
+    }
+    
+    saveSubscribedLists(lists);
+    return lists;
+};
+
+// Remove a shared list from subscriptions
+export const unsubscribeFromSharedList = (id) => {
+    const lists = getSubscribedLists();
+    const updatedLists = lists.filter(list => list.id !== id);
+    saveSubscribedLists(updatedLists);
+    return updatedLists;
+};
+
 // Initialize storage
 export const initializeStorage = async () => {
     if (isSharedList) {
