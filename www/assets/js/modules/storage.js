@@ -164,7 +164,7 @@ export const getOwnedListByDate = (date) => {
 // Fetch tasks for a specific shared list ID
 const fetchTasksForOwnedList = async (id) => {
     try {
-        const response = await fetch(`/api/lists/${id}`);
+        const response = await fetch(`/api/lists/${id}`, { cache: 'no-cache' });
         if (!response.ok) return null;
         const data = await response.json();
         return data.tasks || null;
@@ -206,7 +206,7 @@ export const initializeStorage = async () => {
 // Load tasks from server
 export const loadTasksFromServer = async () => {
     try {
-        const response = await fetch(`/api/lists/${shareId}`);
+        const response = await fetch(`/api/lists/${shareId}`, { cache: 'no-cache' });
         if (!response.ok) {
             throw new Error(`Server responded with ${response.status}: ${await response.text()}`);
         }
@@ -245,7 +245,7 @@ export const saveTasksToServer = async (tasks, focusId = null) => {
 // Personal tasks helpers
 async function loadPersonalTasksFromServer(date) {
     try {
-        const response = await fetch(`/api/user/tasks/${date}`);
+        const response = await fetch(`/api/user/tasks/${date}`, { cache: 'no-cache' });
         if (!response.ok) return [];
         const data = await response.json();
         return data.tasks || [];
