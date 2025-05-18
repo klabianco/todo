@@ -272,13 +272,14 @@ export const setupSharedUI = (isOwner = isOwnedList(getShareId())) => {
         domElements.currentDateDisplay.textContent = 'Shared List';
         domElements.currentDateDisplay.className = 'text-sm px-4 py-1 bg-gray-100 rounded-md'; // Add rounded corners when not between buttons
 
-        // Show back button and subscribe button only if not owner
+        // Show subscribe button only if not owner
         if (!isOwner) {
             domElements.subscribeButton.classList.remove('hidden');
+            domElements.backToPersonalButton.classList.remove('hidden');
         } else {
             domElements.subscribeButton.classList.add('hidden');
+            domElements.backToPersonalButton.classList.add('hidden');
         }
-        domElements.backToPersonalButton.classList.remove('hidden');
     }
 };
 
