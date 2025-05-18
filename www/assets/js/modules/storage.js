@@ -10,6 +10,10 @@ let shareId = null;
 let sharedListFocusId = null;
 let activeDate = getCurrentDate();
 
+// Cached user data
+let subscribedLists = [];
+let ownedLists = [];
+
 // Initialize the storage state based on URL parameters
 export const initializeStorageState = () => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -46,15 +50,40 @@ export const setupSharing = (newShareId) => {
     sharedListFocusId = null;
 };
 
-// Get subscribed shared lists
-export const getSubscribedLists = () => {
-    const lists = localStorage.getItem('todoSubscribedLists');
-    return lists ? JSON.parse(lists) : [];
+// Load user lists from server
+export const loadUserLists = async () => {
+    try {
+        const res = await fetch('/api/user/subscriptions');
+        if (res.ok) {
+            const data = await res.json();
+            subscribedLists = data.lists || [];
+        }
+    } catch (e) {
+        console.error('Failed to load subscriptions', e);
+    }
+
+    try {
+        const res = await fetch('/api/user/owned');
+        if (res.ok) {
+            const data = await res.json();
+            ownedLists = data.lists || [];
+        }
+    } catch (e) {
+        console.error('Failed to load owned lists', e);
+    }
 };
+
+// Get subscribed shared lists
+export const getSubscribedLists = () => subscribedLists;
 
 // Save subscribed shared lists
 export const saveSubscribedLists = (lists) => {
-    localStorage.setItem('todoSubscribedLists', JSON.stringify(lists));
+    subscribedLists = lists;
+    fetch('/api/user/subscriptions', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lists })
+    });
 };
 
 // Add a shared list to subscriptions
@@ -86,13 +115,15 @@ export const unsubscribeFromSharedList = (id) => {
 
 // ----- Owned shared lists helpers -----
 
-export const getOwnedLists = () => {
-    const lists = localStorage.getItem('todoOwnedLists');
-    return lists ? JSON.parse(lists) : [];
-};
+export const getOwnedLists = () => ownedLists;
 
-const saveOwnedLists = (lists) => {
-    localStorage.setItem('todoOwnedLists', JSON.stringify(lists));
+const saveOwnedLists = async (lists) => {
+    ownedLists = lists;
+    await fetch('/api/user/owned', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lists })
+    });
 };
 
 // Add a new owned list with optional date metadata
@@ -150,13 +181,7 @@ export const syncOwnedListForDate = async (date) => {
 
     const tasks = await fetchTasksForOwnedList(entry.id);
     if (!tasks) return;
-
-    const tasksKey = `todoTasks_${date}`;
-    const stickyTasks = tasks.filter(t => t.sticky);
-    const nonStickyTasks = tasks.filter(t => !t.sticky);
-
-    localStorage.setItem(tasksKey, JSON.stringify(nonStickyTasks));
-    localStorage.setItem('todoStickyTasks', JSON.stringify(stickyTasks));
+    await savePersonalTasksToServer(date, tasks);
 };
 
 // Initialize storage
@@ -172,16 +197,7 @@ export const initializeStorage = async () => {
             return [];
         }
     } else {
-        // For local storage
-        const tasksKey = `todoTasks_${activeDate}`;
-        if (!localStorage.getItem(tasksKey)) {
-            localStorage.setItem(tasksKey, '[]');
-        }
-
-        if (!localStorage.getItem('todoStickyTasks')) {
-            localStorage.setItem('todoStickyTasks', '[]');
-        }
-
+        await loadUserLists();
         // If this date corresponds to an owned shared list, sync it from server
         await syncOwnedListForDate(activeDate);
     }
@@ -226,6 +242,31 @@ export const saveTasksToServer = async (tasks, focusId = null) => {
     }
 };
 
+// Personal tasks helpers
+async function loadPersonalTasksFromServer(date) {
+    try {
+        const response = await fetch(`/api/user/tasks/${date}`);
+        if (!response.ok) return [];
+        const data = await response.json();
+        return data.tasks || [];
+    } catch (e) {
+        console.error('Failed to load personal tasks', e);
+        return [];
+    }
+}
+
+async function savePersonalTasksToServer(date, tasks) {
+    try {
+        await fetch(`/api/user/tasks/${date}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tasks })
+        });
+    } catch (e) {
+        console.error('Failed to save personal tasks', e);
+    }
+}
+
 // Create a shared list on the server
 export const createSharedList = async (tasks, focusId = null) => {
     try {
@@ -268,15 +309,8 @@ export const loadTasks = async () => {
             return [];
         }
     } else {
-        // For local storage
-        const tasksKey = `todoTasks_${activeDate}`;
-        const dateTasks = JSON.parse(localStorage.getItem(tasksKey) || '[]');
-        const stickyTasks = JSON.parse(localStorage.getItem('todoStickyTasks') || '[]');
-        
-        const dateTaskIds = new Set(dateTasks.map(task => task.id));
-        const filteredStickyTasks = stickyTasks.filter(stickyTask => !dateTaskIds.has(stickyTask.id));
-        
-        return [...dateTasks, ...filteredStickyTasks];
+        // Personal list stored on server
+        return await loadPersonalTasksFromServer(activeDate);
     }
 };
 
@@ -286,12 +320,8 @@ export const saveTasks = async (tasks) => {
         // For shared lists, save to server
         return await saveTasksToServer(tasks);
     } else {
-        // For local storage
-        const stickyTasks = tasks.filter(task => task.sticky);
-        const nonStickyTasks = tasks.filter(task => !task.sticky);
-        
-        localStorage.setItem(`todoTasks_${activeDate}`, JSON.stringify(nonStickyTasks));
-        localStorage.setItem('todoStickyTasks', JSON.stringify(stickyTasks));
+        // Personal list stored on server
+        await savePersonalTasksToServer(activeDate, tasks);
     }
 };
 
