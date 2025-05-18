@@ -105,6 +105,35 @@ const autoSubscribeSharedList = async (shareId) => {
     storage.subscribeToSharedList(shareId, listTitle, shareUrl);
 };
 
+// Handle subscribing to a shared list
+const handleSubscribeButtonClick = async () => {
+    const shareId = storage.getShareId();
+    if (!shareId) return;
+    
+    // Get current tasks to use as the list title
+    const allTasks = await storage.loadTasks();
+    
+    // Find a suitable title - use the first non-completed task or default
+    let listTitle = 'Shared List';
+    const firstActiveTask = allTasks.find(task => !task.completed);
+    if (firstActiveTask) {
+        listTitle = firstActiveTask.task;
+    }
+    
+    const subscribedLists = storage.getSubscribedLists();
+    const isAlreadySubscribed = subscribedLists.some(list => list.id === shareId);
+    
+    if (isAlreadySubscribed) {
+        // Already subscribed, remove from subscriptions
+        storage.unsubscribeFromSharedList(shareId);
+        ui.updateSubscribeButtonState(false);
+    } else {
+        // Add to subscriptions
+        const shareUrl = window.location.href;
+        storage.subscribeToSharedList(shareId, listTitle, shareUrl);
+        ui.updateSubscribeButtonState(true);
+    }
+};
 
 // Handle returning to personal list from shared list
 const handleBackToPersonalList = () => {
@@ -122,6 +151,8 @@ const setupEventListeners = () => {
     // Back to personal list button
     ui.domElements.backToPersonalButton.addEventListener('click', handleBackToPersonalList);
     
+    // Subscribe button (for shared lists)
+    ui.domElements.subscribeButton.addEventListener('click', handleSubscribeButtonClick);
     
     // Task form submission
     ui.domElements.taskForm.addEventListener('submit', async e => {
@@ -214,6 +245,8 @@ const handleShareButtonClick = async () => {
             // Remember which date this shared list belongs to
             storage.addOwnedList(newShareId, storage.getActiveDate());
             ui.setupSharedUI(true);
+            // Do not show the "Save to My Lists" button when creating a share
+            ui.hideSubscribeButton();
             // Start listening for updates without requiring a page reload
             storage.connectToUpdates(() => {
                 renderTasks();
