@@ -134,7 +134,7 @@ export default function App() {
           onPress={() => toggleSticky(item.id)}
         />
         <Button title="Open" onPress={() => setCurrentParentId(item.id)} />
-        <Button title="Del" onPress={() => deleteTask(item.id)} />
+        <Button title="🗑" onPress={() => deleteTask(item.id)} />
       </View>
     </View>
   );

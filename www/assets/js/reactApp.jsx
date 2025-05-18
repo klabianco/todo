@@ -129,8 +129,12 @@ function App() {
         <button onClick={() => toggleSticky(task.id)} className="mr-2 text-xl">
           {task.sticky ? '📌' : '📍'}
         </button>
-        <button onClick={() => deleteTask(task.id)} className="text-sm text-red-500 hover:text-red-700">
-          Delete
+        <button
+          onClick={() => deleteTask(task.id)}
+          className="text-sm text-red-500 hover:text-red-700"
+          aria-label="Delete"
+        >
+          🗑️
         </button>
       </div>
     </li>
