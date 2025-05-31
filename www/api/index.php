@@ -142,6 +142,9 @@ switch ($resource) {
                         if ($focus_id !== null) {
                             $list_data['focusId'] = $focus_id;
                         }
+                        
+                        // Always update the lastModified timestamp with current server time
+                        // This ensures changes are detected by viewers polling for updates
                         $list_data['lastModified'] = date('c');
                         
                         file_put_contents($file_path, json_encode($list_data));

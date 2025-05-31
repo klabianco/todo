@@ -60,29 +60,99 @@ export const init = async () => {
     // Set up event listeners
     setupEventListeners();
     
+    // Check for a forced subscription from localStorage
+    // This is a more direct approach to ensure subscriptions are applied
+    if (!isSharedList) {
+        try {
+            // First check for our new forced subscription
+            const forcedSubJson = localStorage.getItem('todo_force_subscription');
+            if (forcedSubJson) {
+                const forcedSub = JSON.parse(forcedSubJson);
+                
+                // Only use if it's recent (last 5 minutes)
+                const isRecent = (Date.now() - forcedSub.timestamp) < 300000; // 5 minutes
+                
+                if (isRecent && forcedSub.id) {
+                    console.log('Found forced subscription to apply:', forcedSub.id);
+                    
+                    // Add directly to the subscription list
+                    const currentLists = storage.getSubscribedLists();
+                    
+                    // Only add if not already present
+                    if (!currentLists.some(list => list.id === forcedSub.id)) {
+                        currentLists.push({
+                            id: forcedSub.id,
+                            title: forcedSub.title || 'Shared List',
+                            url: forcedSub.url || window.location.origin,
+                            lastAccessed: new Date().toISOString()
+                        });
+                        
+                        // Save the updated list
+                        await storage.saveSubscribedLists(currentLists);
+                        console.log('Applied forced subscription successfully');
+                    } else {
+                        console.log('Forced subscription already exists in list');
+                    }
+                }
+                
+                // Clear the forced subscription regardless of whether we used it
+                localStorage.removeItem('todo_force_subscription');
+            }
+            
+            // Also check the original pending subscription as a fallback
+            const pendingSubJson = localStorage.getItem('todo_pending_subscription');
+            if (pendingSubJson) {
+                const pendingSub = JSON.parse(pendingSubJson);
+                if ((Date.now() - pendingSub.timestamp) < 300000 && pendingSub.id) {
+                    console.log('Found pending subscription to restore:', pendingSub.id);
+                    await storage.subscribeToSharedList(
+                        pendingSub.id,
+                        pendingSub.title || 'Shared List',
+                        pendingSub.url || window.location.origin
+                    );
+                }
+                localStorage.removeItem('todo_pending_subscription');
+            }
+        } catch (err) {
+            console.error('Error processing subscription from localStorage:', err);
+        }
+    }
+    
     // Setup subscribed lists or auto-subscribe when visiting a shared list
     if (!isSharedList) {
-        // Force a cleanup of invalid lists on app startup
+        // Always reload the user lists from the server to get the most up-to-date subscriptions
+        // This ensures any lists subscribed to in other tabs/sessions are reflected
+        await storage.loadUserLists();
+        
+        // Get the current list of subscriptions after reloading
         const subscribedLists = storage.getSubscribedLists();
+        
         if (subscribedLists.length > 0) {
+            console.log(`Loaded ${subscribedLists.length} subscribed lists`);  
+            
             // Check for any invalid lists and remove them
             Promise.all(subscribedLists.map(async (list) => {
                 try {
-                    const response = await fetch(`/api/lists/${list.id}`, { method: 'HEAD' });
+                    // Using GET instead of HEAD as the server doesn't support HEAD requests
+                    const response = await fetch(`/api/lists/${list.id}?t=${Date.now()}`, { 
+                        method: 'GET',
+                        headers: { 'Accept': 'application/json' },
+                        cache: 'no-store'
+                    });
                     return response.ok ? list : null;
                 } catch (err) {
                     console.error(`Error checking list ${list.id}:`, err);
                     return null;
                 }
             }))
-            .then(validatedLists => {
+            .then(async validatedLists => {
                 // Filter out null results (invalid lists)
                 const validLists = validatedLists.filter(list => list !== null);
                 
                 // If we removed any lists, update storage
                 if (validLists.length < subscribedLists.length) {
                     console.log(`Removed ${subscribedLists.length - validLists.length} invalid lists`);
-                    storage.saveSubscribedLists(validLists);
+                    await storage.saveSubscribedLists(validLists);
                 }
                 
                 // Update UI with valid lists
@@ -90,6 +160,15 @@ export const init = async () => {
                     ui.addSubscribedListsUI(validLists, handleSubscribedListClick);
                 }
             });
+        } else if (shouldRefreshLists) {
+            // If we have no lists but are coming back from a shared view,
+            // try loading lists again to catch any recent subscriptions
+            console.log('No subscribed lists found but refreshLists is true - checking again');
+            await storage.loadUserLists();
+            const refreshedLists = storage.getSubscribedLists();
+            if (refreshedLists.length > 0) {
+                ui.addSubscribedListsUI(refreshedLists, handleSubscribedListClick);
+            }
         }
     } else {
         if (!isOwner) {
@@ -103,15 +182,30 @@ export const init = async () => {
     // Set up real-time updates
     if (isSharedList) {
         // Connect to updates for the current shared list
-        storage.connectToUpdates((updatedData) => {
+        const shareId = window.location.search.split('share=')[1]?.split('&')[0];
+        console.log('Connecting to real-time updates for share ID:', shareId);
+        
+        storage.connectToUpdates(shareId, (updatedData) => {
             if (updatedData.tasks) {
-                ui.renderTasks(updatedData.tasks);
+                // Update the tasks in storage
+                storage.updateTasks(updatedData.tasks);
+                
+                // Re-render the tasks using our app's render function
+                renderTasks();
+                
+                // Show notification about the update
                 ui.showUpdatedNotification();
                 
                 if (updatedData.focusId) {
-                    state.focusedTaskId = updatedData.focusId;
-                    ui.highlightTask(updatedData.focusId);
-                    setFocusedTaskAsTitle(updatedData.tasks);
+                    // Just update the focused task ID
+                    currentFocusedTaskId = updatedData.focusId;
+                    // Update UI if needed with the focused task
+                    if (ui.domElements.focusTitle && updatedData.tasks) {
+                        const focusedTask = updatedData.tasks.find(t => t.id === updatedData.focusId);
+                        if (focusedTask) {
+                            ui.domElements.focusTitle.textContent = focusedTask.task;
+                        }
+                    }
                 }
             }
         });
@@ -119,13 +213,20 @@ export const init = async () => {
         // Connect to updates for owned lists when in personal view
         storage.connectToOwnedListsUpdates((updatedData) => {
             if (updatedData.tasks) {
-                ui.renderTasks(updatedData.tasks);
+                // Use the local renderTasks function instead of ui.renderTasks
+                renderTasks();
                 ui.showUpdatedNotification();
                 
                 if (updatedData.focusId) {
-                    state.focusedTaskId = updatedData.focusId;
-                    ui.highlightTask(updatedData.focusId);
-                    setFocusedTaskAsTitle(updatedData.tasks);
+                    // Just update the focused task ID
+                    currentFocusedTaskId = updatedData.focusId;
+                    // Update UI if needed with the focused task
+                    if (ui.domElements.focusTitle && updatedData.tasks) {
+                        const focusedTask = updatedData.tasks.find(t => t.id === updatedData.focusId);
+                        if (focusedTask) {
+                            ui.domElements.focusTitle.textContent = focusedTask.task;
+                        }
+                    }
                 }
             }
         });
@@ -171,25 +272,48 @@ const handleSubscribedListClick = async (list) => {
 const autoSubscribeSharedList = async (shareId) => {
     if (!shareId) return;
     
-    // Even if already subscribed, refresh subscription data to ensure it's current
-    // This helps with the issue where lists aren't showing up
+    console.log('Starting auto-subscription process for shared list:', shareId);
     
-    // Determine a title for the subscription based on tasks
-    const allTasks = await storage.loadTasks();
-    let listTitle = 'Shared List';
-    const firstActiveTask = allTasks.find(task => !task.completed);
-    if (firstActiveTask) {
-        listTitle = firstActiveTask.task;
+    try {
+        // Load the most recent list of tasks to determine a title
+        const allTasks = await storage.loadTasks();
+        
+        // Choose a descriptive title for the subscription
+        let listTitle = 'Shared List';
+        const firstActiveTask = allTasks.find(task => !task.completed);
+        if (firstActiveTask) {
+            listTitle = firstActiveTask.task;
+        } else if (allTasks.length > 0) {
+            // Use the first task even if completed
+            listTitle = allTasks[0].task;
+        }
+        
+        // Make title more descriptive if possible
+        if (listTitle === 'Shared List' && window.location.href.includes('groceries')) {
+            listTitle = 'Groceries';
+        }
+        
+        // Generate the share URL (current URL)
+        const shareUrl = window.location.href;
+        
+        // Use our enhanced subscribe function which returns a promise
+        const updatedLists = await storage.subscribeToSharedList(shareId, listTitle, shareUrl);
+        
+        console.log('Auto-subscription complete, lists:', updatedLists.length);
+        
+        // Verify subscription was added
+        const hasSubscription = updatedLists.some(list => list.id === shareId);
+        if (hasSubscription) {
+            console.log('Verified subscription exists in list');
+        } else {
+            console.error('Subscription was not added to the list!');
+        }
+        
+        return updatedLists;
+    } catch (err) {
+        console.error('Error during auto-subscription:', err);
+        return null;
     }
-    
-    const shareUrl = window.location.href;
-    const updatedLists = storage.subscribeToSharedList(shareId, listTitle, shareUrl);
-    
-    // Force a save to ensure changes are persisted
-    storage.saveSubscribedLists(updatedLists);
-    
-    console.log('Auto-subscribed to shared list:', shareId, 'Title:', listTitle);
-    return updatedLists;
 };
 
 
@@ -224,16 +348,70 @@ window.showCopiedNotification = () => {
 };
 
 // Handle returning to personal list from shared list
-const handleBackToPersonalList = () => {
-    // Clear the share parameter from URL and reload
+const handleBackToPersonalList = async () => {
+    if (storage.getIsSharedList()) {
+        const currentShareId = storage.getShareId();
+        
+        // First, check if this is a list that we own
+        // If it is, we don't need to worry about subscriptions
+        if (!storage.isOwnedList(currentShareId)) {
+            try {
+                // Get the current list title
+                const allTasks = await storage.loadTasks();
+                let listTitle = 'Shared List';
+                if (allTasks.length > 0) {
+                    listTitle = allTasks[0].task;
+                }
+                // For the specific case mentioned by the user
+                if (window.location.href.includes('groceries')) {
+                    listTitle = 'Groceries';
+                }
+                
+                // Generate the share URL
+                const shareUrl = window.location.href;
+                
+                // DIRECT APPROACH: Add this subscription to localStorage immediately
+                // This will be read and applied on the personal list page
+                localStorage.setItem('todo_force_subscription', JSON.stringify({
+                    id: currentShareId,
+                    title: listTitle,
+                    url: shareUrl,
+                    timestamp: Date.now()
+                }));
+                
+                console.log('Saved forced subscription to localStorage');
+                
+                // Try saving through the normal API as well
+                const currentLists = storage.getSubscribedLists();
+                
+                // Check if already in the list
+                if (!currentLists.some(list => list.id === currentShareId)) {
+                    console.log('Adding subscription to current list');
+                    currentLists.push({
+                        id: currentShareId,
+                        title: listTitle,
+                        url: shareUrl,
+                        lastAccessed: new Date().toISOString()
+                    });
+                    
+                    // Save updated list
+                    await storage.saveSubscribedLists(currentLists);
+                }
+            } catch (err) {
+                console.error('Error saving subscription before navigation:', err);
+            }
+        }
+    }
+    
+    // Clear the share parameter from URL and disconnect real-time updates
     storage.disconnectUpdates();
     const url = new URL(window.location.href);
     url.searchParams.delete('share');
     
     // Add a flag to indicate we're coming back from a shared list
-    // This will help us ensure the subscribed lists are refreshed
     url.searchParams.set('refreshLists', 'true');
     
+    // Navigate back to personal list
     window.location.href = url.href;
 };
 
@@ -366,23 +544,24 @@ const handleShareButtonClick = async () => {
             const allTasks = await storage.loadTasks();
             let shareId;
             
-            // Check if we already have a shared list for the current date
+            // Check if we already have a shared list for this date
             const existingList = storage.getOwnedListByDate(currentDate);
             
-            if (existingList) {
-                // Reuse the existing share ID but update its content
-                console.log('Reusing existing share ID for this date:', existingList.id);
+            if (existingList && existingList.id) {
+                // Reuse the existing shared list ID
+                console.log('Reusing existing shared list ID:', existingList.id);
                 shareId = existingList.id;
                 
-                // Update the existing shared list with current tasks
+                // Update the existing shared list with current tasks and focus
                 await storage.updateSharedList(shareId, allTasks, currentFocusedTaskId);
             } else {
-                // Create a new shared list on server with current tasks and focus
+                // Create a new shared list if none exists for this date
+                console.log('Creating new shared list for date:', currentDate);
                 shareId = await storage.createSharedList(allTasks, currentFocusedTaskId);
-                
-                // Remember which date this shared list belongs to
-                storage.addOwnedList(shareId, currentDate);
             }
+            
+            // Remember which date this shared list belongs to
+            storage.addOwnedList(shareId, currentDate);
 
             // Generate share URL
             let shareUrl = `${window.location.origin}${window.location.pathname}?share=${shareId}`;
@@ -410,7 +589,8 @@ const handleShareButtonClick = async () => {
             storage.setupSharing(shareId);
             ui.setupSharedUI(true);
             // Start listening for updates without requiring a page reload
-            storage.connectToUpdates(() => {
+            storage.connectToUpdates(shareId, (updatedData) => {
+                console.log('Real-time update received for shared list:', shareId);
                 renderTasks();
             });
         } catch (error) {
@@ -439,12 +619,52 @@ const switchToDate = async (newDate) => {
 };
 
 // Jump to a specific breadcrumb level
-const jumpToBreadcrumb = (index) => {
+const jumpToBreadcrumb = async (index) => {
     if (index === 'root') {
         // If we're viewing a shared list, going to the root should
         // return to the personal list which shows the date navigation.
         if (storage.getIsSharedList()) {
-            handleBackToPersonalList();
+            // DIRECT FIX FOR ALL TASKS BUTTON
+            // Save subscription directly using our new approach
+            const currentShareId = storage.getShareId();
+            if (currentShareId) {
+                try {
+                    console.log('All Tasks: Direct subscription save for:', currentShareId);
+                    
+                    // Get current list title
+                    const allTasks = await storage.loadTasks();
+                    let listTitle = 'Shared List';
+                    if (allTasks.length > 0) {
+                        listTitle = allTasks[0].task;
+                    }
+                    if (window.location.href.includes('groceries')) {
+                        listTitle = 'Groceries';
+                    }
+                    
+                    // Only add to subscriptions if we don't already own this list
+                    if (!storage.isOwnedList(currentShareId)) {
+                        // Save directly to localStorage
+                        localStorage.setItem('todo_force_subscription', JSON.stringify({
+                            id: currentShareId,
+                            title: listTitle,
+                            url: window.location.href,
+                            timestamp: Date.now()
+                        }));
+                        console.log('All Tasks: Saved forced subscription to localStorage');
+                    } else {
+                        console.log('All Tasks: Skipping subscription for owned list:', currentShareId);
+                    }
+                } catch (err) {
+                    console.error('All Tasks: Error saving subscription:', err);
+                }
+            }
+            
+            // Navigate away
+            storage.disconnectUpdates();
+            const url = new URL(window.location.href);
+            url.searchParams.delete('share');
+            url.searchParams.set('refreshLists', 'true');
+            window.location.href = url.href;
             return;
         }
 

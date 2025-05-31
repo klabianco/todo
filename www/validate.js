@@ -1,0 +1,1 @@
+const validateSyntax = require('syntax-error'); const fs = require('fs'); const path = require('path'); const filePath = path.resolve('./assets/js/modules/app.js'); const content = fs.readFileSync(filePath, 'utf8'); const err = validateSyntax(content, filePath); if (err) { console.error('Syntax error:', err.toString()); } else { console.log('No syntax errors found'); }

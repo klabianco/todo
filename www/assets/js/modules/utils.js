@@ -4,11 +4,16 @@
 
 // Generate a UUID
 export const generateUUID = () => {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    // Using timestamp as part of the ID to ensure uniqueness
+    const timestamp = new Date().getTime().toString(16);
+    const randomPart = 'xxxxxxxxxxxx4xxxyxxxxxxxxxxxxxxx'.replace(/[xy]/g, c => {
         const r = Math.random() * 16 | 0;
         const v = c === 'x' ? r : (r & 0x3 | 0x8);
         return v.toString(16);
     });
+    
+    // Combine timestamp and random part for truly unique IDs
+    return timestamp.substring(0, 8) + randomPart.substring(0, 24);
 };
 
 // Get current date in YYYY-MM-DD format
