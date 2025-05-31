@@ -62,9 +62,34 @@ export const init = async () => {
     
     // Setup subscribed lists or auto-subscribe when visiting a shared list
     if (!isSharedList) {
+        // Force a cleanup of invalid lists on app startup
         const subscribedLists = storage.getSubscribedLists();
-        if (subscribedLists.length > 0 || shouldRefreshLists) {
-            ui.addSubscribedListsUI(subscribedLists, handleSubscribedListClick);
+        if (subscribedLists.length > 0) {
+            // Check for any invalid lists and remove them
+            Promise.all(subscribedLists.map(async (list) => {
+                try {
+                    const response = await fetch(`/api/lists/${list.id}`, { method: 'HEAD' });
+                    return response.ok ? list : null;
+                } catch (err) {
+                    console.error(`Error checking list ${list.id}:`, err);
+                    return null;
+                }
+            }))
+            .then(validatedLists => {
+                // Filter out null results (invalid lists)
+                const validLists = validatedLists.filter(list => list !== null);
+                
+                // If we removed any lists, update storage
+                if (validLists.length < subscribedLists.length) {
+                    console.log(`Removed ${subscribedLists.length - validLists.length} invalid lists`);
+                    storage.saveSubscribedLists(validLists);
+                }
+                
+                // Update UI with valid lists
+                if (validLists.length > 0 || shouldRefreshLists) {
+                    ui.addSubscribedListsUI(validLists, handleSubscribedListClick);
+                }
+            });
         }
     } else {
         if (!isOwner) {
@@ -75,10 +100,34 @@ export const init = async () => {
     // Render initial task list
     await renderTasks();
 
-    // Real-time updates for shared lists
+    // Set up real-time updates
     if (isSharedList) {
-        storage.connectToUpdates(() => {
-            renderTasks();
+        // Connect to updates for the current shared list
+        storage.connectToUpdates((updatedData) => {
+            if (updatedData.tasks) {
+                ui.renderTasks(updatedData.tasks);
+                ui.showUpdatedNotification();
+                
+                if (updatedData.focusId) {
+                    state.focusedTaskId = updatedData.focusId;
+                    ui.highlightTask(updatedData.focusId);
+                    setFocusedTaskAsTitle(updatedData.tasks);
+                }
+            }
+        });
+    } else {
+        // Connect to updates for owned lists when in personal view
+        storage.connectToOwnedListsUpdates((updatedData) => {
+            if (updatedData.tasks) {
+                ui.renderTasks(updatedData.tasks);
+                ui.showUpdatedNotification();
+                
+                if (updatedData.focusId) {
+                    state.focusedTaskId = updatedData.focusId;
+                    ui.highlightTask(updatedData.focusId);
+                    setFocusedTaskAsTitle(updatedData.tasks);
+                }
+            }
         });
     }
 
@@ -96,7 +145,25 @@ export const init = async () => {
 };
 
 // Handle clicking on a subscribed shared list
-const handleSubscribedListClick = (list) => {
+const handleSubscribedListClick = async (list) => {
+    // First check if the list still exists
+    try {
+        const response = await fetch(`/api/lists/${list.id}`, { method: 'GET' });
+        if (!response.ok) {
+            // List doesn't exist anymore, remove it from subscriptions
+            alert(`This shared list no longer exists and will be removed from your subscriptions.`);
+            storage.unsubscribeFromSharedList(list.id);
+            
+            // Refresh the subscribed lists UI
+            const updatedLists = storage.getSubscribedLists();
+            ui.addSubscribedListsUI(updatedLists, handleSubscribedListClick);
+            return;
+        }
+    } catch (err) {
+        console.error('Error checking list:', err);
+    }
+    
+    // List exists, navigate to it
     window.location.href = list.url;
 };
 
@@ -170,6 +237,31 @@ const handleBackToPersonalList = () => {
     window.location.href = url.href;
 };
 
+// Handle deleting a shared list (owner only)
+const handleDeleteSharedList = async () => {
+    if (!storage.getIsSharedList() || !storage.isOwnedList(storage.getShareId())) {
+        return; // Not a shared list or not the owner
+    }
+    
+    const confirmDelete = confirm('Are you sure you want to delete this shared list? This will remove it for all users who have subscribed to it.');
+    if (!confirmDelete) {
+        return;
+    }
+    
+    const shareId = storage.getShareId();
+    const success = await storage.deleteSharedList(shareId);
+    
+    if (success) {
+        // Redirect back to personal list
+        storage.disconnectUpdates();
+        const url = new URL(window.location.href);
+        url.searchParams.delete('share');
+        url.searchParams.set('refreshLists', 'true');
+        window.location.href = url.href;
+    } else {
+        alert('Failed to delete the shared list. Please try again.');
+    }
+};
 
 // Set up all event listeners
 const setupEventListeners = () => {
@@ -217,6 +309,12 @@ const setupEventListeners = () => {
         rootBreadcrumb.addEventListener('click', () => jumpToBreadcrumb('root'));
     }
     
+    // Delete shared list button (for owners)
+    const deleteListButton = document.getElementById('delete-list-button');
+    if (deleteListButton) {
+        deleteListButton.addEventListener('click', handleDeleteSharedList);
+    }
+    
     // Set up share button
     ui.setupShareButton(handleShareButtonClick);
 
@@ -259,19 +357,35 @@ const handleShareButtonClick = async () => {
         // Show copied notification
         showCopiedNotification();
     } else {
-        // Create a new shared list
         try {
             ui.domElements.shareButton.disabled = true;
             ui.domElements.shareButton.textContent = 'Creating share link...';
             
-            // Get current tasks
+            // First, get the current tasks regardless of whether we have an existing shared list
+            const currentDate = storage.getActiveDate();
             const allTasks = await storage.loadTasks();
-
-            // Create shared list on server and include current focus
-            const newShareId = await storage.createSharedList(allTasks, currentFocusedTaskId);
+            let shareId;
+            
+            // Check if we already have a shared list for the current date
+            const existingList = storage.getOwnedListByDate(currentDate);
+            
+            if (existingList) {
+                // Reuse the existing share ID but update its content
+                console.log('Reusing existing share ID for this date:', existingList.id);
+                shareId = existingList.id;
+                
+                // Update the existing shared list with current tasks
+                await storage.updateSharedList(shareId, allTasks, currentFocusedTaskId);
+            } else {
+                // Create a new shared list on server with current tasks and focus
+                shareId = await storage.createSharedList(allTasks, currentFocusedTaskId);
+                
+                // Remember which date this shared list belongs to
+                storage.addOwnedList(shareId, currentDate);
+            }
 
             // Generate share URL
-            let shareUrl = `${window.location.origin}${window.location.pathname}?share=${newShareId}`;
+            let shareUrl = `${window.location.origin}${window.location.pathname}?share=${shareId}`;
             
             // Display share URL
             ui.domElements.shareUrlInput.value = shareUrl;
@@ -293,9 +407,7 @@ const handleShareButtonClick = async () => {
             window.history.pushState({}, '', shareUrl);
             
             // Update app state
-            storage.setupSharing(newShareId);
-            // Remember which date this shared list belongs to
-            storage.addOwnedList(newShareId, storage.getActiveDate());
+            storage.setupSharing(shareId);
             ui.setupSharedUI(true);
             // Start listening for updates without requiring a page reload
             storage.connectToUpdates(() => {

@@ -57,6 +57,32 @@ export const loadUserLists = async () => {
         if (res.ok) {
             const data = await res.json();
             subscribedLists = data.lists || [];
+            
+            // Validate that each subscribed list still exists
+            const validatedLists = [];
+            let hasInvalidLists = false;
+            
+            for (const list of subscribedLists) {
+                try {
+                    // Try to fetch the list data to verify it exists
+                    const checkRes = await fetch(`/api/lists/${list.id}`, { method: 'GET' });
+                    if (checkRes.ok) {
+                        validatedLists.push(list);
+                    } else {
+                        console.log(`Removing invalid list from subscriptions: ${list.id}`);
+                        hasInvalidLists = true;
+                    }
+                } catch (err) {
+                    console.error(`Error checking list ${list.id}:`, err);
+                    hasInvalidLists = true;
+                }
+            }
+            
+            // If we found invalid lists, update the subscriptions
+            if (hasInvalidLists && validatedLists.length !== subscribedLists.length) {
+                subscribedLists = validatedLists;
+                saveSubscribedLists(validatedLists);
+            }
         }
     } catch (e) {
         console.error('Failed to load subscriptions', e);
@@ -111,6 +137,36 @@ export const unsubscribeFromSharedList = (id) => {
     const updatedLists = lists.filter(list => list.id !== id);
     saveSubscribedLists(updatedLists);
     return updatedLists;
+};
+
+// Delete a shared list completely (only available to owners)
+export const deleteSharedList = async (id) => {
+    try {
+        const response = await fetch(`/api/lists/${id}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (!response.ok) {
+            console.error('Failed to delete shared list:', response.status);
+            return false;
+        }
+        
+        // Remove from owned lists
+        const lists = getOwnedLists();
+        const updatedLists = lists.filter(list => {
+            if (typeof list === 'object') {
+                return list.id !== id;
+            }
+            return list !== id; // Support legacy format
+        });
+        await saveOwnedLists(updatedLists);
+        
+        return true;
+    } catch (err) {
+        console.error('Error deleting shared list:', err);
+        return false;
+    }
 };
 
 // ----- Owned shared lists helpers -----
@@ -316,6 +372,34 @@ export const createSharedList = async (tasks, focusId = null) => {
     }
 };
 
+// Update an existing shared list with current tasks
+export const updateSharedList = async (shareId, tasks, focusId = null) => {
+    try {
+        console.log('Updating existing shared list:', shareId);
+        
+        const response = await fetch(`/api/lists/${shareId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(focusId ? { tasks, focusId } : { tasks })
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Error updating shared list:', errorText);
+            throw new Error(`Server responded with ${response.status}: ${errorText}`);
+        }
+        
+        sharedListFocusId = focusId;
+        return true;
+    } catch (error) {
+        console.error('Error updating shared list:', error);
+        alert('Failed to update the shared list. Please try again. Error: ' + error.message);
+        throw error;
+    }
+};
+
 // Load tasks (either from local storage or server)
 export const loadTasks = async () => {
     if (isSharedList) {
@@ -345,8 +429,11 @@ export const saveTasks = async (tasks) => {
 
 // ----- Real-time updates via polling -----
 let pollingIntervalId = null;
+let personalPollingIntervalIds = {}; // Track polling for each owned list
 let lastModified = null;
+let ownedListsLastModified = {}; // Track last modified for owned lists
 
+// Connect to updates for a shared list when viewing it directly
 export const connectToUpdates = (onUpdate) => {
     if (!isSharedList || !shareId) return;
 
@@ -372,10 +459,73 @@ export const connectToUpdates = (onUpdate) => {
     pollingIntervalId = setInterval(poll, 5000);
 };
 
+// Connect to updates for owned lists when viewing personal list
+export const connectToOwnedListsUpdates = async (onUpdate) => {
+    // Clean up any existing polling
+    disconnectOwnedListsUpdates();
+    
+    // Get owned lists
+    const ownedLists = getOwnedLists();
+    if (!ownedLists || ownedLists.length === 0) return;
+    
+    // Set up polling for each owned list
+    for (const list of ownedLists) {
+        const listId = typeof list === 'object' ? list.id : list;
+        if (!listId) continue;
+        
+        // Initialize last modified tracking
+        ownedListsLastModified[listId] = null;
+        
+        // Create polling function for this list
+        const pollList = async () => {
+            try {
+                const res = await fetch(`/api/lists/${listId}`, { cache: 'no-cache' });
+                if (!res.ok) return;
+                
+                const data = await res.json();
+                
+                // Check if the list has been updated
+                if (ownedListsLastModified[listId] !== data.lastModified) {
+                    console.log(`Owned list ${listId} has been updated`);
+                    ownedListsLastModified[listId] = data.lastModified;
+                    
+                    // Get the current date this list belongs to
+                    const ownedList = ownedLists.find(l => typeof l === 'object' && l.id === listId);
+                    if (ownedList && ownedList.date && activeDate === ownedList.date) {
+                        // We're on the date of this list, update tasks
+                        if (onUpdate) onUpdate(data);
+                    }
+                }
+            } catch (err) {
+                console.error(`Polling error for list ${listId}:`, err);
+            }
+        };
+        
+        // Start polling
+        pollList(); // Initial poll
+        personalPollingIntervalIds[listId] = setInterval(pollList, 5000);
+    }
+};
+
 export const disconnectUpdates = () => {
     if (pollingIntervalId) {
         clearInterval(pollingIntervalId);
         pollingIntervalId = null;
     }
     lastModified = null;
+    
+    // Also disconnect owned lists polling
+    disconnectOwnedListsUpdates();
+};
+
+// Disconnect polling for owned lists
+export const disconnectOwnedListsUpdates = () => {
+    // Clear all polling intervals
+    Object.values(personalPollingIntervalIds).forEach(intervalId => {
+        clearInterval(intervalId);
+    });
+    
+    // Reset tracking
+    personalPollingIntervalIds = {};
+    ownedListsLastModified = {};
 };

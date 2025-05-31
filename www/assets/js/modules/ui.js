@@ -24,7 +24,10 @@ export const domElements = {
     shareUrlInput: $('share-url'),
     copyShareUrlButton: $('copy-share-url'),
     closeShareUrlButton: $('close-share-url'),
-    backToPersonalButton: $('back-to-personal-button')
+    backToPersonalButton: $('back-to-personal-button'),
+    subscribedListsContainer: $('subscribed-lists-container'),
+    subscribedListsList: $('subscribed-lists'),
+    notificationContainer: document.createElement('div') // Container for notifications
 };
 
 // Variables for Sortable instances
@@ -273,6 +276,27 @@ export const setupSharedUI = (isOwner = isOwnedList(getShareId())) => {
 
         // Show button to return to personal lists
         domElements.backToPersonalButton.classList.remove('hidden');
+        
+        // Add delete button for owners
+        if (isOwner) {
+            // Create delete button if it doesn't exist
+            let deleteButton = document.getElementById('delete-list-button');
+            if (!deleteButton) {
+                deleteButton = document.createElement('button');
+                deleteButton.id = 'delete-list-button';
+                deleteButton.className = 'ml-2 bg-red-500 hover:bg-red-600 text-white py-1 px-3 rounded text-sm flex items-center';
+                deleteButton.innerHTML = `
+                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                    </svg>
+                    <span>Delete List</span>
+                `;
+                
+                // Add to DOM next to back button
+                const buttonContainer = domElements.backToPersonalButton.parentNode;
+                buttonContainer.appendChild(deleteButton);
+            }
+        }
     }
 };
 
@@ -384,4 +408,46 @@ export const setupShareButton = (onShareButtonClick) => {
             domElements.shareButton.classList.remove('hidden');
         });
     }
+};
+
+// Show notification that the list has been updated from a remote source
+export const showUpdatedNotification = () => {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = 'bg-gray-800 text-white px-4 py-2 rounded-md shadow-lg transform transition-all duration-300 flex items-center';
+    notification.style.opacity = '0';
+    notification.style.transform = 'translateY(10px)';
+    
+    // Add content
+    const icon = document.createElement('span');
+    icon.innerHTML = `
+        <svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+        </svg>
+    `;
+    
+    const text = document.createElement('span');
+    text.textContent = 'List updated from shared source';
+    
+    notification.appendChild(icon);
+    notification.appendChild(text);
+    
+    // Add to container
+    domElements.notificationContainer.appendChild(notification);
+    
+    // Animate in
+    setTimeout(() => {
+        notification.style.opacity = '1';
+        notification.style.transform = 'translateY(0)';
+    }, 10);
+    
+    // Animate out and remove after delay
+    setTimeout(() => {
+        notification.style.opacity = '0';
+        notification.style.transform = 'translateY(-10px)';
+        
+        setTimeout(() => {
+            notification.remove();
+        }, 300);
+    }, 3000);
 };

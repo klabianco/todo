@@ -156,6 +156,47 @@ switch ($resource) {
                 }
                 break;
                 
+            case 'DELETE':
+                if ($id) {
+                    // Delete a specific task list
+                    $file_path = get_task_file_path($id);
+                    if (file_exists($file_path)) {
+                        // Get all users with subscription data
+                        $users_dir = $data_dir . '/users';
+                        if (file_exists($users_dir)) {
+                            $user_dirs = glob($users_dir . '/*', GLOB_ONLYDIR);
+                            
+                            // Process each user's subscriptions
+                            foreach ($user_dirs as $user_dir) {
+                                $subscribed_path = $user_dir . '/subscribed.json';
+                                if (file_exists($subscribed_path)) {
+                                    $subscribed_data = json_decode(file_get_contents($subscribed_path), true);
+                                    if (is_array($subscribed_data)) {
+                                        // Remove the deleted list from subscriptions
+                                        $updated_lists = array_filter($subscribed_data, function($item) use ($id) {
+                                            return !isset($item['id']) || $item['id'] !== $id;
+                                        });
+                                        
+                                        // Save updated subscriptions
+                                        file_put_contents($subscribed_path, json_encode(array_values($updated_lists)));
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Delete the list file
+                        unlink($file_path);
+                        echo json_encode(['success' => true]);
+                    } else {
+                        http_response_code(404);
+                        echo json_encode(['error' => 'Task list not found']);
+                    }
+                } else {
+                    http_response_code(400);
+                    echo json_encode(['error' => 'Share ID is required']);
+                }
+                break;
+                
             default:
                 http_response_code(405);
                 echo json_encode(['error' => 'Method not allowed']);
