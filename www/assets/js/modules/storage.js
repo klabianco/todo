@@ -305,30 +305,38 @@ const fetchTasksForOwnedList = async (id) => {
 export const syncOwnedListForDate = async (date) => {
     const entry = getOwnedListByDate(date);
     if (!entry) {
-        console.log(`No owned list found for date ${date}`);
+        console.debug(`No owned list found for date ${date}`);
         return;
     }
 
-    console.log(`Syncing owned list ${entry.id} for date ${date}`);
+    console.debug(`Syncing owned list ${entry.id} for date ${date}`);
     
     try {
         // Fetch the latest tasks from the shared list
         const tasks = await fetchTasksForOwnedList(entry.id);
         if (!tasks) {
-            console.log(`No tasks found for list ${entry.id}`);
+            console.debug(`No tasks found for list ${entry.id}`);
             return;
         }
         
-        console.log(`Updating personal tasks for date ${date} with ${tasks.length} tasks from shared list ${entry.id}`);
+        // Only log at a higher level if there are actual tasks to sync
+        if (tasks.length > 0) {
+            console.log(`Syncing ${tasks.length} tasks from shared list ${entry.id} to personal list for date ${date}`);
+        } else {
+            console.debug(`No tasks to sync from shared list ${entry.id}`);
+        }
         
         // Save these tasks to the personal list for this date
         await savePersonalTasksToServer(date, tasks);
         
         // Update our local tasks array if this is the active date
         if (date === activeDate && !isSharedList) {
-            console.log(`Updating local tasks array for active date ${activeDate}`);
+            console.debug(`Updating local tasks array for active date ${activeDate}`);
             // Update the module-level tasks array with the latest tasks
             updateTasks(tasks);
+            
+            // Force re-render of the task list UI
+            document.dispatchEvent(new CustomEvent('tasksUpdated', { detail: { tasks } }));
         }
         
         return tasks;
@@ -651,105 +659,70 @@ export const connectToOwnedListsUpdates = async (onUpdate) => {
     // Get owned lists
     const ownedLists = getOwnedLists();
     if (!ownedLists || ownedLists.length === 0) {
-        console.log('No owned lists found, skipping polling setup');
+        console.debug('No owned lists found, skipping polling setup');
         return;
     }
-
-    console.log(`Setting up polling for ${ownedLists.length} owned lists`);
     
-    // Debug: Log all owned lists
-    ownedLists.forEach((list, index) => {
-        if (typeof list === 'object') {
-            console.log(`Owned list ${index}: id=${list.id}, date=${list.date}`);
-        } else {
-            console.log(`Owned list ${index}: id=${list}`);
-        }
-    });
-    
-    // Get current date's list ID
+    // We only need to track the list for the current date
+    // First try to get the owned list for the current date
     const currentDateList = getOwnedListByDate(activeDate);
-    const currentDateListId = currentDateList ? currentDateList.id : null;
-    console.log(`Current date list ID for ${activeDate}: ${currentDateListId}`);
-
-    // Set up polling for each owned list
-    for (const list of ownedLists) {
-        const listId = typeof list === 'object' ? list.id : list;
-        if (!listId) {
-            console.log('Skipping list with no ID');
-            continue;
-        }
-
-        console.log(`Setting up polling for owned list: ${listId}`);
-        
-        // Initialize last modified tracking
-        ownedListsLastModified[listId] = null;
-
-        // Create polling function for this list
-        const pollList = async () => {
-            try {
-                // Add cache-busting timestamp and no-store cache policy
-                const res = await fetch(`/api/lists/${listId}?t=${Date.now()}`, { 
-                    cache: 'no-store',
-                    headers: { 'Accept': 'application/json' }
-                });
-                
-                if (!res.ok) {
-                    console.log(`List ${listId} not found or server error: ${res.status}`);
-                    return;
-                }
-
-                const data = await res.json();
-                
-                // Initialize the last modified timestamp on first poll
-                if (ownedListsLastModified[listId] === null) {
-                    console.log(`First poll for list ${listId}, lastModified: ${data.lastModified}`);
-                    ownedListsLastModified[listId] = data.lastModified;
-                    return; // Just initialize, don't process updates yet
-                }
-                
-                // Check if the list has been updated
-                if (ownedListsLastModified[listId] !== data.lastModified) {
-                    console.log(`Owned list ${listId} has been updated from lastModified: ${ownedListsLastModified[listId]} to ${data.lastModified}`);
-                    ownedListsLastModified[listId] = data.lastModified;
-                    
-                    // Find the list entry to get its date
-                    const ownedList = ownedLists.find(l => {
-                        if (typeof l === 'object') return l.id === listId;
-                        return l === listId;
-                    });
-                    
-                    // IMPROVED DETECTION LOGIC
-                    // 1. This is the list for the current date
-                    const isCurrentDateList = currentDateListId === listId;
-                    
-                    // 2. This is a list we're currently viewing based on the active date
-                    const listDate = ownedList && typeof ownedList === 'object' ? ownedList.date : null;
-                    const isCurrentlyViewedList = listDate && activeDate === listDate;
-                    
-                    // 3. Debug logging
-                    console.log(`List ${listId} check: isCurrentDateList=${isCurrentDateList}, isCurrentlyViewedList=${isCurrentlyViewedList}`);
-                    console.log(`List date: ${listDate}, Active date: ${activeDate}`);
-                    
-                    // 4. Apply updates if this list relates to the current view
-                    if (isCurrentDateList || isCurrentlyViewedList) {
-                        console.log(`Updating tasks for owned list ${listId} that matches current view`);
-                        // Load the tasks from server for the current active date
-                        await syncOwnedListForDate(activeDate);
-                        // Call the update callback with the data from the shared list
-                        if (onUpdate) onUpdate(data);
-                    } else {
-                        console.log(`Skipping update for list ${listId} - not matching current view`);
-                    }
-                }
-            } catch (err) {
-                console.error(`Polling error for list ${listId}:`, err.message);
-            }
-        };
-        
-        // Start polling
-        pollList(); // Initial poll
-        personalPollingIntervalIds[listId] = setInterval(pollList, 2000); // Reduced to 2 seconds for faster updates
+    
+    if (!currentDateList || !currentDateList.id) {
+        console.debug(`No owned list found for current date ${activeDate}, skipping polling`);
+        return;
     }
+    
+    const listId = currentDateList.id;
+    console.debug(`Setting up polling for current date (${activeDate}) owned list: ${listId}`);
+    
+    // Initialize last modified tracking
+    ownedListsLastModified[listId] = null;
+
+    // Create polling function for this list
+    const pollList = async () => {
+        try {
+            // Add cache-busting timestamp and no-store cache policy
+            const res = await fetch(`/api/lists/${listId}?t=${Date.now()}`, { 
+                cache: 'no-store',
+                headers: { 'Accept': 'application/json' }
+            });
+            
+            if (!res.ok) {
+                console.debug(`List ${listId} not found or server error: ${res.status}`);
+                return;
+            }
+
+            const data = await res.json();
+            
+            // Initialize the last modified timestamp on first poll
+            if (ownedListsLastModified[listId] === null) {
+                console.debug(`First poll for current date list ${listId}`);
+                ownedListsLastModified[listId] = data.lastModified;
+                return; // Just initialize, don't process updates yet
+            }
+            
+            // Check if the list has been updated
+            if (ownedListsLastModified[listId] !== data.lastModified) {
+                console.debug(`Owned list ${listId} has been updated`);
+                ownedListsLastModified[listId] = data.lastModified;
+                
+                // Load the tasks from server for the current active date
+                await syncOwnedListForDate(activeDate);
+                
+                // Call the update callback with the data from the shared list
+                if (onUpdate) {
+                    console.debug('Triggering UI update for changed list');
+                    onUpdate(data);
+                }
+            }
+        } catch (err) {
+            console.error(`Polling error for list ${listId}:`, err.message);
+        }
+    };
+    
+    // Start polling
+    pollList(); // Initial poll
+    personalPollingIntervalIds[listId] = setInterval(pollList, 2000); // 2 seconds for real-time updates
 };
 
 export const disconnectUpdates = () => {
