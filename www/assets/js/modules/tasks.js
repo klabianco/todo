@@ -14,7 +14,17 @@ export const addTask = async (taskText, currentFocusedTaskId = null) => {
     // Otherwise create a top-level task
     const tasks = await loadTasks();
     
-    // Create new task object
+    // Check if a task with the same text already exists (regardless of completion status)
+    const existingTask = tasks.find(task => 
+        task.task.trim().toLowerCase() === taskText.trim().toLowerCase()
+    );
+    
+    if (existingTask) {
+        // Return the existing task without creating a duplicate
+        return existingTask;
+    }
+    
+    // Create new task object if no existing task found
     const newTask = {
         id: generateUUID(),
         task: taskText,
@@ -40,6 +50,16 @@ export const addSubtask = async (parentId, subtaskText) => {
     
     if (result) {
         const { task } = result;
+        
+        // Check if a subtask with the same text already exists (regardless of completion status)
+        const existingSubtask = task.subtasks && task.subtasks.find(subtask => 
+            subtask.task.trim().toLowerCase() === subtaskText.trim().toLowerCase()
+        );
+        
+        if (existingSubtask) {
+            // Return the existing subtask without creating a duplicate
+            return existingSubtask;
+        }
         
         // Create new subtask
         const newSubtask = {
