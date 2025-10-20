@@ -20,7 +20,11 @@ export const addTask = async (taskText, currentFocusedTaskId = null) => {
     );
     
     if (existingTask) {
-        // Return the existing task without creating a duplicate
+        // If the existing task is completed, uncheck it
+        if (existingTask.completed) {
+            existingTask.completed = false;
+            await saveTasks(tasks);
+        }
         return existingTask;
     }
     
@@ -57,7 +61,11 @@ export const addSubtask = async (parentId, subtaskText) => {
         );
         
         if (existingSubtask) {
-            // Return the existing subtask without creating a duplicate
+            // If the existing subtask is completed, uncheck it
+            if (existingSubtask.completed) {
+                existingSubtask.completed = false;
+                await saveTasks(tasks);
+            }
             return existingSubtask;
         }
         
@@ -93,9 +101,9 @@ export const toggleTaskCompletion = async (taskId) => {
         const { task } = taskResult;
         task.completed = !task.completed;
         
-        // If we're completing a task, also complete all subtasks
-        if (task.completed && task.subtasks && task.subtasks.length > 0) {
-            completeAllSubtasks(task, true);
+        // Toggle completion status for all subtasks to match parent
+        if (task.subtasks && task.subtasks.length > 0) {
+            completeAllSubtasks(task, task.completed);
         }
         
         await saveTasks(tasks);
@@ -113,7 +121,7 @@ export const toggleTaskSticky = async (taskId) => {
         const task = taskResult.task;
         task.sticky = !task.sticky;
         
-        // Apply the same sticky status to all subtasks if it's being made sticky
+        // Apply the same sticky status to all subtasks
         if (task.subtasks && task.subtasks.length > 0) {
             makeAllSubtasksSticky(task, task.sticky);
         }
