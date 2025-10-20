@@ -708,6 +708,13 @@ const focusOnTask = (taskId, taskTitle) => {
                 return;
             }
             
+            // Check if this task is already anywhere in the navigation stack
+            // This prevents circular navigation (e.g., clicking into the same task multiple times)
+            if (taskNavigationStack.some(item => item.id === taskId)) {
+                // Task is already in the navigation path, do nothing
+                return;
+            }
+            
             // Initialize subtasks array if it doesn't exist
             if (!result.task.subtasks) {
                 result.task.subtasks = [];
