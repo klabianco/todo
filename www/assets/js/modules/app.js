@@ -196,17 +196,10 @@ export const init = async () => {
                 // Show notification about the update
                 ui.showUpdatedNotification();
                 
-                if (updatedData.focusId) {
-                    // Just update the focused task ID
-                    currentFocusedTaskId = updatedData.focusId;
-                    // Update UI if needed with the focused task
-                    if (ui.domElements.focusTitle && updatedData.tasks) {
-                        const focusedTask = updatedData.tasks.find(t => t.id === updatedData.focusId);
-                        if (focusedTask) {
-                            ui.domElements.focusTitle.textContent = focusedTask.task;
-                        }
-                    }
-                }
+                // Don't update focus from real-time updates to preserve navigation stack
+                // The focusId in real-time updates only stores single-level focus,
+                // but we support multi-level navigation (e.g., groceries -> 2 perfect bars)
+                // Let users control their own navigation instead of syncing it
             }
         });
     } else {
@@ -217,17 +210,8 @@ export const init = async () => {
                 renderTasks();
                 ui.showUpdatedNotification();
                 
-                if (updatedData.focusId) {
-                    // Just update the focused task ID
-                    currentFocusedTaskId = updatedData.focusId;
-                    // Update UI if needed with the focused task
-                    if (ui.domElements.focusTitle && updatedData.tasks) {
-                        const focusedTask = updatedData.tasks.find(t => t.id === updatedData.focusId);
-                        if (focusedTask) {
-                            ui.domElements.focusTitle.textContent = focusedTask.task;
-                        }
-                    }
-                }
+                // Don't update focus from real-time updates to preserve navigation stack
+                // Let users control their own navigation
             }
         });
     }
