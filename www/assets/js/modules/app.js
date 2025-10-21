@@ -731,8 +731,9 @@ const focusOnTask = (taskId, taskTitle) => {
             currentFocusedTaskId = taskId;
             ui.domElements.taskBreadcrumb.classList.remove('hidden');
 
-            // Update the page title to show the focused task
+            // Update the page title and focus title to show the focused task
             document.title = `${taskTitle} - Todo`;
+            ui.domElements.focusTitle.textContent = taskTitle;
             
             // Save the focus ID for shared lists
             if (storage.getIsSharedList()) {
