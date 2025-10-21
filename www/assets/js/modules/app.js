@@ -699,11 +699,18 @@ const jumpToBreadcrumb = async (index) => {
 
 // Focus on a specific task and its subtasks
 const focusOnTask = (taskId, taskTitle) => {
+    console.log('🔍 focusOnTask called:', { taskId, taskTitle });
+    console.log('📍 Current stack:', taskNavigationStack);
+    console.log('📍 Current focused ID:', currentFocusedTaskId);
+    
     // Allow focusing on any task, even if it doesn't have subtasks yet
     storage.loadTasks().then(tasks => {
         const result = utils.findTaskById(tasks, taskId);
+        console.log('🔍 Found task:', result?.task);
+        
         if (result && result.task) {
             if (currentFocusedTaskId === taskId) {
+                console.log('⚠️ Already focused on this task, returning');
                 // Already focused on this task, do nothing
                 return;
             }
@@ -711,16 +718,20 @@ const focusOnTask = (taskId, taskTitle) => {
             // Check if this task is already anywhere in the navigation stack
             // This prevents circular navigation (e.g., clicking into the same task multiple times)
             if (taskNavigationStack.some(item => item.id === taskId)) {
+                console.log('⚠️ Task already in navigation stack, returning');
                 // Task is already in the navigation path, do nothing
                 return;
             }
             
             // Initialize subtasks array if it doesn't exist
             if (!result.task.subtasks) {
+                console.log('📝 Initializing empty subtasks array');
                 result.task.subtasks = [];
                 // Save the updated task with the empty subtasks array
                 storage.saveTasks(tasks);
             }
+            
+            console.log('✅ Task has subtasks:', result.task.subtasks);
             
             // Add to navigation stack
             taskNavigationStack.push({
@@ -734,14 +745,18 @@ const focusOnTask = (taskId, taskTitle) => {
             // Update the page title and focus title to show the focused task
             document.title = `${taskTitle} - Todo`;
             ui.domElements.focusTitle.textContent = taskTitle;
+            console.log('📝 Updated focus title to:', taskTitle);
             
             // Save the focus ID for shared lists
             if (storage.getIsSharedList()) {
                 storage.saveTasks(tasks, taskId);
             }
             
+            console.log('📍 New stack:', taskNavigationStack);
             updateBreadcrumbTrail();
             renderTasks();
+        } else {
+            console.log('❌ Task not found');
         }
     });
 };
@@ -759,8 +774,12 @@ const promoteTask = async (taskId) => {
 
 // Render all tasks
 const renderTasks = async () => {
+    console.log('🎨 renderTasks called');
+    console.log('📍 currentFocusedTaskId:', currentFocusedTaskId);
+    
     // Load tasks
     const allTasks = await storage.loadTasks();
+    console.log('📦 All tasks loaded:', allTasks.length);
     
     // Clear existing task containers
     ui.domElements.activeTaskList.innerHTML = '';
@@ -780,19 +799,25 @@ const renderTasks = async () => {
     let completedTasks = 0;
     
     if (currentFocusedTaskId) {
+        console.log('🔍 FOCUS MODE: Looking for task:', currentFocusedTaskId);
         // Focus mode: show only the focused task's subtasks
         const result = utils.findTaskById(allTasks, currentFocusedTaskId);
+        console.log('🔍 Found focused task:', result?.task?.task);
         
         if (result) {
             const { task } = result;
             
             // Get all subtasks (or initialize empty array)
             const subtasks = task.subtasks || [];
+            console.log('📋 Subtasks of focused task:', subtasks.length, subtasks.map(st => st.task));
             const activeSubtasks = subtasks.filter(st => !st.completed);
             const completedSubtasks = subtasks.filter(st => st.completed);
+            console.log('✅ Active subtasks:', activeSubtasks.length);
+            console.log('☑️ Completed subtasks:', completedSubtasks.length);
             
             // Add active subtasks
             activeSubtasks.forEach(subtask => {
+                console.log('➕ Adding active subtask:', subtask.task);
                 const subtaskElement = ui.createTaskElement(
                     subtask,
                     0,
@@ -806,6 +831,7 @@ const renderTasks = async () => {
             
             // Add completed subtasks
             completedSubtasks.forEach(subtask => {
+                console.log('➕ Adding completed subtask:', subtask.task);
                 const subtaskElement = ui.createTaskElement(
                     subtask,
                     0,
@@ -821,6 +847,7 @@ const renderTasks = async () => {
             activeTasks = activeSubtasks.length;
             completedTasks = completedSubtasks.length;
         } else {
+            console.log('❌ Focused task not found, reverting to all tasks');
             // Task not found, revert to all tasks view
             currentFocusedTaskId = null;
             ui.domElements.taskBreadcrumb.classList.add('hidden');
