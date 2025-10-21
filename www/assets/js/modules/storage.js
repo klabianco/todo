@@ -74,7 +74,6 @@ export const loadUserLists = async () => {
                     if (checkRes.ok) {
                         validatedLists.push(list);
                     } else {
-                        console.log(`Removing invalid list from subscriptions: ${list.id}`);
                         hasInvalidLists = true;
                     }
                 } catch (err) {
@@ -121,8 +120,6 @@ export const saveSubscribedLists = async (lists) => {
             console.error('Failed to save subscriptions:', response.status);
             return false;
         }
-        
-        console.log('Successfully saved subscriptions:', lists.length, 'lists');
         return true;
     } catch (err) {
         console.error('Error saving subscriptions:', err);
@@ -139,7 +136,6 @@ export const subscribeToSharedList = async (id, title, url) => {
     
     // Don't subscribe to your own lists
     if (isOwnedList(id)) {
-        console.log(`Skipping subscription to list ${id} because you already own it`);
         return getSubscribedLists();
     }
     
@@ -160,8 +156,6 @@ export const subscribeToSharedList = async (id, title, url) => {
         return getSubscribedLists();
     }
     
-    console.log(`Subscribing to shared list: ${id}, Title: ${title}`);
-    
     // Get current subscriptions
     const lists = getSubscribedLists();
     
@@ -170,11 +164,9 @@ export const subscribeToSharedList = async (id, title, url) => {
     
     if (existingIndex >= 0) {
         // Update existing subscription
-        console.log(`Updating existing subscription for ${id}`);
         lists[existingIndex] = { id, title, url, lastAccessed: new Date().toISOString() };
     } else {
         // Add new subscription
-        console.log(`Adding new subscription for ${id}`);
         lists.push({ id, title, url, lastAccessed: new Date().toISOString() });
     }
     
@@ -184,13 +176,11 @@ export const subscribeToSharedList = async (id, title, url) => {
     // Add a backup - store in localStorage too for redundancy
     try {
         localStorage.setItem('todo_subscribed_lists', JSON.stringify(lists));
-        console.log('Saved subscription backup to localStorage');
     } catch (err) {
         console.error('Error saving subscription backup to localStorage:', err);
     }
     
     if (saveResult) {
-        console.log(`Successfully subscribed to list ${id}`);
     } else {
         console.error(`Failed to save subscription for list ${id}`);
     }
@@ -305,33 +295,22 @@ const fetchTasksForOwnedList = async (id) => {
 export const syncOwnedListForDate = async (date) => {
     const entry = getOwnedListByDate(date);
     if (!entry) {
-        console.debug(`No owned list found for date ${date}`);
         return;
     }
-
-    console.debug(`Syncing owned list ${entry.id} for date ${date}`);
     
     try {
         // Fetch the latest tasks from the shared list
         const tasks = await fetchTasksForOwnedList(entry.id);
         if (!tasks) {
-            console.debug(`No tasks found for list ${entry.id}`);
             return;
         }
         
-        // Only log at a higher level if there are actual tasks to sync
-        if (tasks.length > 0) {
-            console.log(`Syncing ${tasks.length} tasks from shared list ${entry.id} to personal list for date ${date}`);
-        } else {
-            console.debug(`No tasks to sync from shared list ${entry.id}`);
-        }
         
         // Save these tasks to the personal list for this date
         await savePersonalTasksToServer(date, tasks);
         
         // Update our local tasks array if this is the active date
         if (date === activeDate && !isSharedList) {
-            console.debug(`Updating local tasks array for active date ${activeDate}`);
             // Update the module-level tasks array with the latest tasks
             updateTasks(tasks);
             
@@ -364,9 +343,6 @@ export const updateOwnedListForDate = async (date, tasks) => {
         if (!response.ok) {
             throw new Error(`Server responded with ${response.status}`);
         }
-        
-        // Log successful update for debugging
-        console.log(`Successfully updated owned shared list ${entry.id} for date ${date}`);
         return true;
     } catch (err) {
         console.error('Failed to update owned shared list', err);
@@ -425,8 +401,6 @@ export const saveTasksToServer = async (tasks, focusId = null) => {
         // Refresh our polling timestamp to prevent our own changes from triggering
         // the update notification
         lastModified = new Date().toISOString();
-        
-        console.log('Successfully saved changes to shared list', shareId);
         return await response.json();
     } catch (error) {
         console.error('Error saving shared tasks:', error);
@@ -471,7 +445,6 @@ async function savePersonalTasksToServer(date, tasks) {
  */
 export const createSharedList = async (tasks, focusId = null) => {
     try {
-        console.log('Creating new shared list');
         
         // Generate a timestamp to guarantee uniqueness
         const timestamp = Date.now();
@@ -495,7 +468,6 @@ export const createSharedList = async (tasks, focusId = null) => {
         }
         
         const data = await response.json();
-        console.log('Share created successfully with ID:', data.shareId);
         sharedListFocusId = focusId;
         return data.shareId;
     } catch (error) {
@@ -508,7 +480,6 @@ export const createSharedList = async (tasks, focusId = null) => {
 // Update an existing shared list with current tasks
 export const updateSharedList = async (shareId, tasks, focusId = null) => {
     try {
-        console.log('Updating existing shared list:', shareId);
         
         const response = await fetch(`/api/lists/${shareId}`, {
             method: 'PUT',
@@ -562,18 +533,15 @@ export const loadTasks = async () => {
 export const saveTasks = async (tasks) => {
     if (isSharedList) {
         // For shared lists, save to server
-        console.log(`Saving tasks to shared list ${shareId}`);
         return await saveTasksToServer(tasks);
     } else {
         // Personal list stored on server
-        console.log(`Saving tasks to personal list for date ${activeDate}`);
         await savePersonalTasksToServer(activeDate, tasks);
         
         // CRITICAL FIX: Also update any owned shared list for this date
         // This ensures changes made in personal view update the shared list
         const ownedList = getOwnedListByDate(activeDate);
         if (ownedList && ownedList.id) {
-            console.log(`Also updating owned shared list ${ownedList.id} for date ${activeDate}`);
             await updateOwnedListForDate(activeDate, tasks);
         }
     }
@@ -595,8 +563,6 @@ export const connectToUpdates = (shareId, onUpdate) => {
 
     // First, disconnect any existing connection
     disconnectUpdates();
-
-    console.log(`Connected to real-time updates for shared list ${shareId}`);
 
     // Reset the module-level last modified timestamp
     lastModified = null;
@@ -623,9 +589,6 @@ export const connectToUpdates = (shareId, onUpdate) => {
 
             // Check if the list has been updated
             if (lastModified !== data.lastModified) {
-                console.log(`Changes detected in shared list ${shareId}`);
-                console.log(`Previous lastModified: ${lastModified}`);
-                console.log(`New lastModified: ${data.lastModified}`);
 
                 // Update our timestamp
                 lastModified = data.lastModified;
@@ -659,7 +622,6 @@ export const connectToOwnedListsUpdates = async (onUpdate) => {
     // Get owned lists
     const ownedLists = getOwnedLists();
     if (!ownedLists || ownedLists.length === 0) {
-        console.debug('No owned lists found, skipping polling setup');
         return;
     }
     
@@ -668,12 +630,10 @@ export const connectToOwnedListsUpdates = async (onUpdate) => {
     const currentDateList = getOwnedListByDate(activeDate);
     
     if (!currentDateList || !currentDateList.id) {
-        console.debug(`No owned list found for current date ${activeDate}, skipping polling`);
         return;
     }
     
     const listId = currentDateList.id;
-    console.debug(`Setting up polling for current date (${activeDate}) owned list: ${listId}`);
     
     // Initialize last modified tracking
     ownedListsLastModified[listId] = null;
@@ -688,7 +648,6 @@ export const connectToOwnedListsUpdates = async (onUpdate) => {
             });
             
             if (!res.ok) {
-                console.debug(`List ${listId} not found or server error: ${res.status}`);
                 return;
             }
 
@@ -696,14 +655,12 @@ export const connectToOwnedListsUpdates = async (onUpdate) => {
             
             // Initialize the last modified timestamp on first poll
             if (ownedListsLastModified[listId] === null) {
-                console.debug(`First poll for current date list ${listId}`);
                 ownedListsLastModified[listId] = data.lastModified;
                 return; // Just initialize, don't process updates yet
             }
             
             // Check if the list has been updated
             if (ownedListsLastModified[listId] !== data.lastModified) {
-                console.debug(`Owned list ${listId} has been updated`);
                 ownedListsLastModified[listId] = data.lastModified;
                 
                 // Load the tasks from server for the current active date
@@ -711,7 +668,6 @@ export const connectToOwnedListsUpdates = async (onUpdate) => {
                 
                 // Call the update callback with the data from the shared list
                 if (onUpdate) {
-                    console.debug('Triggering UI update for changed list');
                     onUpdate(data);
                 }
             }
