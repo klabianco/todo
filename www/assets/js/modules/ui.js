@@ -16,9 +16,6 @@ export const domElements = {
     emptyState: $('empty-state'),
     taskBreadcrumb: $('task-breadcrumb'),
     focusTitle: $('focus-title'),
-    prevDayButton: $('prev-day'),
-    nextDayButton: $('next-day'),
-    currentDateDisplay: $('current-date'),
     shareButton: $('share-button'),
     shareUrlContainer: $('share-url-container'),
     shareUrlInput: $('share-url'),
@@ -268,12 +265,6 @@ export const updateBreadcrumbTrail = (taskNavigationStack, onJumpToBreadcrumb) =
 // Setup UI for shared list
 export const setupSharedUI = (isOwner = isOwnedList(getShareId())) => {
     if (getIsSharedList()) {
-        // Hide date navigation for shared lists - completely remove instead of just disabling
-        domElements.prevDayButton.classList.add('hidden');
-        domElements.nextDayButton.classList.add('hidden');
-        domElements.currentDateDisplay.textContent = '';
-        domElements.currentDateDisplay.className = 'hidden';
-
         // Show button to return to personal lists
         domElements.backToPersonalButton.classList.remove('hidden');
         

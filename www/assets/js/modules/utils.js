@@ -22,31 +22,6 @@ export const getCurrentDate = () => {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 };
 
-// Format date for display
-export const formatDateForDisplay = (dateString) => {
-    const [year, month, day] = dateString.split('-').map(num => parseInt(num, 10));
-    const date = new Date(year, month - 1, day);
-    return date.toLocaleDateString('en-US', {
-        month: 'long',
-        day: 'numeric',
-        year: 'numeric'
-    });
-};
-
-// Get a date relative to another date by offset days
-export const getRelativeDay = (dateString, offsetDays) => {
-    const [year, month, day] = dateString.split('-').map(num => parseInt(num, 10));
-    const date = new Date(year, month - 1, day);
-    date.setDate(date.getDate() + offsetDays);
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-};
-
-// Get previous day
-export const getPreviousDay = dateString => getRelativeDay(dateString, -1);
-
-// Get next day
-export const getNextDay = dateString => getRelativeDay(dateString, 1);
-
 // Helper to recursively make all subtasks sticky
 export const makeAllSubtasksSticky = (task, isSticky) => {
     if (task.subtasks && task.subtasks.length > 0) {

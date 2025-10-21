@@ -427,23 +427,6 @@ const setupEventListeners = () => {
         });
     }
     
-    // Date navigation
-    if (ui.domElements.prevDayButton) {
-        ui.domElements.prevDayButton.addEventListener('click', () => {
-            const currentDate = storage.getActiveDate();
-            const newDate = utils.getPreviousDay(currentDate);
-            switchToDate(newDate);
-        });
-    }
-
-    if (ui.domElements.nextDayButton) {
-        ui.domElements.nextDayButton.addEventListener('click', () => {
-            const currentDate = storage.getActiveDate();
-            const newDate = utils.getNextDay(currentDate);
-            switchToDate(newDate);
-        });
-    }
-    
     // Root breadcrumb navigation
     const rootBreadcrumb = document.querySelector('.breadcrumb-trail button[data-level="root"]');
     if (rootBreadcrumb) {
@@ -562,27 +545,11 @@ const handleShareButtonClick = async () => {
     }
 };
 
-// Switch to a different date
-const switchToDate = async (newDate) => {
-    storage.setActiveDate(newDate);
-    await storage.initializeStorage();
-    
-    ui.domElements.currentDateDisplay.textContent = newDate === utils.getCurrentDate() 
-        ? 'Today' 
-        : utils.formatDateForDisplay(newDate);
-    
-    taskNavigationStack = [];
-    currentFocusedTaskId = null;
-    ui.domElements.taskBreadcrumb.classList.add('hidden');
-
-    await renderTasks();
-};
-
 // Jump to a specific breadcrumb level
 const jumpToBreadcrumb = async (index) => {
     if (index === 'root') {
         // If we're viewing a shared list, going to the root should
-        // return to the personal list which shows the date navigation.
+        // return to the personal list.
         if (storage.getIsSharedList()) {
             // DIRECT FIX FOR ALL TASKS BUTTON
             // Save subscription directly using our new approach
