@@ -1,3 +1,6 @@
+<?php
+require __DIR__ . '/../config/config.php';
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -86,7 +89,13 @@
             <!-- Task list -->
             <div id="tasks-container">
                 <!-- Active tasks -->
-                <div class="flex justify-end items-center mb-4">
+                <div class="flex justify-between items-center mb-4">
+                    <button id="ai-sort-button" class="text-xs bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-md flex items-center" title="Optimize list order by grocery store layout (AI-powered)">
+                        <svg class="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4"></path>
+                        </svg>
+                        Optimize List
+                    </button>
                     <span id="task-count" class="text-sm text-gray-500 dark:text-gray-400">0 tasks</span>
                 </div>
                 

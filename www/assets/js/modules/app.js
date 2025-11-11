@@ -442,6 +442,12 @@ const setupEventListeners = () => {
     // Set up share button
     ui.setupShareButton(handleShareButtonClick);
 
+    // Set up AI sort button
+    const aiSortButton = document.getElementById('ai-sort-button');
+    if (aiSortButton) {
+        aiSortButton.addEventListener('click', handleAISortClick);
+    }
+
     // Handle drag and drop on breadcrumb for task promotion
     if (ui.domElements.taskBreadcrumb) {
         ui.domElements.taskBreadcrumb.addEventListener('dragover', e => {
@@ -462,6 +468,114 @@ const setupEventListeners = () => {
                 draggedTaskId = null;
             }
         });
+    }
+};
+
+// Handle AI sort button click
+const handleAISortClick = async () => {
+    const aiSortButton = document.getElementById('ai-sort-button');
+    if (!aiSortButton) return;
+    
+    // Prevent multiple clicks - check if already processing
+    if (aiSortButton.disabled) {
+        return;
+    }
+    
+    // Disable button and show loading state
+    aiSortButton.disabled = true;
+    aiSortButton.style.opacity = '0.6';
+    aiSortButton.style.cursor = 'not-allowed';
+    aiSortButton.style.pointerEvents = 'none';
+    const originalText = aiSortButton.innerHTML;
+    
+    aiSortButton.innerHTML = `
+        <svg class="animate-spin h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        Optimizing List...
+    `;
+    
+    try {
+        // Load all tasks
+        const allTasks = await storage.loadTasks();
+        
+        let tasksToSort = [];
+        
+        if (currentFocusedTaskId) {
+            // We're in focus mode - sort only the subtasks of the focused task
+            const result = utils.findTaskById(allTasks, currentFocusedTaskId);
+            if (result && result.task) {
+                tasksToSort = result.task.subtasks || [];
+            } else {
+                // Task not found, can't sort - restore button and exit
+                aiSortButton.disabled = false;
+                aiSortButton.style.opacity = '';
+                aiSortButton.style.cursor = '';
+                aiSortButton.style.pointerEvents = '';
+                aiSortButton.innerHTML = originalText;
+                return;
+            }
+        } else {
+            // Normal mode - sort only top-level tasks (not subtasks)
+            tasksToSort = allTasks.filter(task => !task.parentId);
+        }
+        
+        if (tasksToSort.length === 0) {
+            // No tasks to sort - restore button and exit
+            aiSortButton.disabled = false;
+            aiSortButton.style.opacity = '';
+            aiSortButton.style.cursor = '';
+            aiSortButton.style.pointerEvents = '';
+            aiSortButton.innerHTML = originalText;
+            return;
+        }
+        
+        // Call the AI sort API
+        const response = await fetch('/api/sort', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ tasks: tasksToSort })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to sort tasks');
+        }
+        
+        const data = await response.json();
+        const sortedTasks = data.tasks || tasksToSort;
+        
+        // Update the tasks in the correct location
+        if (currentFocusedTaskId) {
+            // Update subtasks of the focused task
+            const result = utils.findTaskById(allTasks, currentFocusedTaskId);
+            if (result && result.task) {
+                result.task.subtasks = sortedTasks;
+                await storage.saveTasks(allTasks);
+            }
+        } else {
+            // Update top-level tasks
+            // Get all subtasks (they should remain unchanged)
+            const allSubtasks = allTasks.filter(task => task.parentId);
+            // Combine sorted top-level tasks with all subtasks
+            await storage.saveTasks([...sortedTasks, ...allSubtasks]);
+        }
+        
+        // Re-render the tasks
+        await renderTasks();
+        
+    } catch (error) {
+        console.error('Error sorting tasks:', error);
+        alert('Failed to sort tasks. Please try again.');
+    } finally {
+        // Always restore button state - ensure it's fully enabled
+        aiSortButton.disabled = false;
+        aiSortButton.style.opacity = '';
+        aiSortButton.style.cursor = '';
+        aiSortButton.style.pointerEvents = '';
+        aiSortButton.innerHTML = originalText;
     }
 };
 

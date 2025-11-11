@@ -291,6 +291,122 @@ switch ($resource) {
         }
         break;
 
+    case 'sort':
+        // AI-powered grocery sorting endpoint
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            require __DIR__ . '/../../config/config.php';
+            
+            $data = json_decode(file_get_contents('php://input'), true);
+            $tasks = isset($data['tasks']) ? $data['tasks'] : [];
+            
+            if (empty($tasks)) {
+                echo json_encode(['tasks' => []]);
+                exit;
+            }
+            
+            // Filter out completed tasks and only sort active tasks
+            $activeTasks = array_filter($tasks, function($task) {
+                return !isset($task['completed']) || !$task['completed'];
+            });
+            
+            // Only sort if we have tasks to sort
+            if (empty($activeTasks)) {
+                echo json_encode(['tasks' => $tasks]);
+                exit;
+            }
+            
+            // Extract task text for AI processing
+            $taskTexts = array_map(function($task) {
+                return $task['task'];
+            }, $activeTasks);
+            
+            // Create AI instance and set up prompt for grocery sorting
+            $ai = new AI();
+            $ai->setJsonResponse(true);
+            
+            $systemMessage = "You are a grocery shopping assistant. Your job is to sort grocery items in the order they would typically be found in a supermarket, optimizing for shopping efficiency. Group similar items together (e.g., all fruits together, all meats together, dairy together, etc.). Think about typical supermarket layout: produce first, then meats, dairy, frozen foods, pantry items, etc.";
+            
+            $prompt = "Sort these grocery items in the optimal order for shopping at a supermarket. Return ONLY a JSON object with an array called 'sortedItems' containing the task text strings in the optimal order:\n\n" . 
+                     json_encode($taskTexts, JSON_PRETTY_PRINT) . 
+                     "\n\nReturn the items in the order they should be shopped, grouped by category (produce together, meats together, dairy together, etc.).";
+            
+            $ai->setPrompt($prompt);
+            $ai->setSystemMessage($systemMessage);
+            
+            try {
+                // Use gpt-5-nano for fast, efficient sorting
+                $model = "gpt-5-nano";
+                
+                // Some models only support temperature of 1.0
+                // Use temperature 1.0 for compatibility
+                $temperature = 1.0;
+                
+                // Use OpenAI with a fast model for sorting
+                $response = $ai->getResponseFromOpenAi(
+                    $systemMessage,
+                    $temperature,
+                    0,
+                    $model,
+                    2000,
+                    true
+                );
+                
+                $aiResult = json_decode($response, true);
+                
+                if (!isset($aiResult['sortedItems']) || !is_array($aiResult['sortedItems'])) {
+                    // Fallback: return original order if AI response is invalid
+                    echo json_encode(['tasks' => $tasks]);
+                    exit;
+                }
+                
+                $sortedTexts = $aiResult['sortedItems'];
+                
+                // Create a map of task text to task objects
+                $taskMap = [];
+                foreach ($activeTasks as $task) {
+                    $text = $task['task'];
+                    if (!isset($taskMap[$text])) {
+                        $taskMap[$text] = [];
+                    }
+                    $taskMap[$text][] = $task;
+                }
+                
+                // Reorder active tasks based on AI sorting
+                $sortedActiveTasks = [];
+                foreach ($sortedTexts as $text) {
+                    if (isset($taskMap[$text]) && !empty($taskMap[$text])) {
+                        // Take the first matching task
+                        $sortedActiveTasks[] = array_shift($taskMap[$text]);
+                    }
+                }
+                
+                // Add any remaining tasks that weren't in the AI response (shouldn't happen, but safety)
+                foreach ($taskMap as $remainingTasks) {
+                    foreach ($remainingTasks as $task) {
+                        $sortedActiveTasks[] = $task;
+                    }
+                }
+                
+                // Get completed tasks (keep them at the end)
+                $completedTasks = array_filter($tasks, function($task) {
+                    return isset($task['completed']) && $task['completed'];
+                });
+                
+                // Combine: sorted active tasks first, then completed tasks
+                $resultTasks = array_merge($sortedActiveTasks, $completedTasks);
+                
+                echo json_encode(['tasks' => $resultTasks]);
+            } catch (Exception $e) {
+                // On error, return original order
+                error_log('AI sort error: ' . $e->getMessage());
+                echo json_encode(['tasks' => $tasks, 'error' => 'Sorting failed, returning original order']);
+            }
+        } else {
+            http_response_code(405);
+            echo json_encode(['error' => 'Method not allowed']);
+        }
+        break;
+
     default:
         http_response_code(404);
         echo json_encode(['error' => 'Resource not found']);
