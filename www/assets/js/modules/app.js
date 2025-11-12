@@ -447,6 +447,44 @@ const setupEventListeners = () => {
     }
 };
 
+// Helper to determine which tasks to sort and get parent info
+const getTasksToSort = (allTasks) => {
+    if (currentFocusedTaskId) {
+        // Focus mode: sort immediate subtasks of focused task
+        const result = utils.findTaskById(allTasks, currentFocusedTaskId);
+        if (!result?.task) return null;
+        return {
+            tasks: result.task.subtasks || [],
+            parentTask: result.task,
+            parentId: currentFocusedTaskId
+        };
+    }
+    
+    // Check if we're viewing subtasks (all active tasks have parentId)
+    const activeTopLevel = allTasks.filter(task => !task.completed && !task.parentId);
+    const activeSubtasks = allTasks.filter(task => !task.completed && task.parentId);
+    
+    if (activeTopLevel.length === 0 && activeSubtasks.length > 0) {
+        // Viewing subtasks - find their parent
+        const firstTask = activeSubtasks[0];
+        const parentResult = utils.findTaskById(allTasks, firstTask.parentId);
+        if (parentResult?.task) {
+            return {
+                tasks: parentResult.task.subtasks || [],
+                parentTask: parentResult.task,
+                parentId: firstTask.parentId
+            };
+        }
+    }
+    
+    // Default: sort top-level tasks
+    return {
+        tasks: allTasks.filter(task => !task.parentId),
+        parentTask: null,
+        parentId: null
+    };
+};
+
 // Handle AI sort button click
 const handleAISortClick = async () => {
     const aiSortButton = document.getElementById('ai-sort-button');
@@ -461,52 +499,54 @@ const handleAISortClick = async () => {
     `;
     
     const originalText = utils.setButtonLoading(aiSortButton, loadingHTML);
-    if (!originalText) return; // Already processing
+    if (!originalText) return;
     
     try {
         const allTasks = await storage.loadTasks();
-        let tasksToSort, completedTasksToPreserve;
+        const sortInfo = getTasksToSort(allTasks);
         
-        if (currentFocusedTaskId) {
-            // Focus mode: sort only active subtasks
-            const result = utils.findTaskById(allTasks, currentFocusedTaskId);
-            if (!result?.task) {
-                utils.restoreButtonState(aiSortButton, originalText);
-                return;
-            }
-            const allSubtasks = result.task.subtasks || [];
-            ({ active: tasksToSort, completed: completedTasksToPreserve } = utils.separateTasks(allSubtasks));
-        } else {
-            // Normal mode: sort only active top-level tasks
-            const topLevelTasks = allTasks.filter(task => !task.parentId);
-            ({ active: tasksToSort, completed: completedTasksToPreserve } = utils.separateTasks(topLevelTasks));
+        if (!sortInfo) {
+            utils.restoreButtonState(aiSortButton, originalText);
+            return;
         }
+        
+        const { active: tasksToSort, completed: completedTasksToPreserve } = utils.separateTasks(sortInfo.tasks);
         
         if (tasksToSort.length === 0) {
             utils.restoreButtonState(aiSortButton, originalText);
             return;
         }
         
-        // Call AI sort API - only send active tasks
+        // Call AI sort API
         const response = await fetch('/api/sort', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ tasks: tasksToSort })
         });
         
-        if (!response.ok) throw new Error('Failed to sort tasks');
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Sort API error:', errorText);
+            throw new Error(`Failed to sort tasks: ${response.status}`);
+        }
         
         const { tasks: sortedActiveTasks = tasksToSort } = await response.json();
         
-        // Update tasks in correct location
-        if (currentFocusedTaskId) {
-            const result = utils.findTaskById(allTasks, currentFocusedTaskId);
-            if (result?.task) {
-                result.task.subtasks = [...sortedActiveTasks, ...completedTasksToPreserve];
-                await storage.saveTasks(allTasks);
+        // Reload and update tasks
+        const updatedTasks = await storage.loadTasks();
+        
+        if (sortInfo.parentId) {
+            // Update subtasks - find parent again in updated tasks
+            const parentResult = utils.findTaskById(updatedTasks, sortInfo.parentId);
+            if (parentResult?.task) {
+                parentResult.task.subtasks = [...sortedActiveTasks, ...completedTasksToPreserve];
+                await storage.saveTasks(updatedTasks);
+            } else {
+                throw new Error('Parent task not found');
             }
         } else {
-            const allSubtasks = allTasks.filter(task => task.parentId);
+            // Update top-level tasks
+            const allSubtasks = updatedTasks.filter(task => task.parentId);
             await storage.saveTasks([...sortedActiveTasks, ...completedTasksToPreserve, ...allSubtasks]);
         }
         

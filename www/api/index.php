@@ -301,15 +301,19 @@ switch ($resource) {
             $aiResult = json_decode($response, true);
             
             if (!isset($aiResult['sortedItems']) || !is_array($aiResult['sortedItems'])) {
-                // Fallback: return original order if AI response is invalid
-                json_response(['tasks' => $tasks]);
+                error_log('AI sort invalid response: ' . substr($response, 0, 500));
+                json_response(['tasks' => $tasks, 'error' => 'Invalid AI response format']);
             }
             
-            // Create a map of task text to task objects (handles duplicates)
+            // Verify count match
+            if (count($aiResult['sortedItems']) !== count($tasks)) {
+                error_log('AI sort count mismatch: sent ' . count($tasks) . ', got ' . count($aiResult['sortedItems']));
+            }
+            
+            // Build task map (handles duplicates)
             $taskMap = [];
             foreach ($tasks as $task) {
-                $text = $task['task'];
-                $taskMap[$text][] = $task;
+                $taskMap[$task['task']][] = $task;
             }
             
             // Reorder tasks based on AI sorting
@@ -320,7 +324,7 @@ switch ($resource) {
                 }
             }
             
-            // Add any remaining tasks that weren't in the AI response (safety fallback)
+            // Add remaining tasks (safety fallback)
             foreach ($taskMap as $remainingTasks) {
                 $sortedTasks = array_merge($sortedTasks, $remainingTasks);
             }
