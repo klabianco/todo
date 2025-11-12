@@ -324,7 +324,9 @@ switch ($resource) {
                         $response = $testResponse;
                         break; // Success, use this response
                     } else {
-                        error_log("AI sort: Model $model returned empty/invalid response. Type: " . gettype($testResponse));
+                        $responseLength = is_string($testResponse) ? strlen($testResponse) : 'N/A';
+                        $responsePreview = is_string($testResponse) ? substr($testResponse, 0, 200) : 'N/A';
+                        error_log("AI sort: Model $model returned empty/invalid response. Type: " . gettype($testResponse) . ", Length: $responseLength, Preview: $responsePreview");
                         $lastError = "Empty or invalid response from $model";
                         $testResponse = false;
                     }
