@@ -283,10 +283,10 @@ switch ($resource) {
         // Create AI instance and set up prompt for grocery sorting
         $ai = new AI();
         $ai->setJsonResponse(true);
-        $ai->setSystemMessage("You are a grocery shopping assistant. Your job is to sort grocery items in the order they would typically be found in a supermarket, optimizing for shopping efficiency. Group similar items together (e.g., all fruits together, all meats together, dairy together, etc.). Think about typical supermarket layout: produce first, then meats, dairy, frozen foods, pantry items, etc.");
-        $ai->setPrompt("Sort these grocery items in the optimal order for shopping at a supermarket. Return ONLY a JSON object with an array called 'sortedItems' containing the task text strings in the optimal order:\n\n" . 
+        $ai->setSystemMessage("You are a grocery shopping assistant. Your job is to sort grocery items in the order they would typically be found in a supermarket, optimizing for shopping efficiency. Group similar items together (e.g., all fruits together, all meats together, dairy together, etc.). Think about typical supermarket layout: produce first, then meats, dairy, frozen foods, pantry items, etc. You MUST return a valid JSON object with a 'sortedItems' array containing strings.");
+        $ai->setPrompt("Sort these grocery items in the optimal order for shopping at a supermarket. Return ONLY a valid JSON object with this exact structure:\n\n{\n  \"sortedItems\": [\"item1\", \"item2\", \"item3\", ...]\n}\n\nItems to sort:\n" . 
                      json_encode($taskTexts, JSON_PRETTY_PRINT) . 
-                     "\n\nReturn the items in the order they should be shopped, grouped by category (produce together, meats together, dairy together, etc.).");
+                     "\n\nReturn the items in the order they should be shopped, grouped by category (produce together, meats together, dairy together, etc.). The 'sortedItems' array must contain exactly the same item strings as provided, just reordered.");
         
         try {
             $response = $ai->getResponseFromOpenAi(
@@ -298,16 +298,46 @@ switch ($resource) {
                 true
             );
             
+            // Clean and parse JSON response
+            $response = trim($response);
+            // Remove any markdown code blocks if present
+            $response = preg_replace('/^```json\s*/', '', $response);
+            $response = preg_replace('/^```\s*/', '', $response);
+            $response = preg_replace('/\s*```$/', '', $response);
+            $response = trim($response);
+            
             $aiResult = json_decode($response, true);
             
-            if (!isset($aiResult['sortedItems']) || !is_array($aiResult['sortedItems'])) {
-                error_log('AI sort invalid response: ' . substr($response, 0, 500));
+            // If first decode failed, try decoding again (in case response is double-encoded)
+            if ($aiResult === null && json_last_error() !== JSON_ERROR_NONE) {
+                $decoded = json_decode($response, true);
+                if ($decoded !== null) {
+                    $aiResult = $decoded;
+                }
+            }
+            
+            // Extract sorted items from various possible response formats
+            $sortedItems = null;
+            if (isset($aiResult['sortedItems']) && is_array($aiResult['sortedItems'])) {
+                $sortedItems = $aiResult['sortedItems'];
+            } elseif (isset($aiResult['items']) && is_array($aiResult['items'])) {
+                $sortedItems = $aiResult['items'];
+            } elseif (isset($aiResult['sorted']) && is_array($aiResult['sorted'])) {
+                $sortedItems = $aiResult['sorted'];
+            } elseif (is_array($aiResult) && isset($aiResult[0])) {
+                // If response is directly an array
+                $sortedItems = $aiResult;
+            }
+            
+            if ($sortedItems === null || !is_array($sortedItems)) {
+                error_log('AI sort invalid response format. Response: ' . substr($response, 0, 1000));
+                error_log('Parsed result: ' . json_encode($aiResult));
                 json_response(['tasks' => $tasks, 'error' => 'Invalid AI response format']);
             }
             
-            // Verify count match
-            if (count($aiResult['sortedItems']) !== count($tasks)) {
-                error_log('AI sort count mismatch: sent ' . count($tasks) . ', got ' . count($aiResult['sortedItems']));
+            // Verify count match (warn but don't fail)
+            if (count($sortedItems) !== count($tasks)) {
+                error_log('AI sort count mismatch: sent ' . count($tasks) . ', got ' . count($sortedItems));
             }
             
             // Build task map (handles duplicates)
@@ -318,9 +348,12 @@ switch ($resource) {
             
             // Reorder tasks based on AI sorting
             $sortedTasks = [];
-            foreach ($aiResult['sortedItems'] as $text) {
-                if (!empty($taskMap[$text])) {
-                    $sortedTasks[] = array_shift($taskMap[$text]);
+            foreach ($sortedItems as $text) {
+                // Handle both string and object formats
+                $taskText = is_string($text) ? $text : (isset($text['task']) ? $text['task'] : (isset($text['text']) ? $text['text'] : $text));
+                
+                if (!empty($taskMap[$taskText])) {
+                    $sortedTasks[] = array_shift($taskMap[$taskText]);
                 }
             }
             
