@@ -419,6 +419,11 @@ const setupEventListeners = () => {
         aiSortButton.addEventListener('click', handleAISortClick);
     }
 
+    // Set up completed tasks toggle
+    if (ui.domElements.completedToggle) {
+        ui.domElements.completedToggle.addEventListener('click', ui.toggleCompletedTasksList);
+    }
+
     // Handle drag and drop on breadcrumb for task promotion
     if (ui.domElements.taskBreadcrumb) {
         ui.domElements.taskBreadcrumb.addEventListener('dragover', e => {
@@ -845,7 +850,7 @@ const renderTasks = async () => {
     
     // Update counts
     ui.domElements.taskCount.textContent = `${activeTasks} task${activeTasks !== 1 ? 's' : ''}`;
-    ui.domElements.completedCount.textContent = `${completedTasks} completed`;
+    ui.domElements.completedCount.textContent = `${completedTasks} task${completedTasks !== 1 ? 's' : ''}`;
     
     // Show/hide empty state
     ui.toggleEmptyState(activeTasks === 0 && !currentFocusedTaskId);

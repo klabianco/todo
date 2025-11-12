@@ -110,13 +110,18 @@ require __DIR__ . '/../config/config.php';
                 </div>
                 
                 <!-- Completed tasks section -->
-                <div id="completed-section" class="mt-8 pt-6 border-t border-gray-200" style="display: none;">
-                    <div class="flex justify-between items-center mb-4">
+                <div id="completed-section" class="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700" style="display: none;">
+                    <button id="completed-toggle" class="flex justify-between items-center w-full mb-4 text-left hover:opacity-80 transition-opacity">
                         <h2 class="text-lg font-medium text-gray-600 dark:text-gray-300">Completed</h2>
-                        <span id="completed-count" class="text-sm text-gray-500 dark:text-gray-400">0 completed</span>
-                    </div>
+                        <div class="flex items-center gap-2">
+                            <span id="completed-count" class="text-sm text-gray-500 dark:text-gray-400">0 completed</span>
+                            <svg id="completed-chevron" class="h-5 w-5 text-gray-500 dark:text-gray-400 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </div>
+                    </button>
                     
-                    <ul id="completed-task-list" class="space-y-2">
+                    <ul id="completed-task-list" class="space-y-2 hidden">
                         <!-- Completed tasks will be inserted here by JavaScript -->
                     </ul>
                 </div>

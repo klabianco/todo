@@ -11,6 +11,8 @@ export const domElements = {
     activeTaskList: $('active-task-list'),
     completedTaskList: $('completed-task-list'),
     completedSection: $('completed-section'),
+    completedToggle: $('completed-toggle'),
+    completedChevron: $('completed-chevron'),
     taskCount: $('task-count'),
     completedCount: $('completed-count'),
     emptyState: $('empty-state'),
@@ -39,6 +41,27 @@ export const toggleEmptyState = isEmpty => {
 // Toggle completed section visibility
 export const toggleCompletedSection = hasCompletedTasks => {
     domElements.completedSection.style.display = hasCompletedTasks ? 'block' : 'none';
+    // Keep completed list collapsed by default when showing section
+    if (hasCompletedTasks && domElements.completedTaskList) {
+        domElements.completedTaskList.classList.add('hidden');
+        if (domElements.completedChevron) {
+            domElements.completedChevron.classList.remove('rotate-180');
+        }
+    }
+};
+
+// Toggle completed tasks list visibility
+export const toggleCompletedTasksList = () => {
+    if (!domElements.completedTaskList || !domElements.completedChevron) return;
+    
+    const isHidden = domElements.completedTaskList.classList.contains('hidden');
+    if (isHidden) {
+        domElements.completedTaskList.classList.remove('hidden');
+        domElements.completedChevron.classList.add('rotate-180');
+    } else {
+        domElements.completedTaskList.classList.add('hidden');
+        domElements.completedChevron.classList.remove('rotate-180');
+    }
 };
 
 // Toggle subtask section visibility
