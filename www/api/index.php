@@ -304,18 +304,25 @@ switch ($resource) {
                 exit;
             }
             
-            // Filter out completed tasks and only sort active tasks
-            $activeTasks = array_filter($tasks, function($task) {
-                return !isset($task['completed']) || !$task['completed'];
-            });
+            // Separate active and completed tasks - only sort active ones
+            $activeTasks = [];
+            $completedTasks = [];
             
-            // Only sort if we have tasks to sort
+            foreach ($tasks as $task) {
+                if (isset($task['completed']) && $task['completed']) {
+                    $completedTasks[] = $task;
+                } else {
+                    $activeTasks[] = $task;
+                }
+            }
+            
+            // Only sort if we have active tasks to sort
             if (empty($activeTasks)) {
                 echo json_encode(['tasks' => $tasks]);
                 exit;
             }
             
-            // Extract task text for AI processing
+            // Extract task text for AI processing (only from active tasks)
             $taskTexts = array_map(function($task) {
                 return $task['task'];
             }, $activeTasks);
@@ -387,12 +394,8 @@ switch ($resource) {
                     }
                 }
                 
-                // Get completed tasks (keep them at the end)
-                $completedTasks = array_filter($tasks, function($task) {
-                    return isset($task['completed']) && $task['completed'];
-                });
-                
-                // Combine: sorted active tasks first, then completed tasks
+                // Combine: sorted active tasks first, then completed tasks (in their original order)
+                // Completed tasks are NOT sorted - they stay exactly as they were
                 $resultTasks = array_merge($sortedActiveTasks, $completedTasks);
                 
                 echo json_encode(['tasks' => $resultTasks]);
