@@ -289,8 +289,8 @@ switch ($resource) {
                      "\n\nReturn the items in the order they should be shopped, grouped by category (produce together, meats together, dairy together, etc.). The 'sortedItems' array must contain exactly the same item strings as provided, just reordered.");
         
         try {
-            // Try gpt-5-nano first, fallback to gpt-4o-mini if it fails
-            $models = ["gpt-5-nano", "gpt-5-mini", "gpt-4.1-nano"];
+            // Use gpt-5-mini as primary, with fallbacks
+            $models = ["gpt-5-mini", "gpt-4o-mini", "gpt-3.5-turbo"];
             $response = false;
             $lastError = null;
             
