@@ -289,30 +289,57 @@ switch ($resource) {
                      "\n\nReturn the items in the order they should be shopped, grouped by category (produce together, meats together, dairy together, etc.). The 'sortedItems' array must contain exactly the same item strings as provided, just reordered.");
         
         try {
-            // Capture any output from the AI class (it might echo errors)
-            ob_start();
-            $response = $ai->getResponseFromOpenAi(
-                $ai->getSystemMessage(),
-                1.0, // Temperature 1.0 for compatibility with gpt-5-nano
-                0,
-                "gpt-5-nano",
-                2000,
-                true
-            );
-            $output = ob_get_clean();
+            // Try gpt-5-nano first, fallback to gpt-4o-mini if it fails
+            $models = ["gpt-5-nano", "gpt-5-mini", "gpt-4.1-nano"];
+            $response = false;
+            $lastError = null;
             
-            // Check for errors in output
-            if (!empty($output)) {
-                error_log('AI sort: Output from AI class: ' . $output);
-                if (stripos($output, 'error') !== false) {
-                    json_response(['tasks' => $tasks, 'error' => 'AI service error: ' . $output]);
+            foreach ($models as $model) {
+                try {
+                    // Capture any output from the AI class (it might echo errors)
+                    ob_start();
+                    $testResponse = @$ai->getResponseFromOpenAi(
+                        $ai->getSystemMessage(),
+                        1.0,
+                        0,
+                        $model,
+                        2000,
+                        true
+                    );
+                    $output = ob_get_clean();
+                    
+                    // Check for errors in output
+                    if (!empty($output)) {
+                        error_log("AI sort: Model $model output: " . $output);
+                        if (stripos($output, 'error') !== false) {
+                            $lastError = $output;
+                            $testResponse = false;
+                            continue; // Try next model
+                        }
+                    }
+                    
+                    // Check if response is valid
+                    if ($testResponse !== false && $testResponse !== null && !empty(trim($testResponse))) {
+                        error_log("AI sort: Successfully got response from model: $model");
+                        $response = $testResponse;
+                        break; // Success, use this response
+                    } else {
+                        error_log("AI sort: Model $model returned empty/invalid response. Type: " . gettype($testResponse));
+                        $lastError = "Empty or invalid response from $model";
+                        $testResponse = false;
+                    }
+                } catch (Throwable $e) {
+                    error_log("AI sort: Exception with model $model: " . $e->getMessage() . " | Type: " . get_class($e));
+                    $lastError = $e->getMessage();
+                    $testResponse = false;
+                    continue; // Try next model
                 }
             }
             
-            // Check if response is valid
+            // If all models failed
             if ($response === false || $response === null || empty(trim($response))) {
-                error_log('AI sort: Empty or false response from OpenAI API. Output was: ' . ($output ?: 'none'));
-                json_response(['tasks' => $tasks, 'error' => 'AI service returned empty response. Please check API key and model availability.']);
+                error_log('AI sort: All models failed. Last error: ' . ($lastError ?: 'Unknown'));
+                json_response(['tasks' => $tasks, 'error' => 'AI service unavailable. Please check API key and model availability.']);
             }
             
             // Clean and parse JSON response
