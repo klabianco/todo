@@ -53,50 +53,44 @@ export const setupSharing = (newShareId) => {
 
 // Load user lists from server
 export const loadUserLists = async () => {
+    // Load subscriptions
     try {
         const res = await fetch('/api/user/subscriptions');
         if (res.ok) {
-            const data = await res.json();
-            subscribedLists = data.lists || [];
+            const { lists = [] } = await res.json();
+            subscribedLists = lists;
             
-            // Validate that each subscribed list still exists
-            const validatedLists = [];
-            let hasInvalidLists = false;
-            
-            for (const list of subscribedLists) {
+            // Validate subscriptions in parallel
+            const validationPromises = subscribedLists.map(async (list) => {
                 try {
-                    // Try to fetch the list data to verify it exists
-                    const checkRes = await fetch(`/api/lists/${list.id}?t=${Date.now()}`, { 
-                        method: 'GET',
+                    const checkRes = await fetch(`/api/lists/${list.id}?t=${Date.now()}`, {
                         headers: { 'Accept': 'application/json' },
                         cache: 'no-store'
                     });
-                    if (checkRes.ok) {
-                        validatedLists.push(list);
-                    } else {
-                        hasInvalidLists = true;
-                    }
+                    return checkRes.ok ? list : null;
                 } catch (err) {
                     console.error(`Error checking list ${list.id}:`, err);
-                    hasInvalidLists = true;
+                    return null;
                 }
-            }
+            });
             
-            // If we found invalid lists, update the subscriptions
-            if (hasInvalidLists && validatedLists.length !== subscribedLists.length) {
+            const validatedLists = (await Promise.all(validationPromises)).filter(Boolean);
+            
+            if (validatedLists.length !== subscribedLists.length) {
                 subscribedLists = validatedLists;
-                saveSubscribedLists(validatedLists);
+                await saveSubscribedLists(validatedLists);
             }
         }
     } catch (e) {
         console.error('Failed to load subscriptions', e);
     }
 
+    // Load owned lists
     try {
         const res = await fetch('/api/user/owned');
         if (res.ok) {
-            const data = await res.json();
-            ownedLists = data.lists || [];
+            const { lists = [] } = await res.json();
+            ownedLists = lists;
         }
     } catch (e) {
         console.error('Failed to load owned lists', e);
@@ -139,13 +133,11 @@ export const subscribeToSharedList = async (id, title, url) => {
         return getSubscribedLists();
     }
     
-    // First, verify the list actually exists
+    // Verify the list exists
     try {
-        // Using GET instead of HEAD as the API doesn't support HEAD requests
-        const response = await fetch(`/api/lists/${id}?t=${Date.now()}`, { 
-            method: 'GET',
+        const response = await fetch(`/api/lists/${id}?t=${Date.now()}`, {
             headers: { 'Accept': 'application/json' },
-            cache: 'no-store' 
+            cache: 'no-store'
         });
         if (!response.ok) {
             console.error(`Cannot subscribe to list ${id} - it does not exist`);
@@ -156,18 +148,15 @@ export const subscribeToSharedList = async (id, title, url) => {
         return getSubscribedLists();
     }
     
-    // Get current subscriptions
+    // Get current subscriptions and update/add
     const lists = getSubscribedLists();
-    
-    // Check if already subscribed
     const existingIndex = lists.findIndex(list => list.id === id);
+    const subscription = { id, title, url, lastAccessed: new Date().toISOString() };
     
     if (existingIndex >= 0) {
-        // Update existing subscription
-        lists[existingIndex] = { id, title, url, lastAccessed: new Date().toISOString() };
+        lists[existingIndex] = subscription;
     } else {
-        // Add new subscription
-        lists.push({ id, title, url, lastAccessed: new Date().toISOString() });
+        lists.push(subscription);
     }
     
     // Save changes both in memory and to the server
@@ -570,7 +559,6 @@ export const connectToUpdates = (shareId, onUpdate) => {
     // Function to poll for updates
     const poll = async () => {
         try {
-            // Add cache-busting parameter to prevent browser caching
             const res = await fetch(`/api/lists/${shareId}?t=${Date.now()}`, {
                 cache: 'no-store'
             });

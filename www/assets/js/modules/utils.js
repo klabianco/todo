@@ -100,3 +100,48 @@ export const createSeparator = () => {
     separator.textContent = '/';
     return separator;
 };
+
+// Helper to separate active and completed tasks
+export const separateTasks = (tasks) => {
+    const active = tasks.filter(task => !task.completed);
+    const completed = tasks.filter(task => task.completed);
+    return { active, completed };
+};
+
+// Helper to restore button state
+export const restoreButtonState = (button, originalText) => {
+    if (!button) return;
+    button.disabled = false;
+    button.style.opacity = '';
+    button.style.cursor = '';
+    button.style.pointerEvents = '';
+    button.innerHTML = originalText;
+};
+
+// Helper to set button loading state
+export const setButtonLoading = (button, loadingText = 'Loading...') => {
+    if (!button || button.disabled) return null;
+    
+    const originalText = button.innerHTML;
+    button.disabled = true;
+    button.style.opacity = '0.6';
+    button.style.cursor = 'not-allowed';
+    button.style.pointerEvents = 'none';
+    button.innerHTML = loadingText;
+    
+    return originalText;
+};
+
+// Helper for API fetch with cache-busting
+export const apiFetch = async (url, options = {}) => {
+    const separator = url.includes('?') ? '&' : '?';
+    const cacheBustUrl = `${url}${separator}t=${Date.now()}`;
+    return fetch(cacheBustUrl, {
+        ...options,
+        headers: {
+            'Accept': 'application/json',
+            ...options.headers
+        },
+        cache: 'no-store'
+    });
+};

@@ -58,6 +58,28 @@ function get_task_file_path($share_id) {
     return $data_dir . '/' . $share_id . '.json';
 }
 
+// Helper function to read JSON file
+function read_json_file($path, $default = []) {
+    return file_exists($path) ? json_decode(file_get_contents($path), true) : $default;
+}
+
+// Helper function to write JSON file
+function write_json_file($path, $data) {
+    return file_put_contents($path, json_encode($data));
+}
+
+// Helper function to send JSON response
+function json_response($data, $status_code = 200) {
+    http_response_code($status_code);
+    echo json_encode($data);
+    exit;
+}
+
+// Helper function to get request body as JSON
+function get_request_body() {
+    return json_decode(file_get_contents('php://input'), true) ?: [];
+}
+
 // ----- User-specific helpers -----
 function get_user_id() {
     if (isset($_COOKIE['todoUserId'])) {
@@ -95,114 +117,86 @@ switch ($resource) {
         switch ($_SERVER['REQUEST_METHOD']) {
             case 'POST':
                 // Create a new shared task list
-                $data = json_decode(file_get_contents('php://input'), true);
+                $data = get_request_body();
                 $share_id = generate_share_id();
-                $tasks = isset($data['tasks']) ? $data['tasks'] : [];
-                $focus_id = isset($data['focusId']) ? $data['focusId'] : null;
                 
                 $list_data = [
                     'id' => $share_id,
-                    'tasks' => $tasks,
-                    'focusId' => $focus_id,
+                    'tasks' => $data['tasks'] ?? [],
+                    'focusId' => $data['focusId'] ?? null,
                     'created' => date('c'),
                     'lastModified' => date('c')
                 ];
                 
-                file_put_contents(get_task_file_path($share_id), json_encode($list_data));
-                echo json_encode(['shareId' => $share_id]);
+                write_json_file(get_task_file_path($share_id), $list_data);
+                json_response(['shareId' => $share_id]);
                 break;
                 
             case 'GET':
-                if ($id) {
-                    // Get a specific task list
-                    $file_path = get_task_file_path($id);
-                    if (file_exists($file_path)) {
-                        echo file_get_contents($file_path);
-                    } else {
-                        http_response_code(404);
-                        echo json_encode(['error' => 'Task list not found']);
-                    }
+                if (!$id) {
+                    json_response(['error' => 'Share ID is required'], 400);
+                }
+                $file_path = get_task_file_path($id);
+                if (file_exists($file_path)) {
+                    echo file_get_contents($file_path);
                 } else {
-                    http_response_code(400);
-                    echo json_encode(['error' => 'Share ID is required']);
+                    json_response(['error' => 'Task list not found'], 404);
                 }
                 break;
                 
             case 'PUT':
-                if ($id) {
-                    // Update a specific task list
-                    $file_path = get_task_file_path($id);
-                    if (file_exists($file_path)) {
-                        $data = json_decode(file_get_contents('php://input'), true);
-                        $tasks = isset($data['tasks']) ? $data['tasks'] : [];
-                        $focus_id = isset($data['focusId']) ? $data['focusId'] : null;
-
-                        $list_data = json_decode(file_get_contents($file_path), true);
-                        $list_data['tasks'] = $tasks;
-                        if ($focus_id !== null) {
-                            $list_data['focusId'] = $focus_id;
-                        }
-                        
-                        // Always update the lastModified timestamp with current server time
-                        // This ensures changes are detected by viewers polling for updates
-                        $list_data['lastModified'] = date('c');
-                        
-                        file_put_contents($file_path, json_encode($list_data));
-                        echo json_encode(['success' => true]);
-                    } else {
-                        http_response_code(404);
-                        echo json_encode(['error' => 'Task list not found']);
-                    }
-                } else {
-                    http_response_code(400);
-                    echo json_encode(['error' => 'Share ID is required']);
+                if (!$id) {
+                    json_response(['error' => 'Share ID is required'], 400);
                 }
+                $file_path = get_task_file_path($id);
+                if (!file_exists($file_path)) {
+                    json_response(['error' => 'Task list not found'], 404);
+                }
+                
+                $data = get_request_body();
+                $list_data = read_json_file($file_path);
+                $list_data['tasks'] = $data['tasks'] ?? [];
+                if (isset($data['focusId'])) {
+                    $list_data['focusId'] = $data['focusId'];
+                }
+                // Always update the lastModified timestamp with current server time
+                // This ensures changes are detected by viewers polling for updates
+                $list_data['lastModified'] = date('c');
+                
+                write_json_file($file_path, $list_data);
+                json_response(['success' => true]);
                 break;
                 
             case 'DELETE':
-                if ($id) {
-                    // Delete a specific task list
-                    $file_path = get_task_file_path($id);
-                    if (file_exists($file_path)) {
-                        // Get all users with subscription data
-                        $users_dir = $data_dir . '/users';
-                        if (file_exists($users_dir)) {
-                            $user_dirs = glob($users_dir . '/*', GLOB_ONLYDIR);
-                            
-                            // Process each user's subscriptions
-                            foreach ($user_dirs as $user_dir) {
-                                $subscribed_path = $user_dir . '/subscribed.json';
-                                if (file_exists($subscribed_path)) {
-                                    $subscribed_data = json_decode(file_get_contents($subscribed_path), true);
-                                    if (is_array($subscribed_data)) {
-                                        // Remove the deleted list from subscriptions
-                                        $updated_lists = array_filter($subscribed_data, function($item) use ($id) {
-                                            return !isset($item['id']) || $item['id'] !== $id;
-                                        });
-                                        
-                                        // Save updated subscriptions
-                                        file_put_contents($subscribed_path, json_encode(array_values($updated_lists)));
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // Delete the list file
-                        unlink($file_path);
-                        echo json_encode(['success' => true]);
-                    } else {
-                        http_response_code(404);
-                        echo json_encode(['error' => 'Task list not found']);
-                    }
-                } else {
-                    http_response_code(400);
-                    echo json_encode(['error' => 'Share ID is required']);
+                if (!$id) {
+                    json_response(['error' => 'Share ID is required'], 400);
                 }
+                $file_path = get_task_file_path($id);
+                if (!file_exists($file_path)) {
+                    json_response(['error' => 'Task list not found'], 404);
+                }
+                
+                // Remove from all user subscriptions
+                $users_dir = $data_dir . '/users';
+                if (file_exists($users_dir)) {
+                    foreach (glob($users_dir . '/*', GLOB_ONLYDIR) as $user_dir) {
+                        $subscribed_path = $user_dir . '/subscribed.json';
+                        $subscribed_data = read_json_file($subscribed_path, []);
+                        if (is_array($subscribed_data) && !empty($subscribed_data)) {
+                            $updated_lists = array_values(array_filter($subscribed_data, function($item) use ($id) {
+                                return !isset($item['id']) || $item['id'] !== $id;
+                            }));
+                            write_json_file($subscribed_path, $updated_lists);
+                        }
+                    }
+                }
+                
+                unlink($file_path);
+                json_response(['success' => true]);
                 break;
                 
             default:
-                http_response_code(405);
-                echo json_encode(['error' => 'Method not allowed']);
+                json_response(['error' => 'Method not allowed'], 405);
         }
         break;
         
@@ -221,197 +215,124 @@ switch ($resource) {
                 $stickyPath = get_user_sticky_path($userId);
                 switch ($_SERVER['REQUEST_METHOD']) {
                     case 'GET':
-                        $tasks = file_exists($tasksPath) ? json_decode(file_get_contents($tasksPath), true) : [];
-                        $sticky = file_exists($stickyPath) ? json_decode(file_get_contents($stickyPath), true) : [];
-                        echo json_encode(['tasks' => array_merge($tasks, $sticky)]);
+                        $tasks = read_json_file($tasksPath, []);
+                        $sticky = read_json_file($stickyPath, []);
+                        json_response(['tasks' => array_merge($tasks, $sticky)]);
                         break;
                     case 'PUT':
-                        $data = json_decode(file_get_contents('php://input'), true);
-                        $incoming = isset($data['tasks']) ? $data['tasks'] : [];
+                        $data = get_request_body();
+                        $incoming = $data['tasks'] ?? [];
                         $stickyTasks = [];
                         $nonSticky = [];
                         foreach ($incoming as $t) {
-                            if (isset($t['sticky']) && $t['sticky']) {
+                            if (!empty($t['sticky'])) {
                                 $stickyTasks[] = $t;
                             } else {
                                 $nonSticky[] = $t;
                             }
                         }
-                        file_put_contents($tasksPath, json_encode($nonSticky));
-                        file_put_contents($stickyPath, json_encode($stickyTasks));
-                        echo json_encode(['success' => true]);
+                        write_json_file($tasksPath, $nonSticky);
+                        write_json_file($stickyPath, $stickyTasks);
+                        json_response(['success' => true]);
                         break;
                     default:
-                        http_response_code(405);
-                        echo json_encode(['error' => 'Method not allowed']);
+                        json_response(['error' => 'Method not allowed'], 405);
                 }
                 break;
 
             case 'subscriptions':
-                $path = get_user_data_path($userId, 'subscribed');
-                switch ($_SERVER['REQUEST_METHOD']) {
-                    case 'GET':
-                        $lists = file_exists($path) ? json_decode(file_get_contents($path), true) : [];
-                        echo json_encode(['lists' => $lists]);
-                        break;
-                    case 'PUT':
-                        $data = json_decode(file_get_contents('php://input'), true);
-                        $lists = isset($data['lists']) ? $data['lists'] : [];
-                        file_put_contents($path, json_encode($lists));
-                        echo json_encode(['success' => true]);
-                        break;
-                    default:
-                        http_response_code(405);
-                        echo json_encode(['error' => 'Method not allowed']);
-                }
-                break;
-
             case 'owned':
-                $path = get_user_data_path($userId, 'owned');
+                $path = get_user_data_path($userId, $sub);
                 switch ($_SERVER['REQUEST_METHOD']) {
                     case 'GET':
-                        $lists = file_exists($path) ? json_decode(file_get_contents($path), true) : [];
-                        echo json_encode(['lists' => $lists]);
+                        json_response(['lists' => read_json_file($path, [])]);
                         break;
                     case 'PUT':
-                        $data = json_decode(file_get_contents('php://input'), true);
-                        $lists = isset($data['lists']) ? $data['lists'] : [];
-                        file_put_contents($path, json_encode($lists));
-                        echo json_encode(['success' => true]);
+                        $data = get_request_body();
+                        write_json_file($path, $data['lists'] ?? []);
+                        json_response(['success' => true]);
                         break;
                     default:
-                        http_response_code(405);
-                        echo json_encode(['error' => 'Method not allowed']);
+                        json_response(['error' => 'Method not allowed'], 405);
                 }
                 break;
 
             default:
-                http_response_code(404);
-                echo json_encode(['error' => 'User resource not found']);
+                json_response(['error' => 'User resource not found'], 404);
         }
         break;
 
     case 'sort':
-        // AI-powered grocery sorting endpoint
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            require __DIR__ . '/../../config/config.php';
-            
-            $data = json_decode(file_get_contents('php://input'), true);
-            $tasks = isset($data['tasks']) ? $data['tasks'] : [];
-            
-            if (empty($tasks)) {
-                echo json_encode(['tasks' => []]);
-                exit;
-            }
-            
-            // Separate active and completed tasks - only sort active ones
-            $activeTasks = [];
-            $completedTasks = [];
-            
-            foreach ($tasks as $task) {
-                if (isset($task['completed']) && $task['completed']) {
-                    $completedTasks[] = $task;
-                } else {
-                    $activeTasks[] = $task;
-                }
-            }
-            
-            // Only sort if we have active tasks to sort
-            if (empty($activeTasks)) {
-                echo json_encode(['tasks' => $tasks]);
-                exit;
-            }
-            
-            // Extract task text for AI processing (only from active tasks)
-            $taskTexts = array_map(function($task) {
-                return $task['task'];
-            }, $activeTasks);
-            
-            // Create AI instance and set up prompt for grocery sorting
-            $ai = new AI();
-            $ai->setJsonResponse(true);
-            
-            $systemMessage = "You are a grocery shopping assistant. Your job is to sort grocery items in the order they would typically be found in a supermarket, optimizing for shopping efficiency. Group similar items together (e.g., all fruits together, all meats together, dairy together, etc.). Think about typical supermarket layout: produce first, then meats, dairy, frozen foods, pantry items, etc.";
-            
-            $prompt = "Sort these grocery items in the optimal order for shopping at a supermarket. Return ONLY a JSON object with an array called 'sortedItems' containing the task text strings in the optimal order:\n\n" . 
+        // AI-powered grocery sorting endpoint - only receives active tasks from frontend
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            json_response(['error' => 'Method not allowed'], 405);
+        }
+        
+        require __DIR__ . '/../../config/config.php';
+        
+        $data = get_request_body();
+        $tasks = $data['tasks'] ?? [];
+        
+        if (empty($tasks)) {
+            json_response(['tasks' => []]);
+        }
+        
+        // Extract task text for AI processing
+        $taskTexts = array_column($tasks, 'task');
+        
+        // Create AI instance and set up prompt for grocery sorting
+        $ai = new AI();
+        $ai->setJsonResponse(true);
+        $ai->setSystemMessage("You are a grocery shopping assistant. Your job is to sort grocery items in the order they would typically be found in a supermarket, optimizing for shopping efficiency. Group similar items together (e.g., all fruits together, all meats together, dairy together, etc.). Think about typical supermarket layout: produce first, then meats, dairy, frozen foods, pantry items, etc.");
+        $ai->setPrompt("Sort these grocery items in the optimal order for shopping at a supermarket. Return ONLY a JSON object with an array called 'sortedItems' containing the task text strings in the optimal order:\n\n" . 
                      json_encode($taskTexts, JSON_PRETTY_PRINT) . 
-                     "\n\nReturn the items in the order they should be shopped, grouped by category (produce together, meats together, dairy together, etc.).";
+                     "\n\nReturn the items in the order they should be shopped, grouped by category (produce together, meats together, dairy together, etc.).");
+        
+        try {
+            $response = $ai->getResponseFromOpenAi(
+                $ai->getSystemMessage(),
+                1.0, // Temperature 1.0 for compatibility with gpt-5-nano
+                0,
+                "gpt-5-nano",
+                2000,
+                true
+            );
             
-            $ai->setPrompt($prompt);
-            $ai->setSystemMessage($systemMessage);
+            $aiResult = json_decode($response, true);
             
-            try {
-                // Use gpt-5-nano for fast, efficient sorting
-                $model = "gpt-5-nano";
-                
-                // Some models only support temperature of 1.0
-                // Use temperature 1.0 for compatibility
-                $temperature = 1.0;
-                
-                // Use OpenAI with a fast model for sorting
-                $response = $ai->getResponseFromOpenAi(
-                    $systemMessage,
-                    $temperature,
-                    0,
-                    $model,
-                    2000,
-                    true
-                );
-                
-                $aiResult = json_decode($response, true);
-                
-                if (!isset($aiResult['sortedItems']) || !is_array($aiResult['sortedItems'])) {
-                    // Fallback: return original order if AI response is invalid
-                    echo json_encode(['tasks' => $tasks]);
-                    exit;
-                }
-                
-                $sortedTexts = $aiResult['sortedItems'];
-                
-                // Create a map of task text to task objects
-                $taskMap = [];
-                foreach ($activeTasks as $task) {
-                    $text = $task['task'];
-                    if (!isset($taskMap[$text])) {
-                        $taskMap[$text] = [];
-                    }
-                    $taskMap[$text][] = $task;
-                }
-                
-                // Reorder active tasks based on AI sorting
-                $sortedActiveTasks = [];
-                foreach ($sortedTexts as $text) {
-                    if (isset($taskMap[$text]) && !empty($taskMap[$text])) {
-                        // Take the first matching task
-                        $sortedActiveTasks[] = array_shift($taskMap[$text]);
-                    }
-                }
-                
-                // Add any remaining tasks that weren't in the AI response (shouldn't happen, but safety)
-                foreach ($taskMap as $remainingTasks) {
-                    foreach ($remainingTasks as $task) {
-                        $sortedActiveTasks[] = $task;
-                    }
-                }
-                
-                // Combine: sorted active tasks first, then completed tasks (in their original order)
-                // Completed tasks are NOT sorted - they stay exactly as they were
-                $resultTasks = array_merge($sortedActiveTasks, $completedTasks);
-                
-                echo json_encode(['tasks' => $resultTasks]);
-            } catch (Exception $e) {
-                // On error, return original order
-                error_log('AI sort error: ' . $e->getMessage());
-                echo json_encode(['tasks' => $tasks, 'error' => 'Sorting failed, returning original order']);
+            if (!isset($aiResult['sortedItems']) || !is_array($aiResult['sortedItems'])) {
+                // Fallback: return original order if AI response is invalid
+                json_response(['tasks' => $tasks]);
             }
-        } else {
-            http_response_code(405);
-            echo json_encode(['error' => 'Method not allowed']);
+            
+            // Create a map of task text to task objects (handles duplicates)
+            $taskMap = [];
+            foreach ($tasks as $task) {
+                $text = $task['task'];
+                $taskMap[$text][] = $task;
+            }
+            
+            // Reorder tasks based on AI sorting
+            $sortedTasks = [];
+            foreach ($aiResult['sortedItems'] as $text) {
+                if (!empty($taskMap[$text])) {
+                    $sortedTasks[] = array_shift($taskMap[$text]);
+                }
+            }
+            
+            // Add any remaining tasks that weren't in the AI response (safety fallback)
+            foreach ($taskMap as $remainingTasks) {
+                $sortedTasks = array_merge($sortedTasks, $remainingTasks);
+            }
+            
+            json_response(['tasks' => $sortedTasks]);
+        } catch (Exception $e) {
+            error_log('AI sort error: ' . $e->getMessage());
+            json_response(['tasks' => $tasks, 'error' => 'Sorting failed, returning original order']);
         }
         break;
 
     default:
-        http_response_code(404);
-        echo json_encode(['error' => 'Resource not found']);
+        json_response(['error' => 'Resource not found'], 404);
 }
 ?>

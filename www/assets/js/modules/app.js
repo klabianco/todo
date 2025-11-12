@@ -60,55 +60,33 @@ export const init = async () => {
     // Set up event listeners
     setupEventListeners();
     
-    // Check for a forced subscription from localStorage
-    // This is a more direct approach to ensure subscriptions are applied
+    // Process subscriptions from localStorage
     if (!isSharedList) {
         try {
-            // First check for our new forced subscription
-            const forcedSubJson = localStorage.getItem('todo_force_subscription');
-            if (forcedSubJson) {
-                const forcedSub = JSON.parse(forcedSubJson);
+            const processSubscription = async (key) => {
+                const subJson = localStorage.getItem(key);
+                if (!subJson) return false;
                 
-                // Only use if it's recent (last 5 minutes)
-                const isRecent = (Date.now() - forcedSub.timestamp) < 300000; // 5 minutes
+                const sub = JSON.parse(subJson);
+                const isRecent = (Date.now() - sub.timestamp) < 300000; // 5 minutes
                 
-                if (isRecent && forcedSub.id) {
-                    
-                    // Add directly to the subscription list
+                if (isRecent && sub.id) {
                     const currentLists = storage.getSubscribedLists();
-                    
-                    // Only add if not already present
-                    if (!currentLists.some(list => list.id === forcedSub.id)) {
-                        currentLists.push({
-                            id: forcedSub.id,
-                            title: forcedSub.title || 'Shared List',
-                            url: forcedSub.url || window.location.origin,
-                            lastAccessed: new Date().toISOString()
-                        });
-                        
-                        // Save the updated list
-                        await storage.saveSubscribedLists(currentLists);
-                    } else {
+                    if (!currentLists.some(list => list.id === sub.id)) {
+                        await storage.subscribeToSharedList(
+                            sub.id,
+                            sub.title || 'Shared List',
+                            sub.url || window.location.origin
+                        );
                     }
                 }
                 
-                // Clear the forced subscription regardless of whether we used it
-                localStorage.removeItem('todo_force_subscription');
-            }
+                localStorage.removeItem(key);
+                return true;
+            };
             
-            // Also check the original pending subscription as a fallback
-            const pendingSubJson = localStorage.getItem('todo_pending_subscription');
-            if (pendingSubJson) {
-                const pendingSub = JSON.parse(pendingSubJson);
-                if ((Date.now() - pendingSub.timestamp) < 300000 && pendingSub.id) {
-                    await storage.subscribeToSharedList(
-                        pendingSub.id,
-                        pendingSub.title || 'Shared List',
-                        pendingSub.url || window.location.origin
-                    );
-                }
-                localStorage.removeItem('todo_pending_subscription');
-            }
+            await processSubscription('todo_force_subscription');
+            await processSubscription('todo_pending_subscription');
         } catch (err) {
             console.error('Error processing subscription from localStorage:', err);
         }
@@ -123,37 +101,30 @@ export const init = async () => {
         // Get the current list of subscriptions after reloading
         const subscribedLists = storage.getSubscribedLists();
         
-        if (subscribedLists.length > 0) {  
+        if (subscribedLists.length > 0) {
+            // Validate lists in parallel
+            const validatedLists = await Promise.all(
+                subscribedLists.map(async (list) => {
+                    try {
+                        const response = await fetch(`/api/lists/${list.id}?t=${Date.now()}`, {
+                            headers: { 'Accept': 'application/json' },
+                            cache: 'no-store'
+                        });
+                        return response.ok ? list : null;
+                    } catch (err) {
+                        console.error(`Error checking list ${list.id}:`, err);
+                        return null;
+                    }
+                })
+            ).then(lists => lists.filter(Boolean));
             
-            // Check for any invalid lists and remove them
-            Promise.all(subscribedLists.map(async (list) => {
-                try {
-                    // Using GET instead of HEAD as the server doesn't support HEAD requests
-                    const response = await fetch(`/api/lists/${list.id}?t=${Date.now()}`, { 
-                        method: 'GET',
-                        headers: { 'Accept': 'application/json' },
-                        cache: 'no-store'
-                    });
-                    return response.ok ? list : null;
-                } catch (err) {
-                    console.error(`Error checking list ${list.id}:`, err);
-                    return null;
-                }
-            }))
-            .then(async validatedLists => {
-                // Filter out null results (invalid lists)
-                const validLists = validatedLists.filter(list => list !== null);
-                
-                // If we removed any lists, update storage
-                if (validLists.length < subscribedLists.length) {
-                    await storage.saveSubscribedLists(validLists);
-                }
-                
-                // Update UI with valid lists
-                if (validLists.length > 0 || shouldRefreshLists) {
-                    ui.addSubscribedListsUI(validLists, handleSubscribedListClick);
-                }
-            });
+            if (validatedLists.length < subscribedLists.length) {
+                await storage.saveSubscribedLists(validatedLists);
+            }
+            
+            if (validatedLists.length > 0 || shouldRefreshLists) {
+                ui.addSubscribedListsUI(validatedLists, handleSubscribedListClick);
+            }
         } else if (shouldRefreshLists) {
             // If we have no lists but are coming back from a shared view,
             // try loading lists again to catch any recent subscriptions
@@ -476,19 +447,7 @@ const handleAISortClick = async () => {
     const aiSortButton = document.getElementById('ai-sort-button');
     if (!aiSortButton) return;
     
-    // Prevent multiple clicks - check if already processing
-    if (aiSortButton.disabled) {
-        return;
-    }
-    
-    // Disable button and show loading state
-    aiSortButton.disabled = true;
-    aiSortButton.style.opacity = '0.6';
-    aiSortButton.style.cursor = 'not-allowed';
-    aiSortButton.style.pointerEvents = 'none';
-    const originalText = aiSortButton.innerHTML;
-    
-    aiSortButton.innerHTML = `
+    const loadingHTML = `
         <svg class="animate-spin h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -496,94 +455,62 @@ const handleAISortClick = async () => {
         Optimizing List...
     `;
     
+    const originalText = utils.setButtonLoading(aiSortButton, loadingHTML);
+    if (!originalText) return; // Already processing
+    
     try {
-        // Load all tasks
         const allTasks = await storage.loadTasks();
-        
-        let tasksToSort = [];
-        let completedTasksToPreserve = [];
+        let tasksToSort, completedTasksToPreserve;
         
         if (currentFocusedTaskId) {
-            // We're in focus mode - sort only the active subtasks of the focused task
+            // Focus mode: sort only active subtasks
             const result = utils.findTaskById(allTasks, currentFocusedTaskId);
-            if (result && result.task) {
-                const allSubtasks = result.task.subtasks || [];
-                // Separate active and completed subtasks
-                tasksToSort = allSubtasks.filter(subtask => !subtask.completed);
-                completedTasksToPreserve = allSubtasks.filter(subtask => subtask.completed);
-            } else {
-                // Task not found, can't sort - restore button and exit
-                aiSortButton.disabled = false;
-                aiSortButton.style.opacity = '';
-                aiSortButton.style.cursor = '';
-                aiSortButton.style.pointerEvents = '';
-                aiSortButton.innerHTML = originalText;
+            if (!result?.task) {
+                utils.restoreButtonState(aiSortButton, originalText);
                 return;
             }
+            const allSubtasks = result.task.subtasks || [];
+            ({ active: tasksToSort, completed: completedTasksToPreserve } = utils.separateTasks(allSubtasks));
         } else {
-            // Normal mode - sort only active top-level tasks (not subtasks, not completed)
+            // Normal mode: sort only active top-level tasks
             const topLevelTasks = allTasks.filter(task => !task.parentId);
-            tasksToSort = topLevelTasks.filter(task => !task.completed);
-            completedTasksToPreserve = topLevelTasks.filter(task => task.completed);
+            ({ active: tasksToSort, completed: completedTasksToPreserve } = utils.separateTasks(topLevelTasks));
         }
         
         if (tasksToSort.length === 0) {
-            // No active tasks to sort - restore button and exit
-            aiSortButton.disabled = false;
-            aiSortButton.style.opacity = '';
-            aiSortButton.style.cursor = '';
-            aiSortButton.style.pointerEvents = '';
-            aiSortButton.innerHTML = originalText;
+            utils.restoreButtonState(aiSortButton, originalText);
             return;
         }
         
-        // Call the AI sort API - only send active tasks (much smaller payload!)
+        // Call AI sort API - only send active tasks
         const response = await fetch('/api/sort', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ tasks: tasksToSort })
         });
         
-        if (!response.ok) {
-            throw new Error('Failed to sort tasks');
-        }
+        if (!response.ok) throw new Error('Failed to sort tasks');
         
-        const data = await response.json();
-        // API returns sorted active tasks (since we only sent active tasks)
-        const sortedActiveTasks = data.tasks || tasksToSort;
+        const { tasks: sortedActiveTasks = tasksToSort } = await response.json();
         
-        // Update the tasks in the correct location
+        // Update tasks in correct location
         if (currentFocusedTaskId) {
-            // Update subtasks of the focused task
             const result = utils.findTaskById(allTasks, currentFocusedTaskId);
-            if (result && result.task) {
-                // Combine sorted active subtasks with completed subtasks (preserved)
+            if (result?.task) {
                 result.task.subtasks = [...sortedActiveTasks, ...completedTasksToPreserve];
                 await storage.saveTasks(allTasks);
             }
         } else {
-            // Update top-level tasks
-            // Get all subtasks (they should remain unchanged)
             const allSubtasks = allTasks.filter(task => task.parentId);
-            // Combine sorted active top-level tasks, completed top-level tasks (preserved), and all subtasks
             await storage.saveTasks([...sortedActiveTasks, ...completedTasksToPreserve, ...allSubtasks]);
         }
         
-        // Re-render the tasks
         await renderTasks();
-        
     } catch (error) {
         console.error('Error sorting tasks:', error);
         alert('Failed to sort tasks. Please try again.');
     } finally {
-        // Always restore button state - ensure it's fully enabled
-        aiSortButton.disabled = false;
-        aiSortButton.style.opacity = '';
-        aiSortButton.style.cursor = '';
-        aiSortButton.style.pointerEvents = '';
-        aiSortButton.innerHTML = originalText;
+        utils.restoreButtonState(aiSortButton, originalText);
     }
 };
 
