@@ -15,14 +15,24 @@ export const addTask = async (taskText, currentFocusedTaskId = null) => {
     const tasks = await loadTasks();
     
     // Check if a task with the same text already exists (regardless of completion status)
-    const existingTask = tasks.find(task => 
+    const existingTaskIndex = tasks.findIndex(task => 
         task.task.trim().toLowerCase() === taskText.trim().toLowerCase()
     );
     
-    if (existingTask) {
-        // If the existing task is completed, uncheck it
+    if (existingTaskIndex !== -1) {
+        const existingTask = tasks[existingTaskIndex];
+        // If the existing task is completed, uncheck it and move to top
         if (existingTask.completed) {
             existingTask.completed = false;
+            // Remove from current position and add to beginning of active tasks
+            tasks.splice(existingTaskIndex, 1);
+            // Find where active tasks start (first non-completed task)
+            const firstActiveIndex = tasks.findIndex(t => !t.completed);
+            if (firstActiveIndex === -1) {
+                tasks.unshift(existingTask); // Add to beginning if no active tasks
+            } else {
+                tasks.splice(firstActiveIndex, 0, existingTask); // Insert at first active position
+            }
             await saveTasks(tasks);
         }
         return existingTask;
@@ -38,8 +48,13 @@ export const addTask = async (taskText, currentFocusedTaskId = null) => {
         created: new Date().toISOString()
     };
     
-    // Add to tasks array
-    tasks.push(newTask);
+    // Add to beginning of active tasks (top of list)
+    const firstActiveIndex = tasks.findIndex(t => !t.completed);
+    if (firstActiveIndex === -1) {
+        tasks.unshift(newTask); // Add to beginning if no active tasks
+    } else {
+        tasks.splice(firstActiveIndex, 0, newTask); // Insert at first active position
+    }
     
     // Save updated tasks
     await saveTasks(tasks);
@@ -56,14 +71,24 @@ export const addSubtask = async (parentId, subtaskText) => {
         const { task } = result;
         
         // Check if a subtask with the same text already exists (regardless of completion status)
-        const existingSubtask = task.subtasks && task.subtasks.find(subtask => 
+        if (!task.subtasks) task.subtasks = [];
+        const existingSubtaskIndex = task.subtasks.findIndex(subtask => 
             subtask.task.trim().toLowerCase() === subtaskText.trim().toLowerCase()
         );
         
-        if (existingSubtask) {
-            // If the existing subtask is completed, uncheck it
+        if (existingSubtaskIndex !== -1) {
+            const existingSubtask = task.subtasks[existingSubtaskIndex];
+            // If the existing subtask is completed, uncheck it and move to top
             if (existingSubtask.completed) {
                 existingSubtask.completed = false;
+                // Remove from current position and add to beginning of active subtasks
+                task.subtasks.splice(existingSubtaskIndex, 1);
+                const firstActiveIndex = task.subtasks.findIndex(st => !st.completed);
+                if (firstActiveIndex === -1) {
+                    task.subtasks.unshift(existingSubtask);
+                } else {
+                    task.subtasks.splice(firstActiveIndex, 0, existingSubtask);
+                }
                 await saveTasks(tasks);
             }
             return existingSubtask;
@@ -80,9 +105,13 @@ export const addSubtask = async (parentId, subtaskText) => {
             parentId: task.id
         };
         
-        // Add to parent's subtasks
-        if (!task.subtasks) task.subtasks = [];
-        task.subtasks.push(newSubtask);
+        // Add to beginning of active subtasks (top of list)
+        const firstActiveIndex = task.subtasks.findIndex(st => !st.completed);
+        if (firstActiveIndex === -1) {
+            task.subtasks.unshift(newSubtask);
+        } else {
+            task.subtasks.splice(firstActiveIndex, 0, newSubtask);
+        }
         
         // Save tasks
         await saveTasks(tasks);
@@ -98,12 +127,43 @@ export const toggleTaskCompletion = async (taskId) => {
     const taskResult = findTaskById(tasks, taskId);
     
     if (taskResult) {
-        const { task } = taskResult;
+        const { task, parent } = taskResult;
+        const wasCompleted = task.completed;
         task.completed = !task.completed;
         
         // Toggle completion status for all subtasks to match parent
         if (task.subtasks && task.subtasks.length > 0) {
             completeAllSubtasks(task, task.completed);
+        }
+        
+        // If unchecking a completed task, move it to the top of active tasks
+        if (wasCompleted && !task.completed) {
+            if (parent) {
+                // It's a subtask - move to top of active subtasks
+                const subtasks = parent.subtasks;
+                const currentIndex = subtasks.findIndex(t => t.id === taskId);
+                if (currentIndex !== -1) {
+                    subtasks.splice(currentIndex, 1);
+                    const firstActiveIndex = subtasks.findIndex(st => !st.completed);
+                    if (firstActiveIndex === -1) {
+                        subtasks.unshift(task);
+                    } else {
+                        subtasks.splice(firstActiveIndex, 0, task);
+                    }
+                }
+            } else {
+                // It's a top-level task - move to top of active tasks
+                const currentIndex = tasks.findIndex(t => t.id === taskId);
+                if (currentIndex !== -1) {
+                    tasks.splice(currentIndex, 1);
+                    const firstActiveIndex = tasks.findIndex(t => !t.completed);
+                    if (firstActiveIndex === -1) {
+                        tasks.unshift(task);
+                    } else {
+                        tasks.splice(firstActiveIndex, 0, task);
+                    }
+                }
+            }
         }
         
         await saveTasks(tasks);
