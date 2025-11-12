@@ -95,7 +95,7 @@ export const createTaskElement = (
     
     // Drag handle
     const dragHandle = document.createElement('div');
-    dragHandle.className = 'drag-handle mr-2 text-gray-400 cursor-grab p-1';
+    dragHandle.className = 'drag-handle mr-2 text-gray-400 cursor-grab p-1 flex-shrink-0';
     dragHandle.innerHTML = `
         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"></path>
@@ -109,7 +109,7 @@ export const createTaskElement = (
     
     // Checkbox and task text
     const leftDiv = document.createElement('div');
-    leftDiv.className = 'flex items-center flex-1';
+    leftDiv.className = 'flex items-start flex-1';
     
     // Add drag handle to the left div
     leftDiv.appendChild(dragHandle);
@@ -117,7 +117,7 @@ export const createTaskElement = (
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.checked = task.completed;
-    checkbox.className = 'mr-3 h-5 w-5 rounded border-gray-300 text-blue-500 dark:text-gray-500 focus:ring-blue-500 dark:focus:ring-gray-500';
+    checkbox.className = 'mr-3 h-5 w-5 min-w-5 flex-shrink-0 rounded border-gray-300 text-blue-500 dark:text-gray-500 focus:ring-blue-500 dark:focus:ring-gray-500';
     
     // Add event listener to checkbox
     checkbox.addEventListener('change', () => {
@@ -125,7 +125,7 @@ export const createTaskElement = (
     });
     
     const span = document.createElement('span');
-    span.className = task.completed ? 'line-through text-gray-500 dark:text-gray-400' : 'dark:text-gray-100';
+    span.className = `${task.completed ? 'line-through text-gray-500 dark:text-gray-400' : 'dark:text-gray-100'} flex-1`;
     span.textContent = task.task;
     span.draggable = true;
     
