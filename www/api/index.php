@@ -289,6 +289,8 @@ switch ($resource) {
                      "\n\nReturn the items in the order they should be shopped, grouped by category (produce together, meats together, dairy together, etc.). The 'sortedItems' array must contain exactly the same item strings as provided, just reordered.");
         
         try {
+            // Capture any output from the AI class (it might echo errors)
+            ob_start();
             $response = $ai->getResponseFromOpenAi(
                 $ai->getSystemMessage(),
                 1.0, // Temperature 1.0 for compatibility with gpt-5-nano
@@ -297,6 +299,21 @@ switch ($resource) {
                 2000,
                 true
             );
+            $output = ob_get_clean();
+            
+            // Check for errors in output
+            if (!empty($output)) {
+                error_log('AI sort: Output from AI class: ' . $output);
+                if (stripos($output, 'error') !== false) {
+                    json_response(['tasks' => $tasks, 'error' => 'AI service error: ' . $output]);
+                }
+            }
+            
+            // Check if response is valid
+            if ($response === false || $response === null || empty(trim($response))) {
+                error_log('AI sort: Empty or false response from OpenAI API. Output was: ' . ($output ?: 'none'));
+                json_response(['tasks' => $tasks, 'error' => 'AI service returned empty response. Please check API key and model availability.']);
+            }
             
             // Clean and parse JSON response
             $response = trim($response);
@@ -306,7 +323,18 @@ switch ($resource) {
             $response = preg_replace('/\s*```$/', '', $response);
             $response = trim($response);
             
+            if (empty($response)) {
+                error_log('AI sort: Response is empty after cleaning');
+                json_response(['tasks' => $tasks, 'error' => 'AI service returned empty response']);
+            }
+            
             $aiResult = json_decode($response, true);
+            
+            // Check JSON decode errors
+            if ($aiResult === null && json_last_error() !== JSON_ERROR_NONE) {
+                error_log('AI sort JSON decode error: ' . json_last_error_msg());
+                error_log('AI sort raw response: ' . substr($response, 0, 500));
+            }
             
             // If first decode failed, try decoding again (in case response is double-encoded)
             if ($aiResult === null && json_last_error() !== JSON_ERROR_NONE) {
