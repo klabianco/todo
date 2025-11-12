@@ -501,12 +501,16 @@ const handleAISortClick = async () => {
         const allTasks = await storage.loadTasks();
         
         let tasksToSort = [];
+        let completedTasksToPreserve = [];
         
         if (currentFocusedTaskId) {
-            // We're in focus mode - sort only the subtasks of the focused task
+            // We're in focus mode - sort only the active subtasks of the focused task
             const result = utils.findTaskById(allTasks, currentFocusedTaskId);
             if (result && result.task) {
-                tasksToSort = result.task.subtasks || [];
+                const allSubtasks = result.task.subtasks || [];
+                // Separate active and completed subtasks
+                tasksToSort = allSubtasks.filter(subtask => !subtask.completed);
+                completedTasksToPreserve = allSubtasks.filter(subtask => subtask.completed);
             } else {
                 // Task not found, can't sort - restore button and exit
                 aiSortButton.disabled = false;
@@ -517,12 +521,14 @@ const handleAISortClick = async () => {
                 return;
             }
         } else {
-            // Normal mode - sort only top-level tasks (not subtasks)
-            tasksToSort = allTasks.filter(task => !task.parentId);
+            // Normal mode - sort only active top-level tasks (not subtasks, not completed)
+            const topLevelTasks = allTasks.filter(task => !task.parentId);
+            tasksToSort = topLevelTasks.filter(task => !task.completed);
+            completedTasksToPreserve = topLevelTasks.filter(task => task.completed);
         }
         
         if (tasksToSort.length === 0) {
-            // No tasks to sort - restore button and exit
+            // No active tasks to sort - restore button and exit
             aiSortButton.disabled = false;
             aiSortButton.style.opacity = '';
             aiSortButton.style.cursor = '';
@@ -531,7 +537,7 @@ const handleAISortClick = async () => {
             return;
         }
         
-        // Call the AI sort API
+        // Call the AI sort API - only send active tasks (much smaller payload!)
         const response = await fetch('/api/sort', {
             method: 'POST',
             headers: {
@@ -545,22 +551,24 @@ const handleAISortClick = async () => {
         }
         
         const data = await response.json();
-        const sortedTasks = data.tasks || tasksToSort;
+        // API returns sorted active tasks (since we only sent active tasks)
+        const sortedActiveTasks = data.tasks || tasksToSort;
         
         // Update the tasks in the correct location
         if (currentFocusedTaskId) {
             // Update subtasks of the focused task
             const result = utils.findTaskById(allTasks, currentFocusedTaskId);
             if (result && result.task) {
-                result.task.subtasks = sortedTasks;
+                // Combine sorted active subtasks with completed subtasks (preserved)
+                result.task.subtasks = [...sortedActiveTasks, ...completedTasksToPreserve];
                 await storage.saveTasks(allTasks);
             }
         } else {
             // Update top-level tasks
             // Get all subtasks (they should remain unchanged)
             const allSubtasks = allTasks.filter(task => task.parentId);
-            // Combine sorted top-level tasks with all subtasks
-            await storage.saveTasks([...sortedTasks, ...allSubtasks]);
+            // Combine sorted active top-level tasks, completed top-level tasks (preserved), and all subtasks
+            await storage.saveTasks([...sortedActiveTasks, ...completedTasksToPreserve, ...allSubtasks]);
         }
         
         // Re-render the tasks
