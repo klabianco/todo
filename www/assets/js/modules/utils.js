@@ -85,14 +85,6 @@ export const findTaskByIdInSubtasks = (parent, taskId) => {
 // DOM helper
 export const $ = id => document.getElementById(id);
 
-// Create element with class names
-export const createElement = (tag, classNames = '', content = '') => {
-    const element = document.createElement(tag);
-    if (classNames) element.className = classNames;
-    if (content) element.textContent = content;
-    return element;
-};
-
 // Create a separator for breadcrumb
 export const createSeparator = () => {
     const separator = document.createElement('span');

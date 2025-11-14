@@ -419,14 +419,51 @@ const setupEventListeners = () => {
         exportButton.addEventListener('click', handleExportClick);
     }
     
-    // Set up import button
+    // Set up import button and modal
     const importButton = document.getElementById('import-button');
+    const importModal = document.getElementById('import-modal');
     const importFileInput = document.getElementById('import-file-input');
-    if (importButton && importFileInput) {
+    const importFileButton = document.getElementById('import-file-button');
+    const importUrlInput = document.getElementById('import-url-input');
+    const confirmImportUrlButton = document.getElementById('confirm-import-url');
+    const cancelImportButton = document.getElementById('cancel-import');
+    
+    if (importButton && importModal) {
         importButton.addEventListener('click', () => {
+            importModal.classList.remove('hidden');
+            importUrlInput.value = '';
+        });
+    }
+    
+    if (cancelImportButton && importModal) {
+        cancelImportButton.addEventListener('click', () => {
+            // Only allow cancel if not currently importing
+            const confirmImportUrlButton = document.getElementById('confirm-import-url');
+            if (!confirmImportUrlButton || !confirmImportUrlButton.disabled) {
+                importModal.classList.add('hidden');
+                importUrlInput.value = '';
+            }
+        });
+    }
+    
+    // Don't allow closing modal by clicking outside - it should stay open during import
+    
+    // File import button in modal
+    if (importFileButton && importFileInput) {
+        importFileButton.addEventListener('click', () => {
             importFileInput.click();
         });
         importFileInput.addEventListener('change', handleImportFile);
+    }
+    
+    // URL import
+    if (confirmImportUrlButton && importUrlInput) {
+        confirmImportUrlButton.addEventListener('click', handleImportFromUrl);
+        importUrlInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                handleImportFromUrl();
+            }
+        });
     }
     
     // Set up export modal
@@ -1236,12 +1273,19 @@ const handleImportFile = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
     
+    const importModal = document.getElementById('import-modal');
+    
     try {
         const text = await file.text();
         const importData = JSON.parse(text);
         
         if (!importData.tasks || !Array.isArray(importData.tasks)) {
             throw new Error('Invalid file format. Expected a JSON file with a "tasks" array.');
+        }
+        
+        // Close modal if open
+        if (importModal) {
+            importModal.classList.add('hidden');
         }
         
         // Confirm import
@@ -1279,6 +1323,167 @@ const handleImportFile = async (event) => {
         console.error('Error importing:', error);
         alert('Failed to import list: ' + error.message);
         event.target.value = '';
+    }
+};
+
+// Handle Import from URL
+const handleImportFromUrl = async () => {
+    const importUrlInput = document.getElementById('import-url-input');
+    const confirmImportUrlButton = document.getElementById('confirm-import-url');
+    const cancelImportButton = document.getElementById('cancel-import');
+    const importModal = document.getElementById('import-modal');
+    
+    const url = importUrlInput?.value.trim();
+    if (!url) {
+        alert('Please enter a URL');
+        return;
+    }
+    
+    // Validate URL format
+    try {
+        new URL(url);
+    } catch (e) {
+        alert('Please enter a valid URL');
+        return;
+    }
+    
+    // Disable button and show loading state
+    const originalText = confirmImportUrlButton.innerHTML;
+    utils.setButtonLoading(confirmImportUrlButton, 'Importing...');
+    confirmImportUrlButton.disabled = true;
+    
+    // Disable cancel button and URL input during import
+    if (cancelImportButton) {
+        cancelImportButton.disabled = true;
+    }
+    if (importUrlInput) {
+        importUrlInput.disabled = true;
+    }
+    
+    try {
+        // Call API to fetch URL and extract items
+        const response = await utils.apiFetch('/api/import-url', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ url })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to import from URL');
+        }
+        
+        const data = await response.json();
+        
+        if (!data.items || !Array.isArray(data.items) || data.items.length === 0) {
+            throw new Error('No items could be extracted from the URL');
+        }
+        
+        // Close modal
+        if (importModal) {
+            importModal.classList.add('hidden');
+        }
+        
+        // Get current tasks
+        const currentTasks = await storage.loadTasks();
+        
+        // Create a parent task with title from URL
+        const parentTaskTitle = data.title || 'Imported List';
+        const parentTaskId = utils.generateUUID();
+        
+        // Create subtasks from extracted items
+        const subtasks = data.items.map(item => ({
+            id: utils.generateUUID(),
+            task: item,
+            completed: false,
+            sticky: false,
+            subtasks: [],
+            parentId: parentTaskId,
+            created: new Date().toISOString()
+        }));
+        
+        // Create parent task with all subtasks
+        const parentTask = {
+            id: parentTaskId,
+            task: parentTaskTitle,
+            completed: false,
+            sticky: false,
+            subtasks: subtasks,
+            created: new Date().toISOString()
+        };
+        
+        // Check if we're in a focused sublist (viewing subtasks of a specific task)
+        if (currentFocusedTaskId) {
+            // Find the focused task and add the imported task as a subtask
+            const focusedResult = utils.findTaskById(currentTasks, currentFocusedTaskId);
+            if (focusedResult && focusedResult.task) {
+                const focusedTask = focusedResult.task;
+                
+                // Set parentId for the imported task
+                parentTask.parentId = currentFocusedTaskId;
+                
+                // Initialize subtasks array if it doesn't exist
+                if (!focusedTask.subtasks) {
+                    focusedTask.subtasks = [];
+                }
+                
+                // Add to beginning of active subtasks (top of list)
+                const firstActiveIndex = focusedTask.subtasks.findIndex(st => !st.completed);
+                if (firstActiveIndex === -1) {
+                    focusedTask.subtasks.unshift(parentTask);
+                } else {
+                    focusedTask.subtasks.splice(firstActiveIndex, 0, parentTask);
+                }
+            } else {
+                // Fallback: add to root if focused task not found
+                const firstActiveIndex = currentTasks.findIndex(t => !t.completed);
+                if (firstActiveIndex === -1) {
+                    currentTasks.unshift(parentTask);
+                } else {
+                    currentTasks.splice(firstActiveIndex, 0, parentTask);
+                }
+            }
+        } else {
+            // Not in focused mode - add to root level
+            const firstActiveIndex = currentTasks.findIndex(t => !t.completed);
+            if (firstActiveIndex === -1) {
+                currentTasks.unshift(parentTask);
+            } else {
+                currentTasks.splice(firstActiveIndex, 0, parentTask);
+            }
+        }
+        
+        // Save tasks
+        await storage.saveTasks(currentTasks);
+        
+        // Re-render
+        await renderTasks();
+        
+        alert(`Successfully imported ${data.items.length} item(s) from URL as subtasks!`);
+        
+        // Reset URL input
+        if (importUrlInput) {
+            importUrlInput.value = '';
+        }
+    } catch (error) {
+        console.error('Error importing from URL:', error);
+        alert('Failed to import from URL: ' + error.message);
+    } finally {
+        // Restore button state
+        utils.restoreButtonState(confirmImportUrlButton, originalText);
+        if (confirmImportUrlButton) {
+            confirmImportUrlButton.disabled = false;
+        }
+        
+        // Re-enable cancel button and URL input
+        if (cancelImportButton) {
+            cancelImportButton.disabled = false;
+        }
+        if (importUrlInput) {
+            importUrlInput.disabled = false;
+        }
     }
 };
 

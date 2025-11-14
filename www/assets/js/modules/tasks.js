@@ -223,46 +223,6 @@ export const deleteTask = async (taskId) => {
     return false;
 };
 
-// Move a task to become a subtask of another task
-export const moveTaskAsSubtask = async (taskId, newParentId) => {
-    if (taskId === newParentId) return false; // Can't make a task a subtask of itself
-    
-    const tasks = await loadTasks();
-    const taskResult = findTaskById(tasks, taskId);
-    const parentResult = findTaskById(tasks, newParentId);
-    
-    if (!taskResult || !parentResult) return false;
-    
-    const { task, parent: oldParent } = taskResult;
-    const { task: newParent } = parentResult;
-    
-    // Check if new parent is a descendant of the task (would create a cycle)
-    let currentTask = newParent;
-    while (currentTask) {
-        if (currentTask.parentId === task.id) return false; // Would create a cycle
-        
-        // Move up the hierarchy
-        const parentResult = currentTask.parentId ? findTaskById(tasks, currentTask.parentId) : null;
-        currentTask = parentResult ? parentResult.task : null;
-    }
-    
-    // Remove from old parent (or top level)
-    if (oldParent) {
-        oldParent.subtasks = oldParent.subtasks.filter(st => st.id !== taskId);
-    } else {
-        const index = tasks.findIndex(t => t.id === taskId);
-        if (index !== -1) tasks.splice(index, 1);
-    }
-    
-    // Add to new parent
-    if (!newParent.subtasks) newParent.subtasks = [];
-    task.parentId = newParent.id;
-    newParent.subtasks.push(task);
-    
-    await saveTasks(tasks);
-    return true;
-};
-
 // Promote a task one level up
 export const promoteTask = async (taskId) => {
     const tasks = await loadTasks();

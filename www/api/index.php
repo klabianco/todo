@@ -507,6 +507,132 @@ switch ($resource) {
         }
         break;
 
+    case 'import-url':
+        // AI-powered URL import endpoint - fetches URL content and extracts items
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            json_response(['error' => 'Method not allowed'], 405);
+        }
+        
+        // Increase execution time limit for AI operations (5 minutes)
+        set_time_limit(300);
+        ini_set('max_execution_time', 300);
+        
+        require __DIR__ . '/../../config/config.php';
+        
+        $data = get_request_body();
+        $url = $data['url'] ?? '';
+        
+        if (empty($url)) {
+            json_response(['error' => 'URL is required'], 400);
+        }
+        
+        // Validate URL
+        if (!filter_var($url, FILTER_VALIDATE_URL)) {
+            json_response(['error' => 'Invalid URL format'], 400);
+        }
+        
+        try {
+            // Fetch URL content
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+            curl_setopt($ch, CURLOPT_MAXREDIRS, 5);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+            curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+            
+            $html = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $error = curl_error($ch);
+            curl_close($ch);
+            
+            if ($html === false || !empty($error)) {
+                error_log('URL fetch error: ' . $error);
+                json_response(['error' => 'Failed to fetch URL: ' . ($error ?: 'Unknown error')], 500);
+            }
+            
+            if ($httpCode !== 200) {
+                error_log('URL fetch HTTP error: ' . $httpCode);
+                json_response(['error' => 'Failed to fetch URL: HTTP ' . $httpCode], 500);
+            }
+            
+            // Extract text content from HTML (simple approach - remove script/style tags and get text)
+            $html = preg_replace('/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/mi', '', $html);
+            $html = preg_replace('/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/mi', '', $html);
+            $text = strip_tags($html);
+            $text = preg_replace('/\s+/', ' ', $text); // Normalize whitespace
+            $text = trim($text);
+            
+            // Limit text length to avoid token limits (keep first 8000 characters)
+            if (strlen($text) > 8000) {
+                $text = substr($text, 0, 8000) . '...';
+            }
+            
+            if (empty($text)) {
+                json_response(['error' => 'No text content found in URL'], 400);
+            }
+            
+            // Extract title from HTML (try to get page title)
+            $title = '';
+            if (preg_match('/<title[^>]*>([^<]+)<\/title>/i', $html, $matches)) {
+                $title = trim($matches[1]);
+            }
+            // Fallback: use URL domain/name if no title found
+            if (empty($title)) {
+                $parsedUrl = parse_url($url);
+                $title = isset($parsedUrl['host']) ? $parsedUrl['host'] : 'Imported List';
+            }
+            
+            // Create AI instance and set up prompt for extracting items
+            $ai = new AI();
+            $ai->setJsonResponse(true);
+            $ai->setSystemMessage("You are a helpful assistant that extracts actionable items (like ingredients, tasks, or items to buy) from web content. Extract all relevant items and return them as a simple list. For recipes, extract ingredients. For articles, extract actionable items or tasks mentioned.");
+            $ai->setPrompt("Extract all actionable items (ingredients, tasks, items to buy, etc.) from the following content. Return ONLY a valid JSON object with this exact structure:\n\n{\n  \"items\": [\"item1\", \"item2\", \"item3\", ...]\n}\n\nContent:\n" . $text . "\n\nReturn the items as a simple array of strings. Each item should be clear and actionable (e.g., \"2 cups flour\" or \"Buy milk\" or \"Call dentist\").");
+            
+            // Try AI models with fallback
+            global $aiModelFallbacks;
+            $response = try_ai_models($ai, $aiModelFallbacks);
+            
+            // Check if we got an error instead of a response
+            if (is_array($response) && isset($response['error'])) {
+                error_log('AI import-url: All models failed. Last error: ' . $response['error']);
+                json_response(['error' => 'AI service unavailable. Please check API key and model availability.'], 500);
+            }
+            
+            // Parse AI response
+            $aiResult = parse_ai_json_response($response);
+            if ($aiResult === null) {
+                error_log('AI import-url: Response is empty or invalid after parsing');
+                json_response(['error' => 'AI service returned invalid response'], 500);
+            }
+            
+            // Extract items from various possible JSON structures
+            $items = [];
+            if (isset($aiResult['items']) && is_array($aiResult['items'])) {
+                $items = $aiResult['items'];
+            } elseif (isset($aiResult['ingredients']) && is_array($aiResult['ingredients'])) {
+                $items = $aiResult['ingredients'];
+            } elseif (is_array($aiResult)) {
+                // If it's a direct array, use it
+                $items = array_values($aiResult);
+            }
+            
+            if (empty($items)) {
+                error_log('AI import-url: No items extracted. Response: ' . substr($response, 0, 1000));
+                json_response(['error' => 'No items could be extracted from the URL content'], 400);
+            }
+            
+            json_response([
+                'title' => $title,
+                'items' => $items,
+                'count' => count($items)
+            ]);
+        } catch (Exception $e) {
+            error_log('AI import-url error: ' . $e->getMessage());
+            json_response(['error' => 'Import failed: ' . $e->getMessage()], 500);
+        }
+        break;
+
     default:
         json_response(['error' => 'Resource not found'], 404);
 }
