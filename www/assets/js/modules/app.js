@@ -438,7 +438,7 @@ const setupEventListeners = () => {
     if (cancelImportButton && importModal) {
         cancelImportButton.addEventListener('click', () => {
             // Only allow cancel if not currently importing
-            const confirmImportUrlButton = document.getElementById('confirm-import-url');
+            const confirmImportUrlButton = utils.$('confirm-import-url');
             if (!confirmImportUrlButton || !confirmImportUrlButton.disabled) {
                 importModal.classList.add('hidden');
                 importUrlInput.value = '';
@@ -519,6 +519,12 @@ const setupEventListeners = () => {
     // Set up completed tasks toggle
     if (ui.domElements.completedToggle) {
         ui.domElements.completedToggle.addEventListener('click', ui.toggleCompletedTasksList);
+    }
+    
+    // Set up Clear Completed button
+    const clearCompletedButton = document.getElementById('clear-completed-button');
+    if (clearCompletedButton) {
+        clearCompletedButton.addEventListener('click', handleClearCompleted);
     }
 
     // Handle drag and drop on breadcrumb for task promotion
@@ -1328,10 +1334,10 @@ const handleImportFile = async (event) => {
 
 // Handle Import from URL
 const handleImportFromUrl = async () => {
-    const importUrlInput = document.getElementById('import-url-input');
-    const confirmImportUrlButton = document.getElementById('confirm-import-url');
-    const cancelImportButton = document.getElementById('cancel-import');
-    const importModal = document.getElementById('import-modal');
+    const importUrlInput = utils.$('import-url-input');
+    const confirmImportUrlButton = utils.$('confirm-import-url');
+    const cancelImportButton = utils.$('cancel-import');
+    const importModal = utils.$('import-modal');
     
     const url = importUrlInput?.value.trim();
     if (!url) {
@@ -1700,6 +1706,40 @@ const updateBreadcrumbTrail = () => {
 // Promote a task up one level
 const promoteTask = async (taskId) => {
     await tasks.promoteTask(taskId);
+    await renderTasks();
+};
+
+// Clear all completed tasks
+const handleClearCompleted = async () => {
+    const confirmed = confirm('Are you sure you want to clear all completed tasks? This cannot be undone.');
+    if (!confirmed) return;
+    
+    const allTasks = await storage.loadTasks();
+    
+    // Recursive function to remove completed tasks from a task array
+    const removeCompletedTasks = (taskArray) => {
+        return taskArray.filter(task => {
+            // If task is completed, exclude it
+            if (task.completed) {
+                return false;
+            }
+            
+            // If task has subtasks, recursively clean them
+            if (task.subtasks && task.subtasks.length > 0) {
+                task.subtasks = removeCompletedTasks(task.subtasks);
+            }
+            
+            return true;
+        });
+    };
+    
+    // Remove all completed tasks (both top-level and nested)
+    const cleanedTasks = removeCompletedTasks(allTasks);
+    
+    // Save the cleaned tasks
+    await storage.saveTasks(cleanedTasks);
+    
+    // Re-render
     await renderTasks();
 };
 

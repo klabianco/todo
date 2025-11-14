@@ -4,6 +4,16 @@
 import { generateUUID, findTaskById, completeAllSubtasks, makeAllSubtasksSticky } from './utils.js';
 import { loadTasks, saveTasks } from './storage.js';
 
+// Helper to insert task at the beginning of active tasks
+const insertAtActiveTop = (taskArray, task) => {
+    const firstActiveIndex = taskArray.findIndex(t => !t.completed);
+    if (firstActiveIndex === -1) {
+        taskArray.unshift(task);
+    } else {
+        taskArray.splice(firstActiveIndex, 0, task);
+    }
+};
+
 // Add a new task
 export const addTask = async (taskText, currentFocusedTaskId = null) => {
     // Handle focused mode - add as a subtask if we're focused
@@ -24,15 +34,8 @@ export const addTask = async (taskText, currentFocusedTaskId = null) => {
         // If the existing task is completed, uncheck it and move to top
         if (existingTask.completed) {
             existingTask.completed = false;
-            // Remove from current position and add to beginning of active tasks
             tasks.splice(existingTaskIndex, 1);
-            // Find where active tasks start (first non-completed task)
-            const firstActiveIndex = tasks.findIndex(t => !t.completed);
-            if (firstActiveIndex === -1) {
-                tasks.unshift(existingTask); // Add to beginning if no active tasks
-            } else {
-                tasks.splice(firstActiveIndex, 0, existingTask); // Insert at first active position
-            }
+            insertAtActiveTop(tasks, existingTask);
             await saveTasks(tasks);
         }
         return existingTask;
@@ -49,12 +52,7 @@ export const addTask = async (taskText, currentFocusedTaskId = null) => {
     };
     
     // Add to beginning of active tasks (top of list)
-    const firstActiveIndex = tasks.findIndex(t => !t.completed);
-    if (firstActiveIndex === -1) {
-        tasks.unshift(newTask); // Add to beginning if no active tasks
-    } else {
-        tasks.splice(firstActiveIndex, 0, newTask); // Insert at first active position
-    }
+    insertAtActiveTop(tasks, newTask);
     
     // Save updated tasks
     await saveTasks(tasks);
@@ -81,14 +79,8 @@ export const addSubtask = async (parentId, subtaskText) => {
             // If the existing subtask is completed, uncheck it and move to top
             if (existingSubtask.completed) {
                 existingSubtask.completed = false;
-                // Remove from current position and add to beginning of active subtasks
                 task.subtasks.splice(existingSubtaskIndex, 1);
-                const firstActiveIndex = task.subtasks.findIndex(st => !st.completed);
-                if (firstActiveIndex === -1) {
-                    task.subtasks.unshift(existingSubtask);
-                } else {
-                    task.subtasks.splice(firstActiveIndex, 0, existingSubtask);
-                }
+                insertAtActiveTop(task.subtasks, existingSubtask);
                 await saveTasks(tasks);
             }
             return existingSubtask;
@@ -106,12 +98,7 @@ export const addSubtask = async (parentId, subtaskText) => {
         };
         
         // Add to beginning of active subtasks (top of list)
-        const firstActiveIndex = task.subtasks.findIndex(st => !st.completed);
-        if (firstActiveIndex === -1) {
-            task.subtasks.unshift(newSubtask);
-        } else {
-            task.subtasks.splice(firstActiveIndex, 0, newSubtask);
-        }
+        insertAtActiveTop(task.subtasks, newSubtask);
         
         // Save tasks
         await saveTasks(tasks);
@@ -144,24 +131,14 @@ export const toggleTaskCompletion = async (taskId) => {
                 const currentIndex = subtasks.findIndex(t => t.id === taskId);
                 if (currentIndex !== -1) {
                     subtasks.splice(currentIndex, 1);
-                    const firstActiveIndex = subtasks.findIndex(st => !st.completed);
-                    if (firstActiveIndex === -1) {
-                        subtasks.unshift(task);
-                    } else {
-                        subtasks.splice(firstActiveIndex, 0, task);
-                    }
+                    insertAtActiveTop(subtasks, task);
                 }
             } else {
                 // It's a top-level task - move to top of active tasks
                 const currentIndex = tasks.findIndex(t => t.id === taskId);
                 if (currentIndex !== -1) {
                     tasks.splice(currentIndex, 1);
-                    const firstActiveIndex = tasks.findIndex(t => !t.completed);
-                    if (firstActiveIndex === -1) {
-                        tasks.unshift(task);
-                    } else {
-                        tasks.splice(firstActiveIndex, 0, task);
-                    }
+                    insertAtActiveTop(tasks, task);
                 }
             }
         }

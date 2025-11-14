@@ -187,16 +187,6 @@ class AI
         }
 
         $content = $response->choices[0]->message->content;
-
-        if ($model == "o3-mini") {
-            /*
-            echo "here!";
-            var_dump($params);
-            var_dump($response); 
-            die;
-            */
-        }
-
         return $content;
     }
 

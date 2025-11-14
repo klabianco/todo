@@ -54,13 +54,20 @@ export const toggleCompletedSection = hasCompletedTasks => {
 export const toggleCompletedTasksList = () => {
     if (!domElements.completedTaskList || !domElements.completedChevron) return;
     
+    const clearButton = document.getElementById('clear-completed-button');
     const isHidden = domElements.completedTaskList.classList.contains('hidden');
     if (isHidden) {
         domElements.completedTaskList.classList.remove('hidden');
         domElements.completedChevron.classList.add('rotate-180');
+        if (clearButton) {
+            clearButton.classList.remove('hidden');
+        }
     } else {
         domElements.completedTaskList.classList.add('hidden');
         domElements.completedChevron.classList.remove('rotate-180');
+        if (clearButton) {
+            clearButton.classList.add('hidden');
+        }
     }
 };
 

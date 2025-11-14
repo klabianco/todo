@@ -99,7 +99,7 @@ require __DIR__ . '/../config/config.php';
                 >
                 <button 
                     type="submit" 
-                    class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-r-lg transition duration-200"
+                    class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-r-lg border border-l-0 border-gray-300 dark:border-gray-600 transition duration-200"
                 >
                     Add
                 </button>
@@ -277,7 +277,7 @@ require __DIR__ . '/../config/config.php';
                 
                 <!-- Completed tasks section -->
                 <div id="completed-section" class="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700" style="display: none;">
-                    <button id="completed-toggle" class="flex justify-between items-center w-full mb-4 text-left hover:opacity-80 transition-opacity">
+                    <button id="completed-toggle" class="flex justify-between items-center w-full mb-2 text-left hover:opacity-80 transition-opacity">
                         <h2 class="text-lg font-medium text-gray-600 dark:text-gray-300">Completed</h2>
                         <div class="flex items-center gap-2">
                             <span id="completed-count" class="text-sm text-gray-500 dark:text-gray-400">0 completed</span>
@@ -286,6 +286,11 @@ require __DIR__ . '/../config/config.php';
                             </svg>
                         </div>
                     </button>
+                    <div class="mb-4">
+                        <button id="clear-completed-button" class="hidden text-xs text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 px-2 py-1 rounded transition-colors" title="Clear all completed tasks">
+                            Clear All
+                        </button>
+                    </div>
                     
                     <ul id="completed-task-list" class="space-y-2 hidden">
                         <!-- Completed tasks will be inserted here by JavaScript -->
