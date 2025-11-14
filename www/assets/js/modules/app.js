@@ -432,11 +432,13 @@ const setupEventListeners = () => {
         closeRecipeModal.addEventListener('click', () => {
             recipeModal.classList.add('hidden');
         });
-        // Close modal when clicking outside
-        recipeModal.addEventListener('click', (e) => {
-            if (e.target === recipeModal) {
-                recipeModal.classList.add('hidden');
-            }
+    }
+    
+    // Set up Get Next Recipe button
+    const getNextRecipeButton = document.getElementById('get-next-recipe-button');
+    if (getNextRecipeButton) {
+        getNextRecipeButton.addEventListener('click', async () => {
+            await generateAndDisplayRecipe(null, false);
         });
     }
 
@@ -699,86 +701,177 @@ const handleAISortClick = async () => {
     }
 };
 
+// Get tasks for recipe generation (shared logic)
+const getTasksForRecipe = async () => {
+    const allTasks = await storage.loadTasks();
+    let allTasksForRecipe = [];
+    
+    if (currentFocusedTaskId) {
+        // Focus mode: use all subtasks (active and completed) of focused task
+        const result = utils.findTaskById(allTasks, currentFocusedTaskId);
+        if (result?.task) {
+            allTasksForRecipe = result.task.subtasks || [];
+        }
+    } else {
+        // Normal mode: check if viewing subtasks or top-level tasks
+        const activeTopLevel = allTasks.filter(task => !task.completed && !task.parentId);
+        const activeSubtasks = allTasks.filter(task => !task.completed && task.parentId);
+        
+        if (activeTopLevel.length === 0 && activeSubtasks.length > 0) {
+            // Viewing subtasks - get all subtasks (active and completed)
+            allTasksForRecipe = allTasks.filter(task => task.parentId);
+        } else {
+            // Viewing top-level tasks - get all top-level tasks (active and completed)
+            allTasksForRecipe = allTasks.filter(task => !task.parentId);
+        }
+    }
+    
+    return allTasksForRecipe;
+};
+
+// Generate and display recipe (shared logic)
+const generateAndDisplayRecipe = async (buttonElement, showModal = true) => {
+    const recipeModal = document.getElementById('recipe-modal');
+    const recipeContent = document.getElementById('recipe-content');
+    const getNextRecipeButton = document.getElementById('get-next-recipe-button');
+    
+    if (!recipeModal || !recipeContent) return;
+    
+    // Show loading state
+    if (buttonElement) {
+        const loadingHTML = `
+            <svg class="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Generating...
+        `;
+        buttonElement.disabled = true;
+        buttonElement.style.opacity = '0.6';
+        buttonElement.style.cursor = 'not-allowed';
+        const originalHTML = buttonElement.innerHTML;
+        buttonElement.innerHTML = loadingHTML;
+        
+        try {
+            // Get tasks for recipe
+            const allTasksForRecipe = await getTasksForRecipe();
+            
+            if (allTasksForRecipe.length === 0) {
+                alert('No ingredients found. Please add some items to your list.');
+                return;
+            }
+            
+            // Show loading in modal content
+            recipeContent.innerHTML = `
+                <div class="flex flex-col items-center justify-center py-12">
+                    <svg class="animate-spin h-12 w-12 text-purple-500 mb-4" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <p class="text-gray-600 dark:text-gray-400">Generating recipe...</p>
+                </div>
+            `;
+            
+            if (showModal) {
+                recipeModal.classList.remove('hidden');
+            }
+            
+            // Call recipe API
+            const response = await fetch('/api/recipe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tasks: allTasksForRecipe })
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                throw new Error(errorData.error || `Failed to generate recipe: ${response.status}`);
+            }
+            
+            const recipe = await response.json();
+            
+            // Display recipe in modal
+            displayRecipe(recipe);
+            
+            if (showModal) {
+                recipeModal.classList.remove('hidden');
+            }
+        } catch (error) {
+            console.error('Error generating recipe:', error);
+            recipeContent.innerHTML = `
+                <div class="text-center py-12">
+                    <p class="text-red-600 dark:text-red-400 mb-4">Failed to generate recipe</p>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">${escapeHtml(error.message)}</p>
+                </div>
+            `;
+            if (showModal) {
+                recipeModal.classList.remove('hidden');
+            }
+        } finally {
+            buttonElement.disabled = false;
+            buttonElement.style.opacity = '';
+            buttonElement.style.cursor = '';
+            buttonElement.innerHTML = originalHTML;
+        }
+    } else {
+        // For get next recipe button, use simpler loading
+        if (getNextRecipeButton) {
+            getNextRecipeButton.disabled = true;
+            getNextRecipeButton.style.opacity = '0.6';
+        }
+        
+        try {
+            const allTasksForRecipe = await getTasksForRecipe();
+            
+            if (allTasksForRecipe.length === 0) {
+                alert('No ingredients found. Please add some items to your list.');
+                return;
+            }
+            
+            recipeContent.innerHTML = `
+                <div class="flex flex-col items-center justify-center py-12">
+                    <svg class="animate-spin h-12 w-12 text-purple-500 mb-4" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <p class="text-gray-600 dark:text-gray-400">Generating next recipe...</p>
+                </div>
+            `;
+            
+            const response = await fetch('/api/recipe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tasks: allTasksForRecipe })
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                throw new Error(errorData.error || `Failed to generate recipe: ${response.status}`);
+            }
+            
+            const recipe = await response.json();
+            displayRecipe(recipe);
+        } catch (error) {
+            console.error('Error generating recipe:', error);
+            recipeContent.innerHTML = `
+                <div class="text-center py-12">
+                    <p class="text-red-600 dark:text-red-400 mb-4">Failed to generate recipe</p>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">${escapeHtml(error.message)}</p>
+                </div>
+            `;
+        } finally {
+            if (getNextRecipeButton) {
+                getNextRecipeButton.disabled = false;
+                getNextRecipeButton.style.opacity = '';
+            }
+        }
+    }
+};
+
 // Handle Get Recipe button click
 const handleGetRecipeClick = async () => {
     const getRecipeButton = document.getElementById('get-recipe-button');
-    const recipeModal = document.getElementById('recipe-modal');
-    const recipeContent = document.getElementById('recipe-content');
-    
-    if (!getRecipeButton || !recipeModal || !recipeContent) return;
-    
-    const loadingHTML = `
-        <svg class="animate-spin h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
-        Generating...
-    `;
-    
-    const originalText = utils.setButtonLoading(getRecipeButton, loadingHTML);
-    if (!originalText) return;
-    
-    // Disable button during processing
-    getRecipeButton.disabled = true;
-    getRecipeButton.style.pointerEvents = 'none';
-    
-    try {
-        // Get all tasks (both active and completed) from current list level
-        const allTasks = await storage.loadTasks();
-        
-        // Get tasks to use for recipe - include ALL tasks (active and completed) from current level
-        let allTasksForRecipe = [];
-        
-        if (currentFocusedTaskId) {
-            // Focus mode: use all subtasks (active and completed) of focused task
-            const result = utils.findTaskById(allTasks, currentFocusedTaskId);
-            if (result?.task) {
-                allTasksForRecipe = result.task.subtasks || [];
-            }
-        } else {
-            // Normal mode: check if viewing subtasks or top-level tasks
-            const activeTopLevel = allTasks.filter(task => !task.completed && !task.parentId);
-            const activeSubtasks = allTasks.filter(task => !task.completed && task.parentId);
-            
-            if (activeTopLevel.length === 0 && activeSubtasks.length > 0) {
-                // Viewing subtasks - get all subtasks (active and completed)
-                allTasksForRecipe = allTasks.filter(task => task.parentId);
-            } else {
-                // Viewing top-level tasks - get all top-level tasks (active and completed)
-                allTasksForRecipe = allTasks.filter(task => !task.parentId);
-            }
-        }
-        
-        if (allTasksForRecipe.length === 0) {
-            alert('No ingredients found. Please add some items to your list.');
-            return;
-        }
-        
-        // Call recipe API
-        const response = await fetch('/api/recipe', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tasks: allTasksForRecipe })
-        });
-        
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-            throw new Error(errorData.error || `Failed to generate recipe: ${response.status}`);
-        }
-        
-        const recipe = await response.json();
-        
-        // Display recipe in modal
-        displayRecipe(recipe);
-        recipeModal.classList.remove('hidden');
-    } catch (error) {
-        console.error('Error generating recipe:', error);
-        alert('Failed to generate recipe: ' + error.message);
-    } finally {
-        utils.restoreButtonState(getRecipeButton, originalText);
-        getRecipeButton.disabled = false;
-        getRecipeButton.style.pointerEvents = '';
-    }
+    await generateAndDisplayRecipe(getRecipeButton, true);
 };
 
 // Display recipe in modal
@@ -787,31 +880,37 @@ const displayRecipe = (recipe) => {
     if (!recipeContent) return;
     
     let html = `
-        <div class="space-y-6">
+        <div class="space-y-8">
             <div>
-                <h3 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">${escapeHtml(recipe.title || 'Recipe')}</h3>
+                <h3 class="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">${escapeHtml(recipe.title || 'Recipe')}</h3>
             </div>
             
             <div>
-                <h4 class="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-3">Ingredients</h4>
-                <ul class="list-disc list-inside space-y-1 text-gray-600 dark:text-gray-400">
+                <h4 class="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4 pb-2 border-b border-gray-300 dark:border-gray-600">Ingredients</h4>
+                <ul class="space-y-2 text-gray-700 dark:text-gray-300">
     `;
     
     // Display ingredients
     if (Array.isArray(recipe.ingredients)) {
         recipe.ingredients.forEach(ingredient => {
-            html += `<li>${escapeHtml(ingredient)}</li>`;
+            html += `<li class="flex items-start">
+                <span class="mr-2 text-purple-500 dark:text-purple-400">•</span>
+                <span class="text-base">${escapeHtml(ingredient)}</span>
+            </li>`;
         });
     }
     
     // Display additional ingredients if any
     if (Array.isArray(recipe.additionalIngredients) && recipe.additionalIngredients.length > 0) {
         html += `</ul>
-                <div class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Additional ingredients (optional):</p>
-                    <ul class="list-disc list-inside space-y-1 text-gray-500 dark:text-gray-500">`;
+                <div class="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <p class="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-3 uppercase tracking-wide">Additional Ingredients (Optional)</p>
+                    <ul class="space-y-2 text-gray-600 dark:text-gray-400">`;
         recipe.additionalIngredients.forEach(ingredient => {
-            html += `<li>${escapeHtml(ingredient)}</li>`;
+            html += `<li class="flex items-start">
+                <span class="mr-2 text-gray-400 dark:text-gray-500">•</span>
+                <span class="text-base">${escapeHtml(ingredient)}</span>
+            </li>`;
         });
         html += `</ul></div>`;
     } else {
@@ -822,14 +921,17 @@ const displayRecipe = (recipe) => {
             </div>
             
             <div>
-                <h4 class="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-3">Instructions</h4>
-                <ol class="list-decimal list-inside space-y-2 text-gray-600 dark:text-gray-400">
+                <h4 class="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4 pb-2 border-b border-gray-300 dark:border-gray-600">Instructions</h4>
+                <ol class="space-y-4 text-gray-700 dark:text-gray-300">
     `;
     
     // Display instructions
     if (Array.isArray(recipe.instructions)) {
         recipe.instructions.forEach((instruction, index) => {
-            html += `<li class="ml-4">${escapeHtml(instruction)}</li>`;
+            html += `<li class="flex items-start">
+                <span class="flex-shrink-0 w-8 h-8 rounded-full bg-purple-500 text-white flex items-center justify-center font-semibold mr-3 mt-0.5">${index + 1}</span>
+                <span class="text-base leading-relaxed">${escapeHtml(instruction)}</span>
+            </li>`;
         });
     }
     
@@ -841,9 +943,9 @@ const displayRecipe = (recipe) => {
     // Display notes if available
     if (recipe.notes) {
         html += `
-            <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-                <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Notes</h4>
-                <p class="text-sm text-gray-600 dark:text-gray-400">${escapeHtml(recipe.notes)}</p>
+            <div class="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-5 border border-purple-200 dark:border-purple-800">
+                <h4 class="text-sm font-semibold text-purple-800 dark:text-purple-300 mb-2 uppercase tracking-wide">Notes</h4>
+                <p class="text-sm text-purple-700 dark:text-purple-400 leading-relaxed">${escapeHtml(recipe.notes)}</p>
             </div>
         `;
     }
