@@ -47,7 +47,7 @@ require __DIR__ . '/../config/config.php';
                         </svg>
                         Export
                     </button>
-                    <button id="import-button" class="text-sm bg-orange-500 hover:bg-orange-600 text-white px-4 py-1 rounded-md flex items-center">
+                    <button id="import-button" class="text-sm bg-purple-500 hover:bg-purple-600 text-white px-4 py-1 rounded-md flex items-center">
                         <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14v-2m0 0V8m0 2h2m-2 0H10m8 6H6a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                         </svg>
@@ -249,7 +249,7 @@ require __DIR__ . '/../config/config.php';
                                     type="url" 
                                     id="import-url-input" 
                                     placeholder="https://example.com/recipe" 
-                                    class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
                                 >
                                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Paste a recipe or article URL to extract ingredients and create a list</p>
                             </div>
@@ -268,7 +268,7 @@ require __DIR__ . '/../config/config.php';
                             <button id="cancel-import" class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
                                 Cancel
                             </button>
-                            <button id="confirm-import-url" class="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-md">
+                            <button id="confirm-import-url" class="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-md">
                                 Import from URL
                             </button>
                         </div>
