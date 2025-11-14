@@ -111,6 +111,116 @@ function get_user_data_path($user_id, $name) {
     return get_user_dir($user_id) . '/' . $name . '.json';
 }
 
+// Helper function to try AI models with fallback
+function try_ai_models($ai, $models) {
+    $lastError = null;
+    
+    foreach ($models as $model) {
+        try {
+            ob_start();
+            $response = @$ai->getResponseFromOpenAi(
+                $ai->getSystemMessage(),
+                1.0,
+                0,
+                $model,
+                2000,
+                true
+            );
+            $output = ob_get_clean();
+            
+            // Check for errors in output
+            if (!empty($output) && stripos($output, 'error') !== false) {
+                error_log("AI sort: Model $model output: " . $output);
+                $lastError = $output;
+                continue;
+            }
+            
+            // Validate response
+            if ($response !== false && $response !== null && !empty(trim($response))) {
+                error_log("AI sort: Successfully got response from model: $model");
+                return $response;
+            }
+            
+            // Log invalid response
+            $responseLength = is_string($response) ? strlen($response) : 'N/A';
+            $responsePreview = is_string($response) ? substr($response, 0, 200) : 'N/A';
+            error_log("AI sort: Model $model returned empty/invalid response. Type: " . gettype($response) . ", Length: $responseLength, Preview: $responsePreview");
+            $lastError = "Empty or invalid response from $model";
+        } catch (Throwable $e) {
+            error_log("AI sort: Exception with model $model: " . $e->getMessage() . " | Type: " . get_class($e));
+            $lastError = $e->getMessage();
+        }
+    }
+    
+    return ['error' => $lastError ?: 'All models failed'];
+}
+
+// Helper function to clean and parse AI JSON response
+function parse_ai_json_response($response) {
+    // Clean markdown code blocks
+    $response = trim(preg_replace('/^```(?:json)?\s*|\s*```$/m', '', trim($response)));
+    
+    if (empty($response)) {
+        return null;
+    }
+    
+    $result = json_decode($response, true);
+    
+    // If decode failed, log error
+    if ($result === null && json_last_error() !== JSON_ERROR_NONE) {
+        error_log('AI sort JSON decode error: ' . json_last_error_msg());
+        error_log('AI sort raw response: ' . substr($response, 0, 500));
+        return null;
+    }
+    
+    return $result;
+}
+
+// Helper function to extract sorted items from AI response
+function extract_sorted_items($aiResult) {
+    $keys = ['sortedItems', 'items', 'sorted'];
+    
+    foreach ($keys as $key) {
+        if (isset($aiResult[$key]) && is_array($aiResult[$key])) {
+            return $aiResult[$key];
+        }
+    }
+    
+    // If response is directly an array
+    if (is_array($aiResult) && isset($aiResult[0])) {
+        return $aiResult;
+    }
+    
+    return null;
+}
+
+// Helper function to reorder tasks based on sorted items
+function reorder_tasks($tasks, $sortedItems) {
+    // Build task map (handles duplicates)
+    $taskMap = [];
+    foreach ($tasks as $task) {
+        $taskMap[$task['task']][] = $task;
+    }
+    
+    // Reorder tasks based on AI sorting
+    $sortedTasks = [];
+    foreach ($sortedItems as $text) {
+        // Handle both string and object formats
+        $taskText = is_string($text) ? $text : ($text['task'] ?? $text['text'] ?? $text);
+        
+        if (!empty($taskMap[$taskText])) {
+            $sortedTasks[] = array_shift($taskMap[$taskText]);
+        }
+    }
+    
+    // Add remaining tasks (safety fallback)
+    foreach ($taskMap as $remainingTasks) {
+        $sortedTasks = array_merge($sortedTasks, $remainingTasks);
+    }
+    
+    return $sortedTasks;
+}
+
 // Determine and handle the request
 switch ($resource) {
     case 'lists':
@@ -277,115 +387,37 @@ switch ($resource) {
             json_response(['tasks' => []]);
         }
         
-        // Extract task text for AI processing
-        $taskTexts = array_column($tasks, 'task');
-        
-        // Create AI instance and set up prompt for grocery sorting
-        $ai = new AI();
-        $ai->setJsonResponse(true);
-        $ai->setSystemMessage("You are a grocery shopping assistant. Your job is to sort grocery items in the order they would typically be found in a supermarket, optimizing for shopping efficiency. Group similar items together (e.g., all fruits together, all meats together, dairy together, etc.). Think about typical supermarket layout: produce first, then meats, dairy, frozen foods, pantry items, etc. You MUST return a valid JSON object with a 'sortedItems' array containing strings.");
-        $ai->setPrompt("Sort these grocery items in the optimal order for shopping at a supermarket. Return ONLY a valid JSON object with this exact structure:\n\n{\n  \"sortedItems\": [\"item1\", \"item2\", \"item3\", ...]\n}\n\nItems to sort:\n" . 
-                     json_encode($taskTexts, JSON_PRETTY_PRINT) . 
-                     "\n\nReturn the items in the order they should be shopped, grouped by category (produce together, meats together, dairy together, etc.). The 'sortedItems' array must contain exactly the same item strings as provided, just reordered.");
-        
         try {
-            // Use gpt-5-mini as primary, with fallbacks
+            // Extract task text for AI processing
+            $taskTexts = array_column($tasks, 'task');
+            
+            // Create AI instance and set up prompt for grocery sorting
+            $ai = new AI();
+            $ai->setJsonResponse(true);
+            $ai->setSystemMessage("You are a grocery shopping assistant. Your job is to sort grocery items in the order they would typically be found in a supermarket, optimizing for shopping efficiency. Group similar items together (e.g., all fruits together, all meats together, dairy together, etc.). Think about typical supermarket layout: produce first, then meats, dairy, frozen foods, pantry items, etc. You MUST return a valid JSON object with a 'sortedItems' array containing strings.");
+            $ai->setPrompt("Sort these grocery items in the optimal order for shopping at a supermarket. Return ONLY a valid JSON object with this exact structure:\n\n{\n  \"sortedItems\": [\"item1\", \"item2\", \"item3\", ...]\n}\n\nItems to sort:\n" . 
+                         json_encode($taskTexts, JSON_PRETTY_PRINT) . 
+                         "\n\nReturn the items in the order they should be shopped, grouped by category (produce together, meats together, dairy together, etc.). The 'sortedItems' array must contain exactly the same item strings as provided, just reordered.");
+            
+            // Try AI models with fallback
             $models = ["gpt-5-mini", "gpt-4o-mini", "gpt-3.5-turbo"];
-            $response = false;
-            $lastError = null;
+            $response = try_ai_models($ai, $models);
             
-            foreach ($models as $model) {
-                try {
-                    // Capture any output from the AI class (it might echo errors)
-                    ob_start();
-                    $testResponse = @$ai->getResponseFromOpenAi(
-                        $ai->getSystemMessage(),
-                        1.0,
-                        0,
-                        $model,
-                        2000,
-                        true
-                    );
-                    $output = ob_get_clean();
-                    
-                    // Check for errors in output
-                    if (!empty($output)) {
-                        error_log("AI sort: Model $model output: " . $output);
-                        if (stripos($output, 'error') !== false) {
-                            $lastError = $output;
-                            $testResponse = false;
-                            continue; // Try next model
-                        }
-                    }
-                    
-                    // Check if response is valid
-                    if ($testResponse !== false && $testResponse !== null && !empty(trim($testResponse))) {
-                        error_log("AI sort: Successfully got response from model: $model");
-                        $response = $testResponse;
-                        break; // Success, use this response
-                    } else {
-                        $responseLength = is_string($testResponse) ? strlen($testResponse) : 'N/A';
-                        $responsePreview = is_string($testResponse) ? substr($testResponse, 0, 200) : 'N/A';
-                        error_log("AI sort: Model $model returned empty/invalid response. Type: " . gettype($testResponse) . ", Length: $responseLength, Preview: $responsePreview");
-                        $lastError = "Empty or invalid response from $model";
-                        $testResponse = false;
-                    }
-                } catch (Throwable $e) {
-                    error_log("AI sort: Exception with model $model: " . $e->getMessage() . " | Type: " . get_class($e));
-                    $lastError = $e->getMessage();
-                    $testResponse = false;
-                    continue; // Try next model
-                }
-            }
-            
-            // If all models failed
-            if ($response === false || $response === null || empty(trim($response))) {
-                error_log('AI sort: All models failed. Last error: ' . ($lastError ?: 'Unknown'));
+            // Check if we got an error instead of a response
+            if (is_array($response) && isset($response['error'])) {
+                error_log('AI sort: All models failed. Last error: ' . $response['error']);
                 json_response(['tasks' => $tasks, 'error' => 'AI service unavailable. Please check API key and model availability.']);
             }
             
-            // Clean and parse JSON response
-            $response = trim($response);
-            // Remove any markdown code blocks if present
-            $response = preg_replace('/^```json\s*/', '', $response);
-            $response = preg_replace('/^```\s*/', '', $response);
-            $response = preg_replace('/\s*```$/', '', $response);
-            $response = trim($response);
-            
-            if (empty($response)) {
-                error_log('AI sort: Response is empty after cleaning');
-                json_response(['tasks' => $tasks, 'error' => 'AI service returned empty response']);
+            // Parse AI response
+            $aiResult = parse_ai_json_response($response);
+            if ($aiResult === null) {
+                error_log('AI sort: Response is empty or invalid after parsing');
+                json_response(['tasks' => $tasks, 'error' => 'AI service returned invalid response']);
             }
             
-            $aiResult = json_decode($response, true);
-            
-            // Check JSON decode errors
-            if ($aiResult === null && json_last_error() !== JSON_ERROR_NONE) {
-                error_log('AI sort JSON decode error: ' . json_last_error_msg());
-                error_log('AI sort raw response: ' . substr($response, 0, 500));
-            }
-            
-            // If first decode failed, try decoding again (in case response is double-encoded)
-            if ($aiResult === null && json_last_error() !== JSON_ERROR_NONE) {
-                $decoded = json_decode($response, true);
-                if ($decoded !== null) {
-                    $aiResult = $decoded;
-                }
-            }
-            
-            // Extract sorted items from various possible response formats
-            $sortedItems = null;
-            if (isset($aiResult['sortedItems']) && is_array($aiResult['sortedItems'])) {
-                $sortedItems = $aiResult['sortedItems'];
-            } elseif (isset($aiResult['items']) && is_array($aiResult['items'])) {
-                $sortedItems = $aiResult['items'];
-            } elseif (isset($aiResult['sorted']) && is_array($aiResult['sorted'])) {
-                $sortedItems = $aiResult['sorted'];
-            } elseif (is_array($aiResult) && isset($aiResult[0])) {
-                // If response is directly an array
-                $sortedItems = $aiResult;
-            }
-            
+            // Extract sorted items
+            $sortedItems = extract_sorted_items($aiResult);
             if ($sortedItems === null || !is_array($sortedItems)) {
                 error_log('AI sort invalid response format. Response: ' . substr($response, 0, 1000));
                 error_log('Parsed result: ' . json_encode($aiResult));
@@ -397,27 +429,8 @@ switch ($resource) {
                 error_log('AI sort count mismatch: sent ' . count($tasks) . ', got ' . count($sortedItems));
             }
             
-            // Build task map (handles duplicates)
-            $taskMap = [];
-            foreach ($tasks as $task) {
-                $taskMap[$task['task']][] = $task;
-            }
-            
             // Reorder tasks based on AI sorting
-            $sortedTasks = [];
-            foreach ($sortedItems as $text) {
-                // Handle both string and object formats
-                $taskText = is_string($text) ? $text : (isset($text['task']) ? $text['task'] : (isset($text['text']) ? $text['text'] : $text));
-                
-                if (!empty($taskMap[$taskText])) {
-                    $sortedTasks[] = array_shift($taskMap[$taskText]);
-                }
-            }
-            
-            // Add remaining tasks (safety fallback)
-            foreach ($taskMap as $remainingTasks) {
-                $sortedTasks = array_merge($sortedTasks, $remainingTasks);
-            }
+            $sortedTasks = reorder_tasks($tasks, $sortedItems);
             
             json_response(['tasks' => $sortedTasks]);
         } catch (Exception $e) {
