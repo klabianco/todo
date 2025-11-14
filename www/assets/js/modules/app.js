@@ -509,39 +509,14 @@ const setupEventListeners = () => {
 
 // Helper to determine which tasks to sort and get parent info
 const getTasksToSort = (allTasks) => {
-    if (currentFocusedTaskId) {
-        // Focus mode: sort immediate subtasks of focused task
-        const result = utils.findTaskById(allTasks, currentFocusedTaskId);
-        if (!result?.task) return null;
-        return {
-            tasks: result.task.subtasks || [],
-            parentTask: result.task,
-            parentId: currentFocusedTaskId
-        };
-    }
+    const context = utils.getCurrentViewContext(allTasks, currentFocusedTaskId, utils.findTaskById);
+    if (!context) return null;
     
-    // Check if we're viewing subtasks (all active tasks have parentId)
-    const activeTopLevel = allTasks.filter(task => !task.completed && !task.parentId);
-    const activeSubtasks = allTasks.filter(task => !task.completed && task.parentId);
-    
-    if (activeTopLevel.length === 0 && activeSubtasks.length > 0) {
-        // Viewing subtasks - find their parent
-        const firstTask = activeSubtasks[0];
-        const parentResult = utils.findTaskById(allTasks, firstTask.parentId);
-        if (parentResult?.task) {
-            return {
-                tasks: parentResult.task.subtasks || [],
-                parentTask: parentResult.task,
-                parentId: firstTask.parentId
-            };
-        }
-    }
-    
-    // Default: sort top-level tasks
+    // For sorting, we only want active tasks
     return {
-        tasks: allTasks.filter(task => !task.parentId),
-        parentTask: null,
-        parentId: null
+        tasks: utils.filterTasks(context.tasks, { completed: false }),
+        parentTask: context.parentTask,
+        parentId: context.parentId
     };
 };
 
@@ -741,29 +716,12 @@ const handleAISortClick = async () => {
 // Get tasks for recipe generation (shared logic)
 const getTasksForRecipe = async () => {
     const allTasks = await storage.loadTasks();
-    let allTasksForRecipe = [];
+    const context = utils.getCurrentViewContext(allTasks, currentFocusedTaskId, utils.findTaskById);
     
-    if (currentFocusedTaskId) {
-        // Focus mode: use all subtasks (active and completed) of focused task
-        const result = utils.findTaskById(allTasks, currentFocusedTaskId);
-        if (result?.task) {
-            allTasksForRecipe = result.task.subtasks || [];
-        }
-    } else {
-        // Normal mode: check if viewing subtasks or top-level tasks
-        const activeTopLevel = allTasks.filter(task => !task.completed && !task.parentId);
-        const activeSubtasks = allTasks.filter(task => !task.completed && task.parentId);
-        
-        if (activeTopLevel.length === 0 && activeSubtasks.length > 0) {
-            // Viewing subtasks - get all subtasks (active and completed)
-            allTasksForRecipe = allTasks.filter(task => task.parentId);
-        } else {
-            // Viewing top-level tasks - get all top-level tasks (active and completed)
-            allTasksForRecipe = allTasks.filter(task => !task.parentId);
-        }
-    }
+    if (!context) return [];
     
-    return allTasksForRecipe;
+    // For recipe, we want all tasks (active and completed) from current view
+    return context.tasks;
 };
 
 // Generate and display recipe (shared logic)
@@ -1105,8 +1063,8 @@ const exportToPDF = (tasks, filename, includeSubtasks = true) => {
     doc.setFontSize(11);
     
     // Group by completion status
-    const activeTasks = flattened.filter(t => !t.completed);
-    const completedTasks = flattened.filter(t => t.completed);
+    const activeTasks = utils.filterTasks(flattened, { completed: false });
+    const completedTasks = utils.filterTasks(flattened, { completed: true });
     
     // Active tasks
     if (activeTasks.length > 0) {
@@ -1213,28 +1171,12 @@ const handleConfirmExport = async () => {
                     tasksToExport = result.task.subtasks || [];
                 }
             } else {
-                // Normal mode: check if viewing subtasks or top-level tasks
-                const activeTopLevel = allTasks.filter(task => !task.completed && !task.parentId);
-                const activeSubtasks = allTasks.filter(task => !task.completed && task.parentId);
-                
-                if (activeTopLevel.length === 0 && activeSubtasks.length > 0) {
-                    // Viewing subtasks - get subtasks from the specific parent we're viewing
-                    const firstSubtask = activeSubtasks[0];
-                    if (firstSubtask && firstSubtask.parentId) {
-                        const parentResult = utils.findTaskById(allTasks, firstSubtask.parentId);
-                        if (parentResult?.task) {
-                            // Get only subtasks from this specific parent
-                            tasksToExport = parentResult.task.subtasks || [];
-                        } else {
-                            // Fallback: get all subtasks (shouldn't happen)
-                            tasksToExport = allTasks.filter(task => task.parentId);
-                        }
-                    } else {
-                        tasksToExport = allTasks.filter(task => task.parentId);
-                    }
+                // Normal mode: get tasks from current view context
+                const context = utils.getCurrentViewContext(allTasks, currentFocusedTaskId, utils.findTaskById);
+                if (context) {
+                    tasksToExport = context.tasks;
                 } else {
-                    // Viewing top-level tasks - get all top-level tasks
-                    tasksToExport = allTasks.filter(task => !task.parentId);
+                    tasksToExport = [];
                 }
             }
         } else {
@@ -1244,7 +1186,7 @@ const handleConfirmExport = async () => {
         
         // Filter out completed tasks if requested
         if (includeCompleted === 'exclude') {
-            tasksToExport = tasksToExport.filter(task => !task.completed);
+            tasksToExport = utils.filterTasks(tasksToExport, { completed: false });
         }
         
         const dateStr = new Date().toISOString().split('T')[0];
@@ -1632,9 +1574,9 @@ const renderTasks = async () => {
     } else {
         // Normal mode: show all top-level tasks
         // Filter top-level tasks only
-        const allTopLevelTasks = allTasks.filter(task => !task.parentId);
-        const activeTopLevelTasks = allTopLevelTasks.filter(task => !task.completed);
-        const completedTopLevelTasks = allTopLevelTasks.filter(task => task.completed);
+        const allTopLevelTasks = utils.filterTasks(allTasks, { parentId: false });
+        const activeTopLevelTasks = utils.filterTasks(allTopLevelTasks, { completed: false });
+        const completedTopLevelTasks = utils.filterTasks(allTopLevelTasks, { completed: true });
         
         // Add active tasks
         activeTopLevelTasks.forEach(task => {
@@ -1724,9 +1666,9 @@ const handleActiveSortEnd = async function(evt) {
         }
     } else {
         // We're in normal mode, reorder top-level tasks
-        const activeTopLevelTasks = allTasks.filter(t => !t.completed && !t.parentId);
-        const completedTopLevelTasks = allTasks.filter(t => t.completed && !t.parentId);
-        const otherTasks = allTasks.filter(t => t.parentId); // Keep subtasks
+        const activeTopLevelTasks = utils.filterTasks(allTasks, { completed: false, parentId: false });
+        const completedTopLevelTasks = utils.filterTasks(allTasks, { completed: true, parentId: false });
+        const otherTasks = utils.filterTasks(allTasks, { parentId: true }); // Keep subtasks
         
         // Reorder active top-level tasks based on DOM order
         const reorderedTasks = [];
@@ -1767,9 +1709,9 @@ const handleCompletedSortEnd = async function(evt) {
         }
     } else {
         // We're in normal mode, reorder top-level tasks
-        const activeTopLevelTasks = allTasks.filter(t => !t.completed && !t.parentId);
-        const completedTopLevelTasks = allTasks.filter(t => t.completed && !t.parentId);
-        const otherTasks = allTasks.filter(t => t.parentId); // Keep subtasks
+        const activeTopLevelTasks = utils.filterTasks(allTasks, { completed: false, parentId: false });
+        const completedTopLevelTasks = utils.filterTasks(allTasks, { completed: true, parentId: false });
+        const otherTasks = utils.filterTasks(allTasks, { parentId: true }); // Keep subtasks
         
         // Reorder completed top-level tasks based on DOM order
         const reorderedTasks = [];

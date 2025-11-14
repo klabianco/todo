@@ -12,6 +12,9 @@ $dotenv->load();
 
 $defaultOpenAIModel = "gpt-5-mini";
 
+// AI model fallback list (primary first, then fallbacks)
+$aiModelFallbacks = ["gpt-5-mini", "gpt-4o-mini", "gpt-3.5-turbo"];
+
 spl_autoload_register(function ($class_name) {
     include(__DIR__ . '/../src/' . $class_name . '.php');
 });

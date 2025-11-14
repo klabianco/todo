@@ -400,8 +400,8 @@ switch ($resource) {
                          "\n\nReturn the items in the order they should be shopped, grouped by category (produce together, meats together, dairy together, etc.). The 'sortedItems' array must contain exactly the same item strings as provided, just reordered.");
             
             // Try AI models with fallback
-            $models = ["gpt-5-mini", "gpt-4o-mini", "gpt-3.5-turbo"];
-            $response = try_ai_models($ai, $models);
+            global $aiModelFallbacks;
+            $response = try_ai_models($ai, $aiModelFallbacks);
             
             // Check if we got an error instead of a response
             if (is_array($response) && isset($response['error'])) {
@@ -471,8 +471,8 @@ switch ($resource) {
                          "\n\nReturn a JSON object with this structure:\n{\n  \"title\": \"Recipe Name\",\n  \"ingredients\": [\"ingredient1\", \"ingredient2\", ...],\n  \"instructions\": [\"step1\", \"step2\", ...],\n  \"additionalIngredients\": [\"optional ingredient1\", ...],\n  \"notes\": \"optional cooking tips or variations\"\n}\n\nMake it creative and delicious! You can add 1-2 complementary ingredients and assume common pantry staples are available.");
             
             // Try AI models with fallback
-            $models = ["gpt-5-mini", "gpt-4o-mini", "gpt-3.5-turbo"];
-            $response = try_ai_models($ai, $models);
+            global $aiModelFallbacks;
+            $response = try_ai_models($ai, $aiModelFallbacks);
             
             // Check if we got an error instead of a response
             if (is_array($response) && isset($response['error'])) {

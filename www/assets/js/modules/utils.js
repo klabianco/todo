@@ -145,3 +145,56 @@ export const apiFetch = async (url, options = {}) => {
         cache: 'no-store'
     });
 };
+
+// Helper to filter tasks by completion and parent status
+export const filterTasks = (tasks, options = {}) => {
+    const { completed = null, parentId = null } = options;
+    return tasks.filter(task => {
+        if (completed !== null && task.completed !== completed) return false;
+        if (parentId === null) return true; // No filter on parentId
+        if (parentId === false) return !task.parentId; // Top-level only
+        if (parentId === true) return !!task.parentId; // Subtasks only
+        return task.parentId === parentId; // Specific parentId
+    });
+};
+
+// Helper to get current view context (whether viewing subtasks or top-level)
+export const getCurrentViewContext = (allTasks, currentFocusedTaskId, findTaskById) => {
+    if (currentFocusedTaskId) {
+        // Focus mode: viewing subtasks of focused task
+        const result = findTaskById(allTasks, currentFocusedTaskId);
+        if (!result?.task) return null;
+        return {
+            isViewingSubtasks: true,
+            parentTask: result.task,
+            parentId: currentFocusedTaskId,
+            tasks: result.task.subtasks || []
+        };
+    }
+    
+    // Check if we're viewing subtasks (all active tasks have parentId)
+    const activeTopLevel = filterTasks(allTasks, { completed: false, parentId: false });
+    const activeSubtasks = filterTasks(allTasks, { completed: false, parentId: true });
+    
+    if (activeTopLevel.length === 0 && activeSubtasks.length > 0) {
+        // Viewing subtasks - find their parent
+        const firstTask = activeSubtasks[0];
+        const parentResult = findTaskById(allTasks, firstTask.parentId);
+        if (parentResult?.task) {
+            return {
+                isViewingSubtasks: true,
+                parentTask: parentResult.task,
+                parentId: firstTask.parentId,
+                tasks: parentResult.task.subtasks || []
+            };
+        }
+    }
+    
+    // Default: viewing top-level tasks
+    return {
+        isViewingSubtasks: false,
+        parentTask: null,
+        parentId: null,
+        tasks: filterTasks(allTasks, { parentId: false })
+    };
+};
