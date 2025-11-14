@@ -964,7 +964,9 @@ const displayRecipe = (recipe) => {
     
     // Update modal title
     if (recipeModalTitle && recipe.title) {
-        recipeModalTitle.textContent = escapeHtml(recipe.title);
+        // Decode HTML entities (like &amp; to &) before displaying
+        const decodedTitle = decodeHtmlEntities(recipe.title);
+        recipeModalTitle.textContent = decodedTitle;
     }
     
     // Reset scroll position to top
@@ -1047,6 +1049,13 @@ const escapeHtml = (text) => {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+};
+
+// Helper to decode HTML entities (like &amp; to &)
+const decodeHtmlEntities = (text) => {
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = text;
+    return textarea.value;
 };
 
 // Handle Export button click
