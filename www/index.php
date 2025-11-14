@@ -14,6 +14,10 @@ require __DIR__ . '/../config/config.php';
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <!-- SortableJS for drag and drop functionality - use minified version from CDN -->
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <!-- jsPDF for PDF generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- SheetJS for Excel generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <!-- Minimal styles without animations -->
     <link rel="stylesheet" href="/assets/css/todo.css">
 </head>
@@ -134,17 +138,17 @@ require __DIR__ . '/../config/config.php';
                 
                 <!-- Recipe Modal -->
                 <div id="recipe-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] flex flex-col">
-                        <div class="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-between items-center z-10">
-                            <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200">Recipe</h2>
+                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-3xl w-full flex flex-col" style="max-height: 90vh;">
+                        <div class="flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-between items-center">
+                            <h2 id="recipe-modal-title" class="text-2xl font-bold text-gray-800 dark:text-gray-200">Recipe</h2>
                             <button id="close-recipe-modal" class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 px-4 py-2 rounded-md font-medium transition-colors">
                                 Close
                             </button>
                         </div>
-                        <div id="recipe-content" class="p-6 overflow-y-auto flex-1 min-h-0">
+                        <div id="recipe-content" class="flex-1 overflow-y-auto p-6" style="overflow-y: auto; overflow-x: hidden;">
                             <!-- Recipe will be displayed here -->
                         </div>
-                        <div id="recipe-footer" class="hidden sticky bottom-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-end gap-3">
+                        <div id="recipe-footer" class="hidden flex-shrink-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-end gap-3">
                             <button id="get-next-recipe-button" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-md font-medium transition-colors flex items-center">
                                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
@@ -163,7 +167,7 @@ require __DIR__ . '/../config/config.php';
                         </div>
                         <div class="p-6">
                             <p class="text-gray-600 dark:text-gray-400 mb-4">Choose what to export:</p>
-                            <div class="space-y-3">
+                            <div class="space-y-3 mb-6">
                                 <label class="flex items-start cursor-pointer">
                                     <input type="radio" name="export-option" value="all" class="mt-1 mr-3" checked>
                                     <div>
@@ -176,6 +180,47 @@ require __DIR__ . '/../config/config.php';
                                     <div>
                                         <div class="font-medium text-gray-800 dark:text-gray-200">Current View Only</div>
                                         <div class="text-sm text-gray-500 dark:text-gray-400">Export only the tasks you're currently viewing</div>
+                                    </div>
+                                </label>
+                            </div>
+                            <p class="text-gray-600 dark:text-gray-400 mb-4">Choose format:</p>
+                            <div class="space-y-3 mb-6">
+                                <label class="flex items-start cursor-pointer">
+                                    <input type="radio" name="export-format" value="json" class="mt-1 mr-3" checked>
+                                    <div>
+                                        <div class="font-medium text-gray-800 dark:text-gray-200">JSON</div>
+                                        <div class="text-sm text-gray-500 dark:text-gray-400">Machine-readable format for backup</div>
+                                    </div>
+                                </label>
+                                <label class="flex items-start cursor-pointer">
+                                    <input type="radio" name="export-format" value="pdf" class="mt-1 mr-3">
+                                    <div>
+                                        <div class="font-medium text-gray-800 dark:text-gray-200">PDF</div>
+                                        <div class="text-sm text-gray-500 dark:text-gray-400">Printable document format</div>
+                                    </div>
+                                </label>
+                                <label class="flex items-start cursor-pointer">
+                                    <input type="radio" name="export-format" value="excel" class="mt-1 mr-3">
+                                    <div>
+                                        <div class="font-medium text-gray-800 dark:text-gray-200">Excel</div>
+                                        <div class="text-sm text-gray-500 dark:text-gray-400">Spreadsheet format (.xlsx)</div>
+                                    </div>
+                                </label>
+                            </div>
+                            <p class="text-gray-600 dark:text-gray-400 mb-4">Include completed tasks:</p>
+                            <div class="space-y-3">
+                                <label class="flex items-start cursor-pointer">
+                                    <input type="radio" name="export-completed" value="include" class="mt-1 mr-3" checked>
+                                    <div>
+                                        <div class="font-medium text-gray-800 dark:text-gray-200">Yes</div>
+                                        <div class="text-sm text-gray-500 dark:text-gray-400">Include both active and completed tasks</div>
+                                    </div>
+                                </label>
+                                <label class="flex items-start cursor-pointer">
+                                    <input type="radio" name="export-completed" value="exclude" class="mt-1 mr-3">
+                                    <div>
+                                        <div class="font-medium text-gray-800 dark:text-gray-200">No</div>
+                                        <div class="text-sm text-gray-500 dark:text-gray-400">Export only uncompleted tasks</div>
                                     </div>
                                 </label>
                             </div>

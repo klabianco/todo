@@ -458,6 +458,16 @@ const setupEventListeners = () => {
     if (closeRecipeModal && recipeModal) {
         closeRecipeModal.addEventListener('click', () => {
             recipeModal.classList.add('hidden');
+            // Re-enable body scroll
+            document.body.style.overflow = '';
+        });
+        
+        // Prevent body scroll when modal is open
+        recipeModal.addEventListener('click', (e) => {
+            if (e.target === recipeModal) {
+                recipeModal.classList.add('hidden');
+                document.body.style.overflow = '';
+            }
         });
     }
     
@@ -807,14 +817,22 @@ const generateAndDisplayRecipe = async (buttonElement, showModal = true) => {
             
             if (showModal) {
                 recipeModal.classList.remove('hidden');
+                // Prevent body scroll when modal is open
+                document.body.style.overflow = 'hidden';
             }
             
-            // Call recipe API
+            // Call recipe API with extended timeout (5 minutes)
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minutes
+            
             const response = await fetch('/api/recipe', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tasks: allTasksForRecipe })
+                body: JSON.stringify({ tasks: allTasksForRecipe }),
+                signal: controller.signal
             });
+            
+            clearTimeout(timeoutId);
             
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
@@ -831,15 +849,17 @@ const generateAndDisplayRecipe = async (buttonElement, showModal = true) => {
                 recipeFooter.classList.remove('hidden');
             }
             
-            if (showModal) {
-                recipeModal.classList.remove('hidden');
-            }
+            // Modal is already shown above, no need to show again
         } catch (error) {
             console.error('Error generating recipe:', error);
+            let errorMessage = error.message;
+            if (error.name === 'AbortError' || error.message.includes('fetch')) {
+                errorMessage = 'Request timed out. The AI is taking longer than expected. Please try again with fewer ingredients or try again later.';
+            }
             recipeContent.innerHTML = `
                 <div class="text-center py-12">
                     <p class="text-red-600 dark:text-red-400 mb-4">Failed to generate recipe</p>
-                    <p class="text-sm text-gray-600 dark:text-gray-400">${escapeHtml(error.message)}</p>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">${escapeHtml(errorMessage)}</p>
                 </div>
             `;
             // Don't show footer on error
@@ -882,11 +902,18 @@ const generateAndDisplayRecipe = async (buttonElement, showModal = true) => {
                 </div>
             `;
             
+            // Call recipe API with extended timeout (5 minutes)
+            const controller2 = new AbortController();
+            const timeoutId2 = setTimeout(() => controller2.abort(), 300000); // 5 minutes
+            
             const response = await fetch('/api/recipe', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tasks: allTasksForRecipe })
+                body: JSON.stringify({ tasks: allTasksForRecipe }),
+                signal: controller2.signal
             });
+            
+            clearTimeout(timeoutId2);
             
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
@@ -902,10 +929,14 @@ const generateAndDisplayRecipe = async (buttonElement, showModal = true) => {
             }
         } catch (error) {
             console.error('Error generating recipe:', error);
+            let errorMessage = error.message;
+            if (error.name === 'AbortError' || error.message.includes('fetch')) {
+                errorMessage = 'Request timed out. The AI is taking longer than expected. Please try again with fewer ingredients or try again later.';
+            }
             recipeContent.innerHTML = `
                 <div class="text-center py-12">
                     <p class="text-red-600 dark:text-red-400 mb-4">Failed to generate recipe</p>
-                    <p class="text-sm text-gray-600 dark:text-gray-400">${escapeHtml(error.message)}</p>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">${escapeHtml(errorMessage)}</p>
                 </div>
             `;
             // Don't show footer on error
@@ -927,14 +958,19 @@ const handleGetRecipeClick = async () => {
 // Display recipe in modal
 const displayRecipe = (recipe) => {
     const recipeContent = document.getElementById('recipe-content');
+    const recipeModalTitle = document.getElementById('recipe-modal-title');
     if (!recipeContent) return;
+    
+    // Update modal title
+    if (recipeModalTitle && recipe.title) {
+        recipeModalTitle.textContent = escapeHtml(recipe.title);
+    }
+    
+    // Reset scroll position to top
+    recipeContent.scrollTop = 0;
     
     let html = `
         <div class="space-y-8">
-            <div>
-                <h3 class="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">${escapeHtml(recipe.title || 'Recipe')}</h3>
-            </div>
-            
             <div>
                 <h4 class="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4 pb-2 border-b border-gray-300 dark:border-gray-600">Ingredients</h4>
                 <ul class="space-y-2 text-gray-700 dark:text-gray-300">
@@ -1020,32 +1056,184 @@ const handleExportClick = () => {
     }
 };
 
+// Flatten tasks for display (recursive)
+const flattenTasksForDisplay = (tasks, level = 0, parentPath = '', includeSubtasks = true) => {
+    const result = [];
+    tasks.forEach(task => {
+        const indent = '  '.repeat(level);
+        const path = parentPath ? `${parentPath} > ${task.task}` : task.task;
+        result.push({
+            task: task.task,
+            completed: task.completed,
+            level: level,
+            indent: indent,
+            path: path,
+            subtasks: task.subtasks || []
+        });
+        
+        // Add subtasks recursively only if includeSubtasks is true
+        if (includeSubtasks && task.subtasks && task.subtasks.length > 0) {
+            result.push(...flattenTasksForDisplay(task.subtasks, level + 1, path, includeSubtasks));
+        }
+    });
+    return result;
+};
+
+// Export to PDF
+const exportToPDF = (tasks, filename, includeSubtasks = true) => {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    
+    const flattened = flattenTasksForDisplay(tasks, 0, '', includeSubtasks);
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 20;
+    const lineHeight = 7;
+    let y = margin;
+    
+    // Title
+    doc.setFontSize(18);
+    doc.text('Todo List', margin, y);
+    y += 10;
+    
+    doc.setFontSize(10);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Exported: ${new Date().toLocaleDateString()}`, margin, y);
+    y += 10;
+    
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(11);
+    
+    // Group by completion status
+    const activeTasks = flattened.filter(t => !t.completed);
+    const completedTasks = flattened.filter(t => t.completed);
+    
+    // Active tasks
+    if (activeTasks.length > 0) {
+        doc.setFontSize(12);
+        doc.setFont(undefined, 'bold');
+        doc.text('Active Tasks', margin, y);
+        y += 8;
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(10);
+        
+        activeTasks.forEach(task => {
+            if (y > pageHeight - margin - 10) {
+                doc.addPage();
+                y = margin;
+            }
+            const text = `${task.indent}${task.task}`;
+            doc.text(text, margin, y, { maxWidth: pageWidth - margin * 2 });
+            y += lineHeight;
+        });
+        y += 5;
+    }
+    
+    // Completed tasks
+    if (completedTasks.length > 0) {
+        if (y > pageHeight - margin - 15) {
+            doc.addPage();
+            y = margin;
+        }
+        doc.setFontSize(12);
+        doc.setFont(undefined, 'bold');
+        doc.text('Completed Tasks', margin, y);
+        y += 8;
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(10);
+        doc.setTextColor(150, 150, 150);
+        
+        completedTasks.forEach(task => {
+            if (y > pageHeight - margin - 10) {
+                doc.addPage();
+                y = margin;
+            }
+            const text = `${task.indent}✓ ${task.task}`;
+            doc.text(text, margin, y, { maxWidth: pageWidth - margin * 2 });
+            y += lineHeight;
+        });
+    }
+    
+    doc.save(filename);
+};
+
+// Export to Excel
+const exportToExcel = (tasks, filename, includeSubtasks = true) => {
+    const flattened = flattenTasksForDisplay(tasks, 0, '', includeSubtasks);
+    
+    // Create worksheet data
+    const worksheetData = [
+        ['Task', 'Status', 'Level']
+    ];
+    
+    flattened.forEach(task => {
+        worksheetData.push([
+            task.task,
+            task.completed ? 'Completed' : 'Active',
+            task.level
+        ]);
+    });
+    
+    // Create workbook and worksheet
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(worksheetData);
+    
+    // Set column widths
+    ws['!cols'] = [
+        { wch: 50 }, // Task column
+        { wch: 12 }, // Status column
+        { wch: 8 }   // Level column
+    ];
+    
+    // Add worksheet to workbook
+    XLSX.utils.book_append_sheet(wb, ws, 'Todo List');
+    
+    // Save file
+    XLSX.writeFile(wb, filename);
+};
+
 // Handle Confirm Export
 const handleConfirmExport = async () => {
     const exportModal = document.getElementById('export-modal');
     const exportOption = document.querySelector('input[name="export-option"]:checked')?.value || 'all';
+    const exportFormat = document.querySelector('input[name="export-format"]:checked')?.value || 'json';
+    const includeCompleted = document.querySelector('input[name="export-completed"]:checked')?.value || 'include';
     
     try {
         const allTasks = await storage.loadTasks();
         let tasksToExport = [];
         
         if (exportOption === 'current') {
-            // Export only current view (include both active and completed)
+            // Export only current view
+            // Use the same logic as getTasksToSort to ensure consistency
             if (currentFocusedTaskId) {
+                // Focus mode: use subtasks of focused task
                 const result = utils.findTaskById(allTasks, currentFocusedTaskId);
                 if (result?.task) {
                     tasksToExport = result.task.subtasks || [];
                 }
             } else {
-                // Check if viewing subtasks or top-level tasks
+                // Normal mode: check if viewing subtasks or top-level tasks
                 const activeTopLevel = allTasks.filter(task => !task.completed && !task.parentId);
                 const activeSubtasks = allTasks.filter(task => !task.completed && task.parentId);
                 
                 if (activeTopLevel.length === 0 && activeSubtasks.length > 0) {
-                    // Viewing subtasks - get all subtasks (active and completed)
-                    tasksToExport = allTasks.filter(task => task.parentId);
+                    // Viewing subtasks - get subtasks from the specific parent we're viewing
+                    const firstSubtask = activeSubtasks[0];
+                    if (firstSubtask && firstSubtask.parentId) {
+                        const parentResult = utils.findTaskById(allTasks, firstSubtask.parentId);
+                        if (parentResult?.task) {
+                            // Get only subtasks from this specific parent
+                            tasksToExport = parentResult.task.subtasks || [];
+                        } else {
+                            // Fallback: get all subtasks (shouldn't happen)
+                            tasksToExport = allTasks.filter(task => task.parentId);
+                        }
+                    } else {
+                        tasksToExport = allTasks.filter(task => task.parentId);
+                    }
                 } else {
-                    // Viewing top-level tasks - get all top-level tasks (active and completed)
+                    // Viewing top-level tasks - get all top-level tasks
                     tasksToExport = allTasks.filter(task => !task.parentId);
                 }
             }
@@ -1054,27 +1242,46 @@ const handleConfirmExport = async () => {
             tasksToExport = allTasks;
         }
         
-        // Create export data
-        const exportData = {
-            version: '1.0',
-            exportedAt: new Date().toISOString(),
-            tasks: tasksToExport
-        };
+        // Filter out completed tasks if requested
+        if (includeCompleted === 'exclude') {
+            tasksToExport = tasksToExport.filter(task => !task.completed);
+        }
         
-        // Download as JSON file
-        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `todo-list-${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        const dateStr = new Date().toISOString().split('T')[0];
+        
+        // Determine if we should include nested subtasks
+        // For "Current View Only", don't include nested subtasks - only export what's visible
+        const includeSubtasks = exportOption === 'all';
+        
+        // Export based on format
+        if (exportFormat === 'pdf') {
+            exportToPDF(tasksToExport, `todo-list-${dateStr}.pdf`, includeSubtasks);
+        } else if (exportFormat === 'excel') {
+            exportToExcel(tasksToExport, `todo-list-${dateStr}.xlsx`, includeSubtasks);
+        } else {
+            // JSON export
+            const exportData = {
+                version: '1.0',
+                exportedAt: new Date().toISOString(),
+                tasks: tasksToExport
+            };
+            
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `todo-list-${dateStr}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
         
         // Close modal
         if (exportModal) {
             exportModal.classList.add('hidden');
+            // Re-enable body scroll
+            document.body.style.overflow = '';
         }
     } catch (error) {
         console.error('Error exporting:', error);

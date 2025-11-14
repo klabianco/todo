@@ -445,6 +445,10 @@ switch ($resource) {
             json_response(['error' => 'Method not allowed'], 405);
         }
         
+        // Increase execution time limit for AI operations (5 minutes)
+        set_time_limit(300);
+        ini_set('max_execution_time', 300);
+        
         require __DIR__ . '/../../config/config.php';
         
         $data = get_request_body();
