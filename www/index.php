@@ -90,12 +90,20 @@ require __DIR__ . '/../config/config.php';
             <div id="tasks-container">
                 <!-- Active tasks -->
                 <div class="flex justify-between items-center mb-4">
-                    <button id="ai-sort-button" class="text-xs bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-md flex items-center" title="Sort list order by grocery store layout (AI-powered)">
-                        <svg class="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4"></path>
-                        </svg>
-                        Sort
-                    </button>
+                    <div class="flex gap-2">
+                        <button id="ai-sort-button" class="text-xs bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-md flex items-center" title="Sort list order by grocery store layout (AI-powered)">
+                            <svg class="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4"></path>
+                            </svg>
+                            Sort
+                        </button>
+                        <button id="get-recipe-button" class="text-xs bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded-md flex items-center" title="Generate a recipe based on your ingredients (AI-powered)">
+                            <svg class="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+                            </svg>
+                            Get Recipe
+                        </button>
+                    </div>
                     <span id="task-count" class="text-sm text-gray-500 dark:text-gray-400">0 tasks</span>
                 </div>
                 
@@ -107,6 +115,23 @@ require __DIR__ . '/../config/config.php';
                 <div id="empty-state" class="text-center py-6">
                     <p class="text-gray-500 dark:text-gray-400">Your list is empty</p>
                     <p class="text-sm text-gray-400 dark:text-gray-500 mt-1">Add a task to get started</p>
+                </div>
+                
+                <!-- Recipe Modal -->
+                <div id="recipe-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div class="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-between items-center">
+                            <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200">Recipe</h2>
+                            <button id="close-recipe-modal" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                </svg>
+                            </button>
+                        </div>
+                        <div id="recipe-content" class="p-6">
+                            <!-- Recipe will be displayed here -->
+                        </div>
+                    </div>
                 </div>
                 
                 <!-- Completed tasks section -->

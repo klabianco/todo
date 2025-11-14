@@ -419,6 +419,27 @@ const setupEventListeners = () => {
         aiSortButton.addEventListener('click', handleAISortClick);
     }
 
+    // Set up Get Recipe button
+    const getRecipeButton = document.getElementById('get-recipe-button');
+    if (getRecipeButton) {
+        getRecipeButton.addEventListener('click', handleGetRecipeClick);
+    }
+
+    // Set up recipe modal close button
+    const closeRecipeModal = document.getElementById('close-recipe-modal');
+    const recipeModal = document.getElementById('recipe-modal');
+    if (closeRecipeModal && recipeModal) {
+        closeRecipeModal.addEventListener('click', () => {
+            recipeModal.classList.add('hidden');
+        });
+        // Close modal when clicking outside
+        recipeModal.addEventListener('click', (e) => {
+            if (e.target === recipeModal) {
+                recipeModal.classList.add('hidden');
+            }
+        });
+    }
+
     // Set up completed tasks toggle
     if (ui.domElements.completedToggle) {
         ui.domElements.completedToggle.addEventListener('click', ui.toggleCompletedTasksList);
@@ -676,6 +697,167 @@ const handleAISortClick = async () => {
         enableAllInteractions();
         utils.restoreButtonState(aiSortButton, originalText);
     }
+};
+
+// Handle Get Recipe button click
+const handleGetRecipeClick = async () => {
+    const getRecipeButton = document.getElementById('get-recipe-button');
+    const recipeModal = document.getElementById('recipe-modal');
+    const recipeContent = document.getElementById('recipe-content');
+    
+    if (!getRecipeButton || !recipeModal || !recipeContent) return;
+    
+    const loadingHTML = `
+        <svg class="animate-spin h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        Generating...
+    `;
+    
+    const originalText = utils.setButtonLoading(getRecipeButton, loadingHTML);
+    if (!originalText) return;
+    
+    // Disable button during processing
+    getRecipeButton.disabled = true;
+    getRecipeButton.style.pointerEvents = 'none';
+    
+    try {
+        // Get all tasks (both active and completed) from current list level
+        const allTasks = await storage.loadTasks();
+        
+        // Get tasks to use for recipe - include ALL tasks (active and completed) from current level
+        let allTasksForRecipe = [];
+        
+        if (currentFocusedTaskId) {
+            // Focus mode: use all subtasks (active and completed) of focused task
+            const result = utils.findTaskById(allTasks, currentFocusedTaskId);
+            if (result?.task) {
+                allTasksForRecipe = result.task.subtasks || [];
+            }
+        } else {
+            // Normal mode: check if viewing subtasks or top-level tasks
+            const activeTopLevel = allTasks.filter(task => !task.completed && !task.parentId);
+            const activeSubtasks = allTasks.filter(task => !task.completed && task.parentId);
+            
+            if (activeTopLevel.length === 0 && activeSubtasks.length > 0) {
+                // Viewing subtasks - get all subtasks (active and completed)
+                allTasksForRecipe = allTasks.filter(task => task.parentId);
+            } else {
+                // Viewing top-level tasks - get all top-level tasks (active and completed)
+                allTasksForRecipe = allTasks.filter(task => !task.parentId);
+            }
+        }
+        
+        if (allTasksForRecipe.length === 0) {
+            alert('No ingredients found. Please add some items to your list.');
+            return;
+        }
+        
+        // Call recipe API
+        const response = await fetch('/api/recipe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tasks: allTasksForRecipe })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+            throw new Error(errorData.error || `Failed to generate recipe: ${response.status}`);
+        }
+        
+        const recipe = await response.json();
+        
+        // Display recipe in modal
+        displayRecipe(recipe);
+        recipeModal.classList.remove('hidden');
+    } catch (error) {
+        console.error('Error generating recipe:', error);
+        alert('Failed to generate recipe: ' + error.message);
+    } finally {
+        utils.restoreButtonState(getRecipeButton, originalText);
+        getRecipeButton.disabled = false;
+        getRecipeButton.style.pointerEvents = '';
+    }
+};
+
+// Display recipe in modal
+const displayRecipe = (recipe) => {
+    const recipeContent = document.getElementById('recipe-content');
+    if (!recipeContent) return;
+    
+    let html = `
+        <div class="space-y-6">
+            <div>
+                <h3 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">${escapeHtml(recipe.title || 'Recipe')}</h3>
+            </div>
+            
+            <div>
+                <h4 class="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-3">Ingredients</h4>
+                <ul class="list-disc list-inside space-y-1 text-gray-600 dark:text-gray-400">
+    `;
+    
+    // Display ingredients
+    if (Array.isArray(recipe.ingredients)) {
+        recipe.ingredients.forEach(ingredient => {
+            html += `<li>${escapeHtml(ingredient)}</li>`;
+        });
+    }
+    
+    // Display additional ingredients if any
+    if (Array.isArray(recipe.additionalIngredients) && recipe.additionalIngredients.length > 0) {
+        html += `</ul>
+                <div class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Additional ingredients (optional):</p>
+                    <ul class="list-disc list-inside space-y-1 text-gray-500 dark:text-gray-500">`;
+        recipe.additionalIngredients.forEach(ingredient => {
+            html += `<li>${escapeHtml(ingredient)}</li>`;
+        });
+        html += `</ul></div>`;
+    } else {
+        html += `</ul>`;
+    }
+    
+    html += `
+            </div>
+            
+            <div>
+                <h4 class="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-3">Instructions</h4>
+                <ol class="list-decimal list-inside space-y-2 text-gray-600 dark:text-gray-400">
+    `;
+    
+    // Display instructions
+    if (Array.isArray(recipe.instructions)) {
+        recipe.instructions.forEach((instruction, index) => {
+            html += `<li class="ml-4">${escapeHtml(instruction)}</li>`;
+        });
+    }
+    
+    html += `
+                </ol>
+            </div>
+    `;
+    
+    // Display notes if available
+    if (recipe.notes) {
+        html += `
+            <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Notes</h4>
+                <p class="text-sm text-gray-600 dark:text-gray-400">${escapeHtml(recipe.notes)}</p>
+            </div>
+        `;
+    }
+    
+    html += `</div>`;
+    
+    recipeContent.innerHTML = html;
+};
+
+// Helper function to escape HTML
+const escapeHtml = (text) => {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 };
 
 // Handle share button click
