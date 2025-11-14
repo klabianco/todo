@@ -412,6 +412,33 @@ const setupEventListeners = () => {
     
     // Set up share button
     ui.setupShareButton(handleShareButtonClick);
+    
+    // Set up export button
+    const exportButton = document.getElementById('export-button');
+    if (exportButton) {
+        exportButton.addEventListener('click', handleExportClick);
+    }
+    
+    // Set up import button
+    const importButton = document.getElementById('import-button');
+    const importFileInput = document.getElementById('import-file-input');
+    if (importButton && importFileInput) {
+        importButton.addEventListener('click', () => {
+            importFileInput.click();
+        });
+        importFileInput.addEventListener('change', handleImportFile);
+    }
+    
+    // Set up export modal
+    const exportModal = document.getElementById('export-modal');
+    const cancelExportButton = document.getElementById('cancel-export');
+    const confirmExportButton = document.getElementById('confirm-export');
+    if (exportModal && cancelExportButton && confirmExportButton) {
+        cancelExportButton.addEventListener('click', () => {
+            exportModal.classList.add('hidden');
+        });
+        confirmExportButton.addEventListener('click', handleConfirmExport);
+    }
 
     // Set up AI sort button
     const aiSortButton = document.getElementById('ai-sort-button');
@@ -983,6 +1010,127 @@ const escapeHtml = (text) => {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+};
+
+// Handle Export button click
+const handleExportClick = () => {
+    const exportModal = document.getElementById('export-modal');
+    if (exportModal) {
+        exportModal.classList.remove('hidden');
+    }
+};
+
+// Handle Confirm Export
+const handleConfirmExport = async () => {
+    const exportModal = document.getElementById('export-modal');
+    const exportOption = document.querySelector('input[name="export-option"]:checked')?.value || 'all';
+    
+    try {
+        const allTasks = await storage.loadTasks();
+        let tasksToExport = [];
+        
+        if (exportOption === 'current') {
+            // Export only current view (include both active and completed)
+            if (currentFocusedTaskId) {
+                const result = utils.findTaskById(allTasks, currentFocusedTaskId);
+                if (result?.task) {
+                    tasksToExport = result.task.subtasks || [];
+                }
+            } else {
+                // Check if viewing subtasks or top-level tasks
+                const activeTopLevel = allTasks.filter(task => !task.completed && !task.parentId);
+                const activeSubtasks = allTasks.filter(task => !task.completed && task.parentId);
+                
+                if (activeTopLevel.length === 0 && activeSubtasks.length > 0) {
+                    // Viewing subtasks - get all subtasks (active and completed)
+                    tasksToExport = allTasks.filter(task => task.parentId);
+                } else {
+                    // Viewing top-level tasks - get all top-level tasks (active and completed)
+                    tasksToExport = allTasks.filter(task => !task.parentId);
+                }
+            }
+        } else {
+            // Export everything
+            tasksToExport = allTasks;
+        }
+        
+        // Create export data
+        const exportData = {
+            version: '1.0',
+            exportedAt: new Date().toISOString(),
+            tasks: tasksToExport
+        };
+        
+        // Download as JSON file
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `todo-list-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        // Close modal
+        if (exportModal) {
+            exportModal.classList.add('hidden');
+        }
+    } catch (error) {
+        console.error('Error exporting:', error);
+        alert('Failed to export list: ' + error.message);
+    }
+};
+
+// Handle Import File
+const handleImportFile = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    try {
+        const text = await file.text();
+        const importData = JSON.parse(text);
+        
+        if (!importData.tasks || !Array.isArray(importData.tasks)) {
+            throw new Error('Invalid file format. Expected a JSON file with a "tasks" array.');
+        }
+        
+        // Confirm import
+        const confirmed = confirm(
+            `This will import ${importData.tasks.length} task(s). ` +
+            `Do you want to merge with your current list or replace it?\n\n` +
+            `Click OK to merge, Cancel to replace.`
+        );
+        
+        const currentTasks = await storage.loadTasks();
+        let finalTasks = [];
+        
+        if (confirmed) {
+            // Merge: combine current tasks with imported tasks
+            // Remove duplicates by ID, keeping current tasks if they exist
+            const existingIds = new Set(currentTasks.map(t => t.id));
+            const newTasks = importData.tasks.filter(t => !existingIds.has(t.id));
+            finalTasks = [...currentTasks, ...newTasks];
+        } else {
+            // Replace: use imported tasks only
+            finalTasks = importData.tasks;
+        }
+        
+        // Save imported tasks
+        await storage.saveTasks(finalTasks);
+        
+        // Re-render
+        await renderTasks();
+        
+        alert(`Successfully imported ${importData.tasks.length} task(s)!`);
+        
+        // Reset file input
+        event.target.value = '';
+    } catch (error) {
+        console.error('Error importing:', error);
+        alert('Failed to import list: ' + error.message);
+        event.target.value = '';
+    }
 };
 
 // Handle share button click
