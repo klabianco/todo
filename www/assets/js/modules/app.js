@@ -733,9 +733,15 @@ const getTasksForRecipe = async () => {
 const generateAndDisplayRecipe = async (buttonElement, showModal = true) => {
     const recipeModal = document.getElementById('recipe-modal');
     const recipeContent = document.getElementById('recipe-content');
+    const recipeFooter = document.getElementById('recipe-footer');
     const getNextRecipeButton = document.getElementById('get-next-recipe-button');
     
     if (!recipeModal || !recipeContent) return;
+    
+    // Hide footer during loading
+    if (recipeFooter) {
+        recipeFooter.classList.add('hidden');
+    }
     
     // Show loading state
     if (buttonElement) {
@@ -793,6 +799,11 @@ const generateAndDisplayRecipe = async (buttonElement, showModal = true) => {
             // Display recipe in modal
             displayRecipe(recipe);
             
+            // Show footer after recipe is displayed
+            if (recipeFooter) {
+                recipeFooter.classList.remove('hidden');
+            }
+            
             if (showModal) {
                 recipeModal.classList.remove('hidden');
             }
@@ -804,6 +815,7 @@ const generateAndDisplayRecipe = async (buttonElement, showModal = true) => {
                     <p class="text-sm text-gray-600 dark:text-gray-400">${escapeHtml(error.message)}</p>
                 </div>
             `;
+            // Don't show footer on error
             if (showModal) {
                 recipeModal.classList.remove('hidden');
             }
@@ -818,6 +830,11 @@ const generateAndDisplayRecipe = async (buttonElement, showModal = true) => {
         if (getNextRecipeButton) {
             getNextRecipeButton.disabled = true;
             getNextRecipeButton.style.opacity = '0.6';
+        }
+        
+        // Hide footer during loading
+        if (recipeFooter) {
+            recipeFooter.classList.add('hidden');
         }
         
         try {
@@ -851,6 +868,11 @@ const generateAndDisplayRecipe = async (buttonElement, showModal = true) => {
             
             const recipe = await response.json();
             displayRecipe(recipe);
+            
+            // Show footer after recipe is displayed
+            if (recipeFooter) {
+                recipeFooter.classList.remove('hidden');
+            }
         } catch (error) {
             console.error('Error generating recipe:', error);
             recipeContent.innerHTML = `
@@ -859,6 +881,7 @@ const generateAndDisplayRecipe = async (buttonElement, showModal = true) => {
                     <p class="text-sm text-gray-600 dark:text-gray-400">${escapeHtml(error.message)}</p>
                 </div>
             `;
+            // Don't show footer on error
         } finally {
             if (getNextRecipeButton) {
                 getNextRecipeButton.disabled = false;

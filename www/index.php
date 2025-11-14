@@ -126,15 +126,15 @@ require __DIR__ . '/../config/config.php';
                                 Close
                             </button>
                         </div>
-                        <div id="recipe-content" class="p-6 overflow-y-auto flex-1">
+                        <div id="recipe-content" class="p-6 overflow-y-auto flex-1 min-h-0">
                             <!-- Recipe will be displayed here -->
                         </div>
-                        <div class="sticky bottom-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-end gap-3">
+                        <div id="recipe-footer" class="hidden sticky bottom-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-end gap-3">
                             <button id="get-next-recipe-button" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-md font-medium transition-colors flex items-center">
                                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                                 </svg>
-                                Get Next Recipe
+                                Next Recipe
                             </button>
                         </div>
                     </div>
