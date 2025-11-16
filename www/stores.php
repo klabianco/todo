@@ -348,10 +348,26 @@ renderThemeToggle();
             
             try {
                 await groceryStores.deleteGroceryStore(storeId);
+                // Remove from currentStores immediately for instant UI update
+                currentStores = currentStores.filter(store => store.id !== storeId);
+                
+                // Update UI immediately
+                if (currentStores.length === 0) {
+                    elements.emptyState.innerHTML = renderEmptyState();
+                    elements.emptyState.classList.remove('hidden');
+                    elements.storesList.innerHTML = '';
+                } else {
+                    elements.emptyState.classList.add('hidden');
+                    elements.storesList.innerHTML = currentStores.map(store => renderStoreCard(store)).join('');
+                }
+                
+                // Then reload from server to ensure consistency
                 await loadStores();
             } catch (error) {
                 console.error('Error deleting store:', error);
                 alert(`Failed to delete store: ${error.message}`);
+                // Reload on error to ensure UI is in sync
+                await loadStores();
             }
         };
         
