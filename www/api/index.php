@@ -662,30 +662,20 @@ switch ($resource) {
                     
                 case 'POST':
                     // Upload a photo for a store
-                    if (!isset($_FILES['photo']) || $_FILES['photo']['error'] !== UPLOAD_ERR_OK) {
-                        json_response(['error' => 'No photo uploaded or upload error'], 400);
+                    require __DIR__ . '/includes/photo-helpers.php';
+                    
+                    $file = $_FILES['photo'] ?? null;
+                    $validation_error = validate_photo_upload($file);
+                    if ($validation_error) {
+                        json_response($validation_error, 400);
                     }
                     
-                    $file = $_FILES['photo'];
-                    $allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-                    $max_size = 5 * 1024 * 1024; // 5MB
-                    
-                    if (!in_array($file['type'], $allowed_types)) {
-                        json_response(['error' => 'Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed.'], 400);
+                    $save_result = save_uploaded_photo($file, $store_id, $data_dir);
+                    if (isset($save_result['error'])) {
+                        json_response($save_result, 500);
                     }
                     
-                    if ($file['size'] > $max_size) {
-                        json_response(['error' => 'File too large. Maximum size is 5MB.'], 400);
-                    }
-                    
-                    $photos_dir = get_store_photos_dir($store_id);
-                    $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
-                    $photo_id = 'photo-' . bin2hex(random_bytes(8)) . '.' . $extension;
-                    $photo_path = $photos_dir . '/' . $photo_id;
-                    
-                    if (!move_uploaded_file($file['tmp_name'], $photo_path)) {
-                        json_response(['error' => 'Failed to save photo'], 500);
-                    }
+                    $photo_id = $save_result['photo_id'];
                     
                     // Update store to include photo reference
                     if (!isset($stores[$storeIndex]['photos'])) {
@@ -705,29 +695,8 @@ switch ($resource) {
                     break;
                     
                 case 'DELETE':
-                    // Delete a photo
-                    if (!$photo_id) {
-                        json_response(['error' => 'Photo ID is required'], 400);
-                    }
-                    
-                    $photos_dir = get_store_photos_dir($store_id);
-                    $photo_path = $photos_dir . '/' . $photo_id;
-                    
-                    if (file_exists($photo_path)) {
-                        unlink($photo_path);
-                    }
-                    
-                    // Remove photo reference from store
-                    if (isset($stores[$storeIndex]['photos'])) {
-                        $stores[$storeIndex]['photos'] = array_values(array_filter(
-                            $stores[$storeIndex]['photos'],
-                            fn($p) => $p !== $photo_id
-                        ));
-                        $stores[$storeIndex]['updated'] = date('c');
-                        write_json_file($stores_file, $stores);
-                    }
-                    
-                    json_response(['success' => true]);
+                    // Delete endpoint exists but is not used in UI (photos cannot be deleted)
+                    json_response(['error' => 'Photo deletion is not allowed'], 403);
                     break;
                     
                 default:
