@@ -676,12 +676,17 @@ switch ($resource) {
                     }
                     
                     $photo_id = $save_result['photo_id'];
+                    $photo_metadata = [
+                        'id' => $photo_id,
+                        'date_taken' => $save_result['date_taken'] ?? null,
+                        'date_added' => $save_result['date_added'] ?? date('c')
+                    ];
                     
-                    // Update store to include photo reference
+                    // Update store to include photo reference with metadata
                     if (!isset($stores[$storeIndex]['photos'])) {
                         $stores[$storeIndex]['photos'] = [];
                     }
-                    $stores[$storeIndex]['photos'][] = $photo_id;
+                    $stores[$storeIndex]['photos'][] = $photo_metadata;
                     $stores[$storeIndex]['updated'] = date('c');
                     write_json_file($stores_file, $stores);
                     
@@ -689,14 +694,42 @@ switch ($resource) {
                         'success' => true,
                         'photo' => [
                             'id' => $photo_id,
-                            'url' => "/api/store-photos/{$store_id}/{$photo_id}"
+                            'url' => "/api/store-photos/{$store_id}/{$photo_id}",
+                            'date_taken' => $photo_metadata['date_taken'],
+                            'date_added' => $photo_metadata['date_added']
                         ]
                     ]);
                     break;
                     
                 case 'DELETE':
-                    // Delete endpoint exists but is not used in UI (photos cannot be deleted)
-                    json_response(['error' => 'Photo deletion is not allowed'], 403);
+                    // Delete a photo
+                    if (!$photo_id) {
+                        json_response(['error' => 'Photo ID is required'], 400);
+                    }
+                    
+                    $photos_dir = get_store_photos_dir($store_id);
+                    $photo_path = $photos_dir . '/' . $photo_id;
+                    
+                    // Delete the photo file
+                    if (file_exists($photo_path)) {
+                        unlink($photo_path);
+                    }
+                    
+                    // Remove photo reference from store
+                    if (isset($stores[$storeIndex]['photos'])) {
+                        $stores[$storeIndex]['photos'] = array_values(array_filter(
+                            $stores[$storeIndex]['photos'],
+                            function($photo) use ($photo_id) {
+                                // Handle both old format (string ID) and new format (object with id)
+                                $id = is_array($photo) ? ($photo['id'] ?? null) : $photo;
+                                return $id !== $photo_id;
+                            }
+                        ));
+                        $stores[$storeIndex]['updated'] = date('c');
+                        write_json_file($stores_file, $stores);
+                    }
+                    
+                    json_response(['success' => true]);
                     break;
                     
                 default:

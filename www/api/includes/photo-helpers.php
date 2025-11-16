@@ -24,7 +24,33 @@ function validate_photo_upload($file) {
     return null; // Valid
 }
 
-// Save uploaded photo and return photo ID
+// Extract EXIF date taken from photo
+function extract_photo_date_taken($photo_path) {
+    if (!function_exists('exif_read_data')) {
+        return null;
+    }
+    
+    $exif = @exif_read_data($photo_path);
+    if (!$exif) {
+        return null;
+    }
+    
+    // Try different EXIF date fields
+    $date_fields = ['DateTimeOriginal', 'DateTime', 'DateTimeDigitized'];
+    foreach ($date_fields as $field) {
+        if (isset($exif[$field])) {
+            $date = $exif[$field];
+            // Convert EXIF date format to ISO 8601
+            if (preg_match('/^(\d{4}):(\d{2}):(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/', $date, $matches)) {
+                return sprintf('%s-%s-%sT%s:%s:%s', $matches[1], $matches[2], $matches[3], $matches[4], $matches[5], $matches[6]);
+            }
+        }
+    }
+    
+    return null;
+}
+
+// Save uploaded photo and return photo metadata
 function save_uploaded_photo($file, $store_id, $data_dir) {
     if (!function_exists('get_store_photos_dir')) {
         // Fallback if function not available
@@ -44,6 +70,15 @@ function save_uploaded_photo($file, $store_id, $data_dir) {
         return ['error' => 'Failed to save photo'];
     }
     
-    return ['photo_id' => $photo_id, 'photo_path' => $photo_path];
+    // Extract date taken from EXIF if available
+    $date_taken = extract_photo_date_taken($photo_path);
+    $date_added = date('c');
+    
+    return [
+        'photo_id' => $photo_id,
+        'photo_path' => $photo_path,
+        'date_taken' => $date_taken,
+        'date_added' => $date_added
+    ];
 }
 

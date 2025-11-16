@@ -299,6 +299,27 @@ renderThemeToggle();
             }
         };
         
+        // Handle photo deletion
+        const handlePhotoDelete = async (storeId, photoId) => {
+            if (!confirm('Delete this photo?')) return;
+            
+            try {
+                const response = await fetch(`/api/store-photos/${storeId}/${photoId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to delete photo');
+                }
+                
+                await loadStores();
+            } catch (error) {
+                console.error('Error deleting photo:', error);
+                alert(`Failed to delete photo: ${error.message}`);
+            }
+        };
+        
         // Setup photo upload handlers (delegated event listeners on container)
         elements.container?.addEventListener('change', (e) => {
             if (e.target.classList.contains('store-photo-input')) {
@@ -307,6 +328,18 @@ renderThemeToggle();
                 if (file && storeId) {
                     handlePhotoUpload(storeId, file);
                     e.target.value = ''; // Reset input
+                }
+            }
+        });
+        
+        // Setup photo delete handlers (delegated event listeners on container)
+        elements.container?.addEventListener('click', (e) => {
+            if (e.target.closest('.delete-photo-btn')) {
+                const btn = e.target.closest('.delete-photo-btn');
+                const storeId = btn.dataset.storeId;
+                const photoId = btn.dataset.photoId;
+                if (storeId && photoId) {
+                    handlePhotoDelete(storeId, photoId);
                 }
             }
         });

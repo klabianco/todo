@@ -44,22 +44,67 @@ const renderPhotoUploadButton = (storeId) => `
     </label>
 `;
 
+// Get photo ID (handles both old string format and new object format)
+const getPhotoId = (photo) => {
+    return typeof photo === 'string' ? photo : (photo.id || photo);
+};
+
+// Get photo date (taken if available, otherwise added)
+const getPhotoDate = (photo) => {
+    if (typeof photo === 'string') {
+        return null; // Old format, no date info
+    }
+    return photo.date_taken || photo.date_added || null;
+};
+
+// Format photo date for display
+const formatPhotoDate = (dateString) => {
+    if (!dateString) return '';
+    try {
+        const date = new Date(dateString);
+        return date.toLocaleDateString();
+    } catch {
+        return '';
+    }
+};
+
 // Render photo grid HTML
 const renderPhotoGrid = (photos, storeId) => {
     if (!photos || photos.length === 0) return '';
     
     return `
         <div class="mt-3 grid grid-cols-3 gap-2">
-            ${photos.map(photoId => `
-                <div class="relative">
-                    <img 
-                        src="/api/store-photos/${storeId}/${photoId}" 
-                        alt="Store photo" 
-                        class="w-full h-24 object-cover rounded-md"
-                        loading="lazy"
-                    />
-                </div>
-            `).join('')}
+            ${photos.map(photo => {
+                const photoId = getPhotoId(photo);
+                const photoDate = getPhotoDate(photo);
+                const displayDate = formatPhotoDate(photoDate);
+                
+                return `
+                    <div class="relative group">
+                        <img 
+                            src="/api/store-photos/${storeId}/${photoId}" 
+                            alt="Store photo" 
+                            class="w-full h-24 object-cover rounded-md"
+                            loading="lazy"
+                        />
+                        ${displayDate ? `
+                            <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs px-1 py-0.5 rounded-b-md opacity-0 group-hover:opacity-100 transition-opacity">
+                                ${displayDate}
+                            </div>
+                        ` : ''}
+                        <button 
+                            class="delete-photo-btn absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                            data-store-id="${storeId}"
+                            data-photo-id="${photoId}"
+                            title="Delete photo"
+                        >
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                `;
+            }).join('')}
         </div>
     `;
 };
