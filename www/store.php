@@ -83,11 +83,23 @@ renderThemeToggle();
             </div>
         </div>
         
+        <!-- Photo Modal -->
+        <div id="photo-modal" class="hidden fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4">
+            <div class="relative max-w-7xl max-h-[90vh] w-full h-full flex items-center justify-center">
+                <button id="close-photo-modal" class="absolute top-4 right-4 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-full p-2 hover:bg-gray-200 dark:hover:bg-gray-700 z-10">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+                <img id="photo-modal-image" src="" alt="Store photo" class="max-w-full max-h-full object-contain">
+            </div>
+        </div>
+        
         <?php renderContainerEnd(); ?>
         <?php renderFooter(); ?>
     </body>
     <script type="module">
-        import { loadStore, setupPhotoUpload, setupPhotoDelete, handleStoreDelete } from '/assets/js/modules/store-detail.js';
+        import { loadStore, setupPhotoUpload, setupPhotoDelete, setupPhotoModal, handleStoreDelete } from '/assets/js/modules/store-detail.js';
         import { $ } from '/assets/js/modules/utils.js';
         
         const storeId = new URLSearchParams(window.location.search).get('id');
@@ -111,6 +123,7 @@ renderThemeToggle();
         // Setup event handlers
         setupPhotoUpload(storeId, elements.photoInput, reloadStore);
         setupPhotoDelete(storeId, elements.photosGrid, reloadStore);
+        setupPhotoModal();
         $('delete-store-button')?.addEventListener('click', () => handleStoreDelete(storeId));
         $('retry-button')?.addEventListener('click', reloadStore);
         

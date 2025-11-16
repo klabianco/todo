@@ -10,8 +10,10 @@ const SELECTED_STORE_STORAGE_KEY = 'todo_selected_grocery_store';
 // Helper function for API calls with error handling
 const apiCall = async (url, options = {}) => {
     try {
+        const { timeout, ...fetchOptions } = options;
         const response = await apiFetch(url, {
-            ...options,
+            ...fetchOptions,
+            timeout: timeout, // Pass timeout to apiFetch
             headers: {
                 'Content-Type': 'application/json',
                 ...options.headers
@@ -75,13 +77,52 @@ const updateSelectedStoreIfNeeded = (storeId, updatedStore = null) => {
     }
 };
 
-// Add a new grocery store
-export const addGroceryStore = async (name) => {
-    const data = await apiCall('/api/grocery-stores', {
+// Execute a single store creation step
+const executeStoreStep = async (name, step, storeData, onStepUpdate) => {
+    const body = { name: name.trim(), step: step };
+    if (step !== 'basic') {
+        body.store_data = storeData;
+    }
+    
+    const response = await apiCall('/api/grocery-stores', {
         method: 'POST',
-        body: JSON.stringify({ name: name.trim() })
+        body: JSON.stringify(body),
+        timeout: step === 'save' ? 60000 : 600000 // 1 min for save, 10 min for AI steps
     });
-    return data.store;
+    
+    if (response.store_data) {
+        const updatedData = response.store_data;
+        if (onStepUpdate) {
+            onStepUpdate(step, updatedData);
+        }
+        return updatedData;
+    }
+    
+    return storeData;
+};
+
+// Add a new grocery store (step-by-step)
+export const addGroceryStore = async (name, onStepUpdate = null) => {
+    const trimmedName = name.trim();
+    let storeData = null;
+    
+    // Execute steps sequentially
+    storeData = await executeStoreStep(trimmedName, 'basic', null, onStepUpdate);
+    storeData = await executeStoreStep(trimmedName, 'layout_description', storeData, onStepUpdate);
+    storeData = await executeStoreStep(trimmedName, 'aisle_layout', storeData, onStepUpdate);
+    
+    // Final step: Save the store
+    const final = await apiCall('/api/grocery-stores', {
+        method: 'POST',
+        body: JSON.stringify({ 
+            name: trimmedName,
+            step: 'save',
+            store_data: storeData
+        }),
+        timeout: 60000 // 1 minute for save
+    });
+    
+    return final.store;
 };
 
 // Update an existing grocery store

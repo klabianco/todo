@@ -18,15 +18,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Enable error reporting for debugging
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-
-// Debug info
+// Debug info for error responses
 $debug = [
     'request_uri' => $_SERVER['REQUEST_URI'],
-    'request_method' => $_SERVER['REQUEST_METHOD'],
-    'php_self' => $_SERVER['PHP_SELF']
+    'request_method' => $_SERVER['REQUEST_METHOD']
 ];
 
 // Parse the URL to determine the action
@@ -175,27 +170,6 @@ function try_ai_models($ai, $models) {
     }
     
     return ['error' => $lastError ?: 'All models failed'];
-}
-
-// Helper function to clean and parse AI JSON response
-function parse_ai_json_response($response) {
-    // Clean markdown code blocks
-    $response = trim(preg_replace('/^```(?:json)?\s*|\s*```$/m', '', trim($response)));
-    
-    if (empty($response)) {
-        return null;
-    }
-    
-    $result = json_decode($response, true);
-    
-    // If decode failed, log error
-    if ($result === null && json_last_error() !== JSON_ERROR_NONE) {
-        error_log('AI sort JSON decode error: ' . json_last_error_msg());
-        error_log('AI sort raw response: ' . substr($response, 0, 500));
-        return null;
-    }
-    
-    return $result;
 }
 
 // Helper function to extract sorted items from AI response
@@ -401,6 +375,7 @@ switch ($resource) {
         }
         
         require __DIR__ . '/../../config/config.php';
+        require __DIR__ . '/includes/ai-helpers.php';
         
         $data = get_request_body();
         $tasks = $data['tasks'] ?? [];
@@ -648,43 +623,137 @@ switch ($resource) {
                     
                 case 'POST':
                     // Upload a photo for a store
-                    require __DIR__ . '/includes/photo-helpers.php';
-                    
-                    $file = $_FILES['photo'] ?? null;
-                    $validation_error = validate_photo_upload($file);
-                    if ($validation_error) {
-                        json_response($validation_error, 400);
-                    }
-                    
-                    $save_result = save_uploaded_photo($file, $store_id, $data_dir);
-                    if (isset($save_result['error'])) {
-                        json_response($save_result, 500);
-                    }
-                    
-                    $photo_id = $save_result['photo_id'];
-                    $photo_metadata = [
-                        'id' => $photo_id,
-                        'date_taken' => $save_result['date_taken'] ?? null,
-                        'date_added' => $save_result['date_added'] ?? date('c')
-                    ];
-                    
-                    // Update store to include photo reference with metadata
-                    if (!isset($stores[$storeIndex]['photos'])) {
-                        $stores[$storeIndex]['photos'] = [];
-                    }
-                    $stores[$storeIndex]['photos'][] = $photo_metadata;
-                    $stores[$storeIndex]['updated'] = date('c');
-                    write_json_file($stores_file, $stores);
-                    
-                    json_response([
-                        'success' => true,
-                        'photo' => [
+                    try {
+                        require __DIR__ . '/includes/photo-helpers.php';
+                        require __DIR__ . '/../../config/config.php';
+                        require __DIR__ . '/includes/ai-helpers.php';
+                        
+                        // Ensure stores are loaded (they should be from the outer scope, but ensure they exist)
+                        if (!isset($stores) || !isset($storeIndex)) {
+                            $stores = read_json_file($stores_file, []);
+                            $storeIndex = find_store_index($stores, $store_id);
+                            if ($storeIndex === null) {
+                                json_response(['error' => 'Store not found'], 404);
+                            }
+                        }
+                        
+                        $file = $_FILES['photo'] ?? null;
+                        $validation_error = validate_photo_upload($file);
+                        if ($validation_error) {
+                            json_response($validation_error, 400);
+                        }
+                        
+                        $save_result = save_uploaded_photo($file, $store_id, $data_dir);
+                        if (isset($save_result['error'])) {
+                            json_response($save_result, 500);
+                        }
+                        
+                        $photo_id = $save_result['photo_id'];
+                        $photo_path = $save_result['photo_path'];
+                        $photo_metadata = [
                             'id' => $photo_id,
-                            'url' => "/api/store-photos/{$store_id}/{$photo_id}",
-                            'date_taken' => $photo_metadata['date_taken'],
-                            'date_added' => $photo_metadata['date_added']
-                        ]
-                    ]);
+                            'date_taken' => $save_result['date_taken'] ?? null,
+                            'date_added' => $save_result['date_added'] ?? date('c')
+                        ];
+                        
+                        // Analyze photo with AI to detect items and section/location
+                        $photo_analysis = null;
+                        $layout_updated = false;
+                        $analysis_error = null;
+                        try {
+                            $photo_analysis = analyze_store_photo($photo_path);
+                            
+                            if (isset($photo_analysis['error'])) {
+                                $analysis_error = is_string($photo_analysis['error']) ? $photo_analysis['error'] : json_encode($photo_analysis['error']);
+                            } elseif (!empty($photo_analysis['items'])) {
+                                // Update store layout and layout description based on photo analysis
+                                $current_layout = $stores[$storeIndex]['aisle_layout'] ?? '';
+                                $current_layout_description = $stores[$storeIndex]['layout_description'] ?? '';
+                                
+                                // Ensure current_layout is a string (it might be stored as an object/array)
+                                if (is_array($current_layout) || is_object($current_layout)) {
+                                    require __DIR__ . '/includes/store-helpers.php';
+                                    $current_layout = normalize_aisle_layout($current_layout) ?? '';
+                                }
+                                if (!is_string($current_layout)) {
+                                    $current_layout = '';
+                                }
+                                if (!is_string($current_layout_description)) {
+                                    $current_layout_description = '';
+                                }
+                                
+                                $updated_layout_result = update_aisle_layout_from_photo($current_layout, $photo_analysis, $current_layout_description);
+                                
+                                if (isset($updated_layout_result['error'])) {
+                                    $analysis_error = $updated_layout_result['error'];
+                                } elseif (is_array($updated_layout_result) && isset($updated_layout_result['aisle_layout'])) {
+                                    // Update both aisle_layout and layout_description
+                                    if (is_string($updated_layout_result['aisle_layout']) && !empty($updated_layout_result['aisle_layout'])) {
+                                        $stores[$storeIndex]['aisle_layout'] = $updated_layout_result['aisle_layout'];
+                                        $layout_updated = true;
+                                    }
+                                    if (is_string($updated_layout_result['layout_description']) && !empty($updated_layout_result['layout_description'])) {
+                                        $stores[$storeIndex]['layout_description'] = $updated_layout_result['layout_description'];
+                                    }
+                                } else {
+                                    $analysis_error = "Layout update returned invalid format: " . gettype($updated_layout_result);
+                                }
+                            } else {
+                                if (empty($photo_analysis)) {
+                                    $analysis_error = "Photo analysis returned empty result";
+                                } elseif (!is_array($photo_analysis)) {
+                                    $analysis_error = "Photo analysis returned invalid format: " . gettype($photo_analysis);
+                                } elseif (!isset($photo_analysis['items']) || empty($photo_analysis['items'])) {
+                                    $analysis_error = "No items detected in photo";
+                                }
+                            }
+                        } catch (Exception $e) {
+                            $analysis_error = is_string($e->getMessage()) ? $e->getMessage() : 'Exception: ' . get_class($e);
+                            error_log("Exception analyzing photo: " . $analysis_error);
+                            // Continue with photo upload even if analysis fails
+                        } catch (Throwable $e) {
+                            $analysis_error = is_string($e->getMessage()) ? $e->getMessage() : 'Fatal error: ' . get_class($e);
+                            error_log("Fatal error analyzing photo: " . $analysis_error);
+                            // Continue with photo upload even if analysis fails
+                        }
+                        
+                        // Update store to include photo reference with metadata
+                        if (!isset($stores[$storeIndex]['photos'])) {
+                            $stores[$storeIndex]['photos'] = [];
+                        }
+                        $stores[$storeIndex]['photos'][] = $photo_metadata;
+                        $stores[$storeIndex]['updated'] = date('c');
+                        write_json_file($stores_file, $stores);
+                        
+                        $response_data = [
+                            'success' => true,
+                            'photo' => [
+                                'id' => $photo_id,
+                                'url' => "/api/store-photos/{$store_id}/{$photo_id}",
+                                'date_taken' => $photo_metadata['date_taken'],
+                                'date_added' => $photo_metadata['date_added']
+                            ]
+                        ];
+                        
+                        if ($layout_updated) {
+                            $response_data['layout_updated'] = true;
+                            $response_data['detected_items'] = $photo_analysis['items'] ?? [];
+                            $response_data['aisle'] = $photo_analysis['aisle_number'] ?? null;
+                            $response_data['category'] = $photo_analysis['category'] ?? null;
+                        }
+                        
+              if ($analysis_error) {
+                  $response_data['analysis_error'] = $analysis_error;
+              }
+              
+              json_response($response_data);
+                    } catch (Throwable $e) {
+                        error_log("Fatal error in photo upload: " . $e->getMessage() . " | File: " . $e->getFile() . " | Line: " . $e->getLine() . " | Trace: " . $e->getTraceAsString());
+                        json_response([
+                            'error' => 'Failed to upload photo: ' . $e->getMessage(),
+                            'success' => false
+                        ], 500);
+                    }
                     break;
                     
                 case 'DELETE':
@@ -733,25 +802,142 @@ switch ($resource) {
                 break;
                 
             case 'POST':
-                // Add a new grocery store with AI parsing
+                // Add a new grocery store with step-by-step AI processing
                 require __DIR__ . '/../../config/config.php';
                 require __DIR__ . '/includes/ai-helpers.php';
                 
                 $data = get_request_body();
                 $input = trim($data['name'] ?? '');
+                $step = $data['step'] ?? null; // 'basic', 'layout_description', 'aisle_layout', 'save', or null for all
+                $store_data = $data['store_data'] ?? null; // For step 2, 3, and save, pass previous step data
+                
+                // If step is 'save' and we have complete store_data, skip AI steps and just save
+                if ($step === 'save' && $store_data !== null) {
+                    require __DIR__ . '/includes/store-helpers.php';
+                    
+                    $newStore = [
+                        'id' => 'store-' . bin2hex(random_bytes(8)),
+                        'name' => $store_data['name'],
+                        'city' => $store_data['city'] ?? null,
+                        'state' => $store_data['state'] ?? null,
+                        'phone' => $store_data['phone'] ?? null,
+                        'aisle_layout' => $store_data['aisle_layout'] ?? null,
+                        'layout_description' => $store_data['layout_description'] ?? null,
+                        'created' => date('c')
+                    ];
+                    
+                    $stores = read_json_file($stores_file, []);
+                    $stores[] = $newStore;
+                    write_json_file($stores_file, $stores);
+                    
+                    json_response(['store' => $newStore, 'success' => true]);
+                    break;
+                }
                 
                 if (empty($input)) {
                     json_response(['error' => 'Store information is required'], 400);
                 }
                 
-                $result = create_store_with_ai($input, $stores_file);
+                set_ai_execution_time(600); // 10 minutes for all steps combined
                 
-                if (isset($result['error'])) {
-                    error_log("AI store parsing error: " . $result['error']);
-                    json_response(['error' => 'Failed to parse store information: ' . $result['error']], 500);
+                // Step 1: Parse basic store information
+                if ($step === null || $step === 'basic') {
+                    $basic_info = parse_store_basic_info($input);
+                    
+                    if (isset($basic_info['error'])) {
+                        error_log("AI store basic info error: " . $basic_info['error']);
+                        json_response(['error' => 'Failed to parse store information: ' . $basic_info['error']], 500);
+                    }
+                    
+                    if (!isset($basic_info['name']) || empty($basic_info['name'])) {
+                        json_response(['error' => 'Failed to extract store name from input'], 500);
+                    }
+                    
+                    // If only step 1 requested, return basic info
+                    if ($step === 'basic') {
+                        json_response([
+                            'step' => 'basic',
+                            'store_data' => $basic_info,
+                            'success' => true
+                        ]);
+                        break;
+                    }
+                    
+                    $store_data = $basic_info;
                 }
                 
-                json_response(['store' => $result['store'], 'success' => true]);
+                // Step 2: Generate layout description
+                if ($step === null || $step === 'layout_description') {
+                    if ($store_data === null) {
+                        json_response(['error' => 'Store basic information required'], 400);
+                    }
+                    
+                    $layout_result = generate_layout_description($store_data, $input);
+                    
+                    if (isset($layout_result['error'])) {
+                        error_log("AI layout description error: " . $layout_result['error']);
+                        json_response(['error' => 'Failed to generate layout description: ' . $layout_result['error']], 500);
+                    }
+                    
+                    $store_data['layout_description'] = $layout_result['layout_description'] ?? null;
+                    
+                    // If only step 2 requested, return updated store data
+                    if ($step === 'layout_description') {
+                        json_response([
+                            'step' => 'layout_description',
+                            'store_data' => $store_data,
+                            'success' => true
+                        ]);
+                        break;
+                    }
+                }
+                
+                // Step 3: Generate aisle layout (uses layout_description for consistency)
+                if ($step === null || $step === 'aisle_layout') {
+                    if ($store_data === null) {
+                        json_response(['error' => 'Store basic information required'], 400);
+                    }
+                    
+                    $layout_description = $store_data['layout_description'] ?? '';
+                    $aisle_result = generate_aisle_layout($store_data, $layout_description, $input);
+                    
+                    if (isset($aisle_result['error'])) {
+                        error_log("AI aisle layout error: " . $aisle_result['error']);
+                        json_response(['error' => 'Failed to generate aisle layout: ' . $aisle_result['error']], 500);
+                    }
+                    
+                    $store_data['aisle_layout'] = $aisle_result['aisle_layout'] ?? null;
+                    
+                    // If only step 3 requested, return updated store data
+                    if ($step === 'aisle_layout') {
+                        json_response([
+                            'step' => 'aisle_layout',
+                            'store_data' => $store_data,
+                            'success' => true
+                        ]);
+                        break;
+                    }
+                }
+                
+                // All steps complete - save the store
+                require __DIR__ . '/includes/store-helpers.php';
+                
+                $newStore = [
+                    'id' => 'store-' . bin2hex(random_bytes(8)),
+                    'name' => $store_data['name'],
+                    'city' => $store_data['city'] ?? null,
+                    'state' => $store_data['state'] ?? null,
+                    'phone' => $store_data['phone'] ?? null,
+                    'aisle_layout' => $store_data['aisle_layout'] ?? null,
+                    'layout_description' => $store_data['layout_description'] ?? null,
+                    'created' => date('c')
+                ];
+                
+                $stores = read_json_file($stores_file, []);
+                $stores[] = $newStore;
+                write_json_file($stores_file, $stores);
+                
+                json_response(['store' => $newStore, 'success' => true]);
                 break;
                 
                     case 'PUT':

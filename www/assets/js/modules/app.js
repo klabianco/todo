@@ -7,6 +7,7 @@ import * as storage from './storage.js';
 import * as ui from './ui.js';
 import * as tasks from './tasks.js';
 import * as groceryStores from './grocery-stores.js';
+import { showLoadingOverlay, hideLoadingOverlay } from './overlay-utils.js';
 
 // App state
 let taskNavigationStack = [];
@@ -617,23 +618,7 @@ const disableAllInteractions = () => {
     });
     
     // Add overlay
-    let overlay = document.getElementById('sorting-overlay');
-    if (!overlay) {
-        overlay = document.createElement('div');
-        overlay.id = 'sorting-overlay';
-        overlay.className = 'fixed inset-0 bg-black bg-opacity-30 z-50 flex items-center justify-center';
-        overlay.innerHTML = `
-            <div class="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-xl flex flex-col items-center">
-                <svg class="animate-spin h-8 w-8 text-blue-500 mb-4" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                <p class="text-gray-700 dark:text-gray-200 font-medium">Sorting...</p>
-                <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">Please wait</p>
-            </div>
-        `;
-        document.body.appendChild(overlay);
-    }
+    showLoadingOverlay('Sorting...', 'Please wait');
 };
 
 // Re-enable all interactions after sorting
@@ -680,10 +665,7 @@ const enableAllInteractions = () => {
     });
     
     // Remove overlay
-    const overlay = document.getElementById('sorting-overlay');
-    if (overlay) {
-        overlay.remove();
-    }
+    hideLoadingOverlay();
 };
 
 // Handle AI sort button click
@@ -1073,12 +1055,14 @@ const handleImportFromUrl = async () => {
         return;
     }
     
-    // Disable button and show loading state
+    // Show overlay for AI processing
+    showLoadingOverlay('Fetching URL and extracting items with AI...', 'Please wait');
+    
+    // Disable button and inputs during import
     const originalText = confirmImportUrlButton.innerHTML;
     utils.setButtonLoading(confirmImportUrlButton, 'Importing...');
     confirmImportUrlButton.disabled = true;
     
-    // Disable cancel button and URL input during import
     if (cancelImportButton) {
         cancelImportButton.disabled = true;
     }
@@ -1197,6 +1181,9 @@ const handleImportFromUrl = async () => {
         console.error('Error importing from URL:', error);
         alert('Failed to import from URL: ' + error.message);
     } finally {
+        // Hide overlay
+        hideLoadingOverlay();
+        
         // Restore button state
         utils.restoreButtonState(confirmImportUrlButton, originalText);
         if (confirmImportUrlButton) {

@@ -311,49 +311,71 @@ class AI
         try {
             $apiKey = $_SERVER['OPENAI_API_KEY'];
             
-            $messages = [];
+            // Build input array with conversation history (developer + user messages)
+            $input = [];
             
-            // Add system message if present
+            // Add developer/system message if present
             if ($this->getSystemMessage()) {
-                $messages[] = [
-                    'role' => 'system',
-                    'content' => $this->getSystemMessage()
-                ];
-            }
-            
-            // Build user message with image and text
-            $userContent = [];
-            
-            if ($this->hasImage()) {
-                $userContent[] = [
-                    'type' => 'image_url',
-                    'image_url' => [
-                        'url' => 'data:image/jpeg;base64,' . $this->imageData
+                $input[] = [
+                    'role' => 'developer',
+                    'content' => [
+                        [
+                            'type' => 'input_text',
+                            'text' => $this->getSystemMessage()
+                        ]
                     ]
                 ];
             }
             
-            $userContent[] = [
-                'type' => 'text',
-                'text' => $this->getPrompt()
-            ];
+            // Add user message with image and/or text
+            $userContent = [];
             
-            $messages[] = [
-                'role' => 'user',
-                'content' => $userContent
-            ];
-            
-            $data = [
-                'model' => 'gpt-4o',
-                'messages' => $messages,
-                'max_tokens' => 4096
-            ];
-            
-            if ($this->jsonResponse) {
-                $data['response_format'] = ['type' => 'json_object'];
+            // Add text prompt
+            if ($this->hasPrompt()) {
+                $userContent[] = [
+                    'type' => 'input_text',
+                    'text' => $this->getPrompt()
+                ];
             }
             
-            $ch = curl_init('https://api.openai.com/v1/chat/completions');
+            // Add image if present
+            if ($this->hasImage()) {
+                $userContent[] = [
+                    'type' => 'input_image',
+                    'image_url' => 'data:image/jpeg;base64,' . $this->imageData
+                ];
+            }
+            
+            if (!empty($userContent)) {
+                $input[] = [
+                    'role' => 'user',
+                    'content' => $userContent
+                ];
+            }
+            
+            // Build request data for gpt-5-nano using /v1/responses endpoint
+            $data = [
+                'model' => 'gpt-5-nano',
+                'input' => $input,
+                'text' => [
+                    'format' => [
+                        'type' => $this->jsonResponse ? 'json_object' : 'text'
+                    ],
+                    'verbosity' => 'medium'
+                ],
+                'reasoning' => [
+                    'effort' => 'minimal',
+                    'summary' => 'auto'
+                ],
+                'tools' => [],
+                'store' => true,
+                'include' => [
+                    'reasoning.encrypted_content',
+                    'web_search_call.action.sources'
+                ]
+            ];
+            
+            $ch = curl_init('https://api.openai.com/v1/responses');
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_POST, true);
             curl_setopt($ch, CURLOPT_HTTPHEADER, [
@@ -361,23 +383,84 @@ class AI
                 'Content-Type: application/json'
             ]);
             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-            curl_setopt($ch, CURLOPT_TIMEOUT, 120);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 300); // Longer timeout for responses API
             
             $response = curl_exec($ch);
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlError = curl_error($ch);
             curl_close($ch);
             
             if ($httpCode !== 200) {
-                return "Error: OpenAI API returned status code " . $httpCode;
+                $errorMsg = "Error: OpenAI API returned status code $httpCode";
+                if ($response) {
+                    $errorData = json_decode($response, true);
+                    if (isset($errorData['error']['message'])) {
+                        $errorMsg .= " - " . $errorData['error']['message'];
+                    } else {
+                        $errorMsg .= " - Response: " . substr($response, 0, 500);
+                    }
+                }
+                if ($curlError) {
+                    $errorMsg .= " - cURL Error: " . $curlError;
+                }
+                error_log("OpenAI Vision API Error: $errorMsg");
+                return $errorMsg;
+            }
+            
+            if ($curlError) {
+                error_log("OpenAI Vision API cURL Error: " . $curlError);
+                return "Error: cURL error - " . $curlError;
             }
             
             $result = json_decode($response, true);
             
-            if (isset($result['choices'][0]['message']['content'])) {
-                return $result['choices'][0]['message']['content'];
+            // The /v1/responses endpoint returns an array of response objects
+            // The assistant's message is typically the last item with type "message" and role "assistant"
+            if (is_array($result)) {
+                // Find the assistant message in the array
+                for ($i = count($result) - 1; $i >= 0; $i--) {
+                    $item = $result[$i];
+                    if (isset($item['type']) && $item['type'] === 'message' && 
+                        isset($item['role']) && $item['role'] === 'assistant' && 
+                        isset($item['content']) && is_array($item['content'])) {
+                        // Extract text from content array
+                        foreach ($item['content'] as $contentItem) {
+                            if (isset($contentItem['type']) && $contentItem['type'] === 'output_text' && isset($contentItem['text'])) {
+                                return $contentItem['text'];
+                            }
+                        }
+                    }
+                }
+                // If we got here, we didn't find the text - return error with structure info
+                error_log("Failed to extract text from response array");
             }
             
-            return "Error: No response from OpenAI";
+            // Fallback: check if result is an object with input array (old format)
+            if (isset($result['input']) && is_array($result['input'])) {
+                // Find the last assistant message
+                for ($i = count($result['input']) - 1; $i >= 0; $i--) {
+                    $item = $result['input'][$i];
+                    if (isset($item['role']) && $item['role'] === 'assistant' && isset($item['content'])) {
+                        foreach ($item['content'] as $contentItem) {
+                            if (isset($contentItem['type']) && $contentItem['type'] === 'output_text' && isset($contentItem['text'])) {
+                                return $contentItem['text'];
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Fallback: check for text content in other possible locations
+            if (isset($result['text']) && is_string($result['text'])) {
+                return $result['text'];
+            } elseif (isset($result['text']['content'])) {
+                return $result['text']['content'];
+            } elseif (isset($result['output'])) {
+                return is_string($result['output']) ? $result['output'] : json_encode($result['output']);
+            } else {
+                error_log("OpenAI Vision API - Unexpected response structure");
+                return "Error: No text content in response";
+            }
             
         } catch (\Exception $e) {
             return "Error: " . $e->getMessage();

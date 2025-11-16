@@ -154,7 +154,7 @@ renderThemeToggle();
         import { setupModalCloseHandlers, setupFileInputButton, showModal, hideModal } from '/assets/js/modules/modal-utils.js';
         import { withButtonLoading } from '/assets/js/modules/button-utils.js';
         import { onClick, onCtrlEnter } from '/assets/js/modules/event-utils.js';
-        import { $ } from '/assets/js/modules/utils.js';
+        import { $, escapeHtml, formatStoreLocation } from '/assets/js/modules/utils.js';
         import * as groceryStores from '/assets/js/modules/grocery-stores.js';
         
         let currentStores = [];
@@ -270,6 +270,84 @@ renderThemeToggle();
             }
         };
         
+        // Live store card for real-time updates
+        let liveStoreCardId = null;
+        let liveStoreData = null;
+        
+        // Render live store card that updates in real-time
+        const renderLiveStoreCard = (storeData = {}, step = null) => {
+            const storesList = elements.storesList;
+            if (!storesList) return;
+            
+            // Create temporary store object for rendering
+            const tempStore = {
+                id: liveStoreCardId || 'temp-store-' + Date.now(),
+                name: storeData.name || '',
+                city: storeData.city || null,
+                state: storeData.state || null,
+                phone: storeData.phone || null,
+                aisle_layout: storeData.aisle_layout || null,
+                layout_description: storeData.layout_description || null,
+                created: new Date().toISOString(),
+                photos: []
+            };
+            
+            // Build details with loading indicators
+            const detailParts = [];
+            const location = formatStoreLocation(tempStore.city, tempStore.state);
+            if (location) detailParts.push(location);
+            if (tempStore.phone) detailParts.push(tempStore.phone);
+            
+            // Show status for the next step that needs to run
+            // Determine which step we're currently on based on what data we have
+            let statusText = '';
+            if (!tempStore.name) {
+                // Step 1: Extracting basic info
+                statusText = '📍 Extracting store information...';
+            } else if (!tempStore.layout_description) {
+                // Step 2: Generating layout description
+                statusText = '🗺️ Generating layout description...';
+            } else if (!tempStore.aisle_layout) {
+                // Step 3: Creating item locations
+                statusText = '📋 Creating item locations...';
+            }
+            // If all data is present, no status text (complete)
+            
+            const details = detailParts.join('\n\n');
+            
+            // Create or update the live card
+            let liveCard = document.getElementById(liveStoreCardId);
+            if (!liveCard) {
+                // Create new card at the top of the list
+                liveCard = document.createElement('div');
+                liveCard.id = liveStoreCardId;
+                liveCard.className = 'bg-gray-50 dark:bg-gray-700 rounded-lg p-4 border-2 border-blue-400 dark:border-blue-500 border-dashed hover:shadow-md transition-shadow w-full animate-pulse';
+                storesList.insertBefore(liveCard, storesList.firstChild);
+            }
+            
+            // Update card content
+            liveCard.innerHTML = `
+                <div class="mb-2">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">
+                        ${tempStore.name ? escapeHtml(tempStore.name) : '<span class="text-gray-400">New Store</span>'}
+                        ${statusText ? `<span class="text-sm font-normal text-blue-600 dark:text-blue-400 ml-2">${statusText}</span>` : ''}
+                    </h3>
+                    ${details ? `<div class="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap mt-2">${escapeHtml(details)}</div>` : ''}
+                    ${tempStore.layout_description ? `<div class="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap mt-2 italic">${escapeHtml(tempStore.layout_description)}</div>` : ''}
+                </div>
+                <div class="mt-3 text-xs text-gray-500 dark:text-gray-500">
+                    ${tempStore.aisle_layout ? '✓ Complete' : statusText ? 'Processing...' : ''}
+                </div>
+            `;
+            
+            // Remove pulse animation once we have basic info
+            if (tempStore.name && step !== 'basic' && liveCard.classList.contains('animate-pulse')) {
+                liveCard.classList.remove('animate-pulse');
+                liveCard.classList.remove('border-dashed');
+                liveCard.classList.add('border-solid');
+            }
+        };
+        
         // Add store functionality
         const handleAddStore = async () => {
             if (!elements.newStoreInput || !elements.addStoreButton) return;
@@ -277,15 +355,59 @@ renderThemeToggle();
             const storeText = elements.newStoreInput.value.trim();
             if (!storeText) return;
             
-            // Disable button and show loading state
-            await withButtonLoading(elements.addStoreButton, 'Processing...', async () => {
-                await groceryStores.addGroceryStore(storeText);
-                elements.newStoreInput.value = '';
+            // Disable button and input
+            elements.addStoreButton.disabled = true;
+            elements.newStoreInput.disabled = true;
+            
+            // Generate unique ID for live card
+            liveStoreCardId = 'live-store-' + Date.now();
+            liveStoreData = {};
+            
+            // Clear input but keep it visible
+            const originalInputValue = elements.newStoreInput.value;
+            elements.newStoreInput.value = '';
+            
+            // Ensure stores list is visible
+            if (elements.storesContainer) {
+                elements.storesContainer.classList.remove('hidden');
+            }
+            if (elements.emptyState) {
+                elements.emptyState.classList.add('hidden');
+            }
+            
+            // Show blank card immediately with "basic" step status
+            renderLiveStoreCard({}, 'basic');
+            
+            try {
+                await groceryStores.addGroceryStore(storeText, (step, storeData) => {
+                    liveStoreData = storeData;
+                    renderLiveStoreCard(storeData, step);
+                });
+                
+                // Remove live card and reload stores to show final version
+                const liveCard = document.getElementById(liveStoreCardId);
+                if (liveCard) {
+                    liveCard.remove();
+                }
+                
                 await loadStores();
-            }).catch(error => {
+            } catch (error) {
                 console.error('Error adding store:', error);
+                
+                // Remove live card on error
+                const liveCard = document.getElementById(liveStoreCardId);
+                if (liveCard) {
+                    liveCard.remove();
+                }
+                
                 alert(`Failed to add store: ${error.message}`);
-            });
+            } finally {
+                // Re-enable button and input
+                elements.addStoreButton.disabled = false;
+                elements.newStoreInput.disabled = false;
+                liveStoreCardId = null;
+                liveStoreData = null;
+            }
         };
         
         // Setup event handlers

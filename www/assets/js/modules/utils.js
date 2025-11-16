@@ -128,14 +128,31 @@ export const setButtonLoading = (button, loadingText = 'Loading...') => {
 export const apiFetch = async (url, options = {}) => {
     const separator = url.includes('?') ? '&' : '?';
     const cacheBustUrl = `${url}${separator}t=${Date.now()}`;
-    return fetch(cacheBustUrl, {
-        ...options,
-        headers: {
-            'Accept': 'application/json',
-            ...options.headers
-        },
-        cache: 'no-store'
-    });
+    
+    // Default timeout: 10 minutes (600 seconds) for long-running AI operations
+    const timeout = options.timeout || 600000;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    
+    try {
+        const response = await fetch(cacheBustUrl, {
+            ...options,
+            signal: controller.signal,
+            headers: {
+                'Accept': 'application/json',
+                ...options.headers
+            },
+            cache: 'no-store'
+        });
+        clearTimeout(timeoutId);
+        return response;
+    } catch (error) {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') {
+            throw new Error('Request timed out. Please try again.');
+        }
+        throw error;
+    }
 };
 
 // Helper to filter tasks by completion and parent status
@@ -196,4 +213,23 @@ export const getCurrentViewContext = (allTasks, currentFocusedTaskId, findTaskBy
         parentId: null,
         tasks: filterTasks(allTasks, { parentId: false })
     };
+};
+
+// Format store location string from city and state
+export const formatStoreLocation = (city, state) => {
+    const location = [city, state].filter(Boolean).join(', ');
+    return location || null;
+};
+
+// Truncate text intelligently at sentence or word boundaries
+export const truncateText = (text, maxLength = 200) => {
+    if (!text || text.length <= maxLength) {
+        return text;
+    }
+    
+    const truncated = text.substring(0, maxLength);
+    const lastPeriod = truncated.lastIndexOf('.');
+    const lastSpace = truncated.lastIndexOf(' ');
+    const cutPoint = lastPeriod > maxLength * 0.7 ? lastPeriod + 1 : lastSpace;
+    return truncated.substring(0, cutPoint) + '...';
 };

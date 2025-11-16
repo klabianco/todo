@@ -2,8 +2,7 @@
  * Stores page functionality
  * Shared utilities for displaying stores
  */
-import { escapeHtml, apiFetch } from './utils.js';
-import { normalizeAisleLayout, getAisleLayoutPreview } from './store-utils.js';
+import { escapeHtml, apiFetch, formatStoreLocation, truncateText } from './utils.js';
 
 // Load stores from API
 export const loadStoresFromAPI = async () => {
@@ -25,18 +24,11 @@ const parseStoreData = (store) => {
     
     // Build details from structured fields
     const detailParts = [];
-    if (store.city || store.state) {
-        const location = [store.city, store.state].filter(Boolean).join(', ');
-        if (location) detailParts.push(location);
-    }
-    if (store.phone) {
-        detailParts.push(store.phone);
-    }
-    if (store.aisle_layout) {
-        const { preview, hasMore } = getAisleLayoutPreview(store.aisle_layout, 3);
-        if (preview) {
-            detailParts.push(`Store Layout:\n${preview}${hasMore ? '...' : ''}`);
-        }
+    const location = formatStoreLocation(store.city, store.state);
+    if (location) detailParts.push(location);
+    if (store.phone) detailParts.push(store.phone);
+    if (store.layout_description) {
+        detailParts.push(truncateText(store.layout_description.trim(), 200));
     }
     
     // If no structured data, fall back to old format

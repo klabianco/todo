@@ -22,16 +22,29 @@ export const normalizeAisleLayout = (aisleLayout) => {
     return '';
 };
 
-// Get preview of aisle layout (first N lines)
-export const getAisleLayoutPreview = (aisleLayout, maxLines = 3) => {
+// Get preview of aisle layout (first N aisles)
+export const getAisleLayoutPreview = (aisleLayout, maxAisles = 3) => {
+    // Handle array format (new format)
+    if (Array.isArray(aisleLayout) && aisleLayout.length > 0) {
+        const previewAisles = aisleLayout.slice(0, maxAisles);
+        const preview = previewAisles.map(aisle => {
+            const items = Array.isArray(aisle.items) ? aisle.items.slice(0, 3).join(', ') : '';
+            const moreItems = Array.isArray(aisle.items) && aisle.items.length > 3 ? '...' : '';
+            return `${aisle.aisle_number || 'Unknown'}: ${items}${moreItems}`;
+        }).join('\n');
+        const hasMore = aisleLayout.length > maxAisles;
+        return { preview, hasMore, fullText: '' };
+    }
+    
+    // Handle legacy string format
     const layoutText = normalizeAisleLayout(aisleLayout);
     if (!layoutText) {
-        return '';
+        return { preview: '', hasMore: false, fullText: '' };
     }
     
     const lines = layoutText.split('\n');
-    const preview = lines.slice(0, maxLines).join('\n');
-    const hasMore = lines.length > maxLines;
+    const preview = lines.slice(0, maxAisles).join('\n');
+    const hasMore = lines.length > maxAisles;
     
     return { preview, hasMore, fullText: layoutText };
 };

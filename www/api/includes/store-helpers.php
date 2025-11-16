@@ -4,6 +4,7 @@
  */
 
 // Convert aisle_layout from object/array to string format (for backward compatibility)
+if (!function_exists('normalize_aisle_layout')) {
 function normalize_aisle_layout($aisle_layout) {
     if (empty($aisle_layout)) {
         return null;
@@ -24,4 +25,4 @@ function normalize_aisle_layout($aisle_layout) {
     
     return null;
 }
-
+}
