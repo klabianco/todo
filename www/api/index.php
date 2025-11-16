@@ -1,11 +1,16 @@
 <?php
-// Set headers for JSON API
+// Set headers for JSON API (can be overridden for file serving)
+$is_file_request = false;
+if (!isset($_GET['is_file'])) {
 header('Content-Type: application/json');
+}
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 // Prevent caching so clients always fetch the latest list data
+if (!isset($_GET['is_file'])) {
 header('Cache-Control: no-store');
+}
 
 // Handle OPTIONS request for CORS preflight
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -40,6 +45,7 @@ if ($api_pos === false) {
 $api_parts = array_slice($uri_parts, $api_pos + 1);
 $resource = isset($api_parts[0]) ? $api_parts[0] : null;
 $id = isset($api_parts[1]) ? $api_parts[1] : null;
+$sub_id = isset($api_parts[2]) ? $api_parts[2] : null; // For nested resources like store-photos/{store_id}/{photo_id}
 
 // Ensure data directory exists
 $data_dir = __DIR__ . '/data';
@@ -62,6 +68,16 @@ function get_task_file_path($share_id) {
 function get_stores_list_file_path($share_id) {
     global $data_dir;
     return $data_dir . '/stores-' . $share_id . '.json';
+}
+
+// Get the path to store photos directory
+function get_store_photos_dir($store_id) {
+    global $data_dir;
+    $photos_dir = $data_dir . '/store-photos/' . $store_id;
+    if (!file_exists($photos_dir)) {
+        mkdir($photos_dir, 0755, true);
+    }
+    return $photos_dir;
 }
 
 // Helper function to read JSON file
@@ -252,9 +268,9 @@ switch ($resource) {
                 if (!$id) {
                     json_response(['error' => 'Share ID is required'], 400);
                 }
-                $file_path = get_task_file_path($id);
-                if (file_exists($file_path)) {
-                    echo file_get_contents($file_path);
+                    $file_path = get_task_file_path($id);
+                    if (file_exists($file_path)) {
+                        echo file_get_contents($file_path);
                 } else {
                     json_response(['error' => 'Task list not found'], 404);
                 }
@@ -264,7 +280,7 @@ switch ($resource) {
                 if (!$id) {
                     json_response(['error' => 'Share ID is required'], 400);
                 }
-                $file_path = get_task_file_path($id);
+                    $file_path = get_task_file_path($id);
                 if (!file_exists($file_path)) {
                     json_response(['error' => 'Task list not found'], 404);
                 }
@@ -275,10 +291,10 @@ switch ($resource) {
                 if (isset($data['focusId'])) {
                     $list_data['focusId'] = $data['focusId'];
                 }
-                // Always update the lastModified timestamp with current server time
-                // This ensures changes are detected by viewers polling for updates
-                $list_data['lastModified'] = date('c');
-                
+                        // Always update the lastModified timestamp with current server time
+                        // This ensures changes are detected by viewers polling for updates
+                        $list_data['lastModified'] = date('c');
+                        
                 write_json_file($file_path, $list_data);
                 json_response(['success' => true]);
                 break;
@@ -287,20 +303,20 @@ switch ($resource) {
                 if (!$id) {
                     json_response(['error' => 'Share ID is required'], 400);
                 }
-                $file_path = get_task_file_path($id);
+                    $file_path = get_task_file_path($id);
                 if (!file_exists($file_path)) {
                     json_response(['error' => 'Task list not found'], 404);
                 }
                 
                 // Remove from all user subscriptions
-                $users_dir = $data_dir . '/users';
-                if (file_exists($users_dir)) {
+                        $users_dir = $data_dir . '/users';
+                        if (file_exists($users_dir)) {
                     foreach (glob($users_dir . '/*', GLOB_ONLYDIR) as $user_dir) {
-                        $subscribed_path = $user_dir . '/subscribed.json';
+                                $subscribed_path = $user_dir . '/subscribed.json';
                         $subscribed_data = read_json_file($subscribed_path, []);
                         if (is_array($subscribed_data) && !empty($subscribed_data)) {
                             $updated_lists = array_values(array_filter($subscribed_data, function($item) use ($id) {
-                                return !isset($item['id']) || $item['id'] !== $id;
+                                            return !isset($item['id']) || $item['id'] !== $id;
                             }));
                             write_json_file($subscribed_path, $updated_lists);
                         }
@@ -572,28 +588,155 @@ switch ($resource) {
         break;
 
     case 'grocery-stores':
+    case 'store-photos':
         // Grocery stores endpoint - shared across all users
         $stores_file = $data_dir . '/grocery-stores.json';
         
         // Helper function to find store index by ID
-        function find_store_index($stores, $id) {
-            foreach ($stores as $index => $store) {
-                if ($store['id'] === $id) {
-                    return $index;
+        if (!function_exists('find_store_index')) {
+            function find_store_index($stores, $id) {
+                foreach ($stores as $index => $store) {
+                    if ($store['id'] === $id) {
+                        return $index;
+                    }
                 }
+                return null;
             }
-            return null;
         }
         
         // Helper function to validate store name
-        function validate_store_name($name) {
-            $name = trim($name ?? '');
-            if (empty($name)) {
-                json_response(['error' => 'Store name is required'], 400);
+        if (!function_exists('validate_store_name')) {
+            function validate_store_name($name) {
+                $name = trim($name ?? '');
+                if (empty($name)) {
+                    json_response(['error' => 'Store name is required'], 400);
+                }
+                return $name;
             }
-            return $name;
         }
         
+        // Handle store-photos case
+        if ($resource === 'store-photos') {
+            $store_id = $id;
+            $photo_id = $sub_id;
+            
+            if (!$store_id && $_SERVER['REQUEST_METHOD'] !== 'GET') {
+                json_response(['error' => 'Store ID is required'], 400);
+            }
+            
+            // Verify store exists (except for GET requests which serve files)
+            if ($_SERVER['REQUEST_METHOD'] !== 'GET' || $photo_id) {
+                $stores = read_json_file($stores_file, []);
+                $storeIndex = find_store_index($stores, $store_id);
+                if ($storeIndex === null) {
+                    json_response(['error' => 'Store not found'], 404);
+                }
+            }
+            
+            switch ($_SERVER['REQUEST_METHOD']) {
+                case 'GET':
+                    // Serve photo file
+                    if (!$store_id || !$photo_id) {
+                        http_response_code(400);
+                        header('Content-Type: application/json');
+                        echo json_encode(['error' => 'Store ID and Photo ID are required']);
+                        exit;
+                    }
+                    
+                    $photos_dir = get_store_photos_dir($store_id);
+                    $photo_path = $photos_dir . '/' . $photo_id;
+                    
+                    if (!file_exists($photo_path)) {
+                        http_response_code(404);
+                        exit;
+                    }
+                    
+                    // Override JSON headers for file serving
+                    header_remove('Content-Type');
+                    header_remove('Cache-Control');
+                    $mime_type = mime_content_type($photo_path);
+                    header('Content-Type: ' . $mime_type);
+                    header('Cache-Control: public, max-age=31536000'); // Cache for 1 year
+                    readfile($photo_path);
+                    exit;
+                    
+                case 'POST':
+                    // Upload a photo for a store
+                    if (!isset($_FILES['photo']) || $_FILES['photo']['error'] !== UPLOAD_ERR_OK) {
+                        json_response(['error' => 'No photo uploaded or upload error'], 400);
+                    }
+                    
+                    $file = $_FILES['photo'];
+                    $allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+                    $max_size = 5 * 1024 * 1024; // 5MB
+                    
+                    if (!in_array($file['type'], $allowed_types)) {
+                        json_response(['error' => 'Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed.'], 400);
+                    }
+                    
+                    if ($file['size'] > $max_size) {
+                        json_response(['error' => 'File too large. Maximum size is 5MB.'], 400);
+                    }
+                    
+                    $photos_dir = get_store_photos_dir($store_id);
+                    $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
+                    $photo_id = 'photo-' . bin2hex(random_bytes(8)) . '.' . $extension;
+                    $photo_path = $photos_dir . '/' . $photo_id;
+                    
+                    if (!move_uploaded_file($file['tmp_name'], $photo_path)) {
+                        json_response(['error' => 'Failed to save photo'], 500);
+                    }
+                    
+                    // Update store to include photo reference
+                    if (!isset($stores[$storeIndex]['photos'])) {
+                        $stores[$storeIndex]['photos'] = [];
+                    }
+                    $stores[$storeIndex]['photos'][] = $photo_id;
+                    $stores[$storeIndex]['updated'] = date('c');
+                    write_json_file($stores_file, $stores);
+                    
+                    json_response([
+                        'success' => true,
+                        'photo' => [
+                            'id' => $photo_id,
+                            'url' => "/api/store-photos/{$store_id}/{$photo_id}"
+                        ]
+                    ]);
+                    break;
+                    
+                case 'DELETE':
+                    // Delete a photo
+                    if (!$photo_id) {
+                        json_response(['error' => 'Photo ID is required'], 400);
+                    }
+                    
+                    $photos_dir = get_store_photos_dir($store_id);
+                    $photo_path = $photos_dir . '/' . $photo_id;
+                    
+                    if (file_exists($photo_path)) {
+                        unlink($photo_path);
+                    }
+                    
+                    // Remove photo reference from store
+                    if (isset($stores[$storeIndex]['photos'])) {
+                        $stores[$storeIndex]['photos'] = array_values(array_filter(
+                            $stores[$storeIndex]['photos'],
+                            fn($p) => $p !== $photo_id
+                        ));
+                        $stores[$storeIndex]['updated'] = date('c');
+                        write_json_file($stores_file, $stores);
+                    }
+                    
+                    json_response(['success' => true]);
+                    break;
+                    
+                default:
+                    json_response(['error' => 'Method not allowed'], 405);
+            }
+            break; // Exit early for store-photos
+        }
+        
+        // Continue with grocery-stores case
         switch ($_SERVER['REQUEST_METHOD']) {
             case 'GET':
                 // Get all grocery stores

@@ -29,6 +29,7 @@ const parseStoreData = (store) => {
 // Render a single store card
 export const renderStoreCard = (store, escapeHtmlFn = escapeHtml) => {
     const { name, details, createdDate } = parseStoreData(store);
+    const photos = store.photos || [];
     
     return `
         <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 border border-gray-200 dark:border-gray-600 hover:shadow-md transition-shadow w-full">
@@ -36,8 +37,50 @@ export const renderStoreCard = (store, escapeHtmlFn = escapeHtml) => {
                 <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">${escapeHtmlFn(name)}</h3>
                 ${details ? `<div class="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap mt-2">${escapeHtmlFn(details)}</div>` : ''}
             </div>
-            <div class="text-xs text-gray-500 dark:text-gray-500 mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
-                Added: ${createdDate}
+            
+            ${photos.length > 0 ? `
+                <div class="mt-3 grid grid-cols-3 gap-2">
+                    ${photos.map(photoId => `
+                        <div class="relative group">
+                            <img 
+                                src="/api/store-photos/${store.id}/${photoId}" 
+                                alt="Store photo" 
+                                class="w-full h-24 object-cover rounded-md"
+                                loading="lazy"
+                            />
+                            <button 
+                                class="delete-photo-btn absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                data-store-id="${store.id}"
+                                data-photo-id="${photoId}"
+                                title="Delete photo"
+                            >
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    `).join('')}
+                </div>
+            ` : ''}
+            
+            <div class="mt-3 flex items-center justify-between">
+                <div class="text-xs text-gray-500 dark:text-gray-500">
+                    Added: ${createdDate}
+                </div>
+                <label class="cursor-pointer">
+                    <input 
+                        type="file" 
+                        accept="image/*" 
+                        class="hidden store-photo-input" 
+                        data-store-id="${store.id}"
+                    />
+                    <span class="text-xs bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded-md inline-flex items-center">
+                        <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                        Add Photo
+                    </span>
+                </label>
             </div>
         </div>
     `;
