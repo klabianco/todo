@@ -1,28 +1,13 @@
 <?php
 require __DIR__ . '/../config/config.php';
+require __DIR__ . '/includes/head.php';
+require __DIR__ . '/includes/footer.php';
+require __DIR__ . '/includes/theme-toggle.php';
+require __DIR__ . '/includes/container.php';
+
+renderHead('Todo', ['sortablejs', 'jspdf', 'xlsx'], true);
+renderContainerStart();
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
-    <title>Todo</title>
-    <!-- Tailwind CSS (production version) -->
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-    <!-- SortableJS for drag and drop functionality - use minified version from CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
-    <!-- jsPDF for PDF generation -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <!-- SheetJS for Excel generation -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <!-- Minimal styles without animations -->
-    <link rel="stylesheet" href="/assets/css/todo.css">
-</head>
-<body class="bg-gray-50 text-gray-800 min-h-screen dark:bg-gray-900 dark:text-gray-200">
-    <div class="container mx-auto px-4 py-6 max-w-lg">
         <header class="text-center mb-6">
             <h1 class="text-3xl font-bold text-gray-700 dark:text-gray-200">Todo</h1>
             <div class="mt-3 flex flex-col gap-2">
@@ -55,12 +40,7 @@ require __DIR__ . '/../config/config.php';
                     </button>
                 </div>
                 <input type="file" id="import-file-input" accept=".json" class="hidden">
-                <button id="theme-toggle" class="p-1 rounded-full opacity-40 hover:opacity-80 transition-opacity absolute top-4 right-4" title="Toggle dark/light mode" aria-label="Toggle dark/light mode">
-                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                        <path class="sun-icon" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" fill-rule="evenodd" clip-rule="evenodd"></path>
-                        <path class="moon-icon" d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path>
-                    </svg>
-                </button>
+                <?php renderThemeToggle(); ?>
                 <div id="share-url-container" class="hidden mt-2 bg-gray-100 p-2 rounded-md max-w-md mx-auto dark:bg-gray-800">
                     <div class="flex items-center">
                         <input id="share-url" type="text" readonly class="bg-white px-2 py-1 rounded text-sm flex-grow mr-2 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200" />
@@ -319,7 +299,10 @@ require __DIR__ . '/../config/config.php';
             </div>
         </div>
         
-    </div>
+    <?php renderContainerEnd(); ?>
+    
+    <?php renderFooter(); ?>
+    
     <script>
         function loadMain(version) {
             const script = document.createElement('script');

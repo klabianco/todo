@@ -58,6 +58,12 @@ function get_task_file_path($share_id) {
     return $data_dir . '/' . $share_id . '.json';
 }
 
+// Get the path to a stores list file
+function get_stores_list_file_path($share_id) {
+    global $data_dir;
+    return $data_dir . '/stores-' . $share_id . '.json';
+}
+
 // Helper function to read JSON file
 function read_json_file($path, $default = []) {
     return file_exists($path) ? json_decode(file_get_contents($path), true) : $default;
@@ -648,6 +654,73 @@ switch ($resource) {
                 
                 unset($stores[$storeIndex]);
                 write_json_file($stores_file, array_values($stores));
+                json_response(['success' => true]);
+                break;
+                
+            default:
+                json_response(['error' => 'Method not allowed'], 405);
+        }
+        break;
+        
+    case 'stores-lists':
+        // Share stores lists (similar to task lists)
+        switch ($_SERVER['REQUEST_METHOD']) {
+            case 'POST':
+                // Create a new shared stores list
+                $data = get_request_body();
+                $share_id = generate_share_id();
+                
+                $list_data = [
+                    'id' => $share_id,
+                    'stores' => $data['stores'] ?? [],
+                    'created' => date('c'),
+                    'lastModified' => date('c')
+                ];
+                
+                write_json_file(get_stores_list_file_path($share_id), $list_data);
+                json_response(['shareId' => $share_id]);
+                break;
+                
+            case 'GET':
+                if (!$id) {
+                    json_response(['error' => 'Share ID is required'], 400);
+                }
+                $file_path = get_stores_list_file_path($id);
+                if (file_exists($file_path)) {
+                    echo file_get_contents($file_path);
+                } else {
+                    json_response(['error' => 'Stores list not found'], 404);
+                }
+                break;
+                
+            case 'PUT':
+                if (!$id) {
+                    json_response(['error' => 'Share ID is required'], 400);
+                }
+                $file_path = get_stores_list_file_path($id);
+                if (!file_exists($file_path)) {
+                    json_response(['error' => 'Stores list not found'], 404);
+                }
+                
+                $data = get_request_body();
+                $list_data = read_json_file($file_path);
+                $list_data['stores'] = $data['stores'] ?? [];
+                $list_data['lastModified'] = date('c');
+                
+                write_json_file($file_path, $list_data);
+                json_response(['success' => true]);
+                break;
+                
+            case 'DELETE':
+                if (!$id) {
+                    json_response(['error' => 'Share ID is required'], 400);
+                }
+                $file_path = get_stores_list_file_path($id);
+                if (!file_exists($file_path)) {
+                    json_response(['error' => 'Stores list not found'], 404);
+                }
+                
+                unlink($file_path);
                 json_response(['success' => true]);
                 break;
                 

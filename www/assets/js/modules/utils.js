@@ -150,6 +150,13 @@ export const filterTasks = (tasks, options = {}) => {
     });
 };
 
+// Helper to escape HTML
+export const escapeHtml = (text) => {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+};
+
 // Helper to get current view context (whether viewing subtasks or top-level)
 export const getCurrentViewContext = (allTasks, currentFocusedTaskId, findTaskById) => {
     if (currentFocusedTaskId) {

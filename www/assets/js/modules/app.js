@@ -959,12 +959,8 @@ const handleAISortClick = async () => {
     }
 };
 
-// Helper function to escape HTML
-const escapeHtml = (text) => {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-};
+// Import escapeHtml from utils
+const escapeHtml = utils.escapeHtml;
 
 // Handle Export button click
 const handleExportClick = () => {

@@ -3,13 +3,14 @@
  * Handles storage and retrieval of grocery stores and selected store
  * Stores are shared across all users via server API
  */
+import { apiFetch } from './utils.js';
 
 const SELECTED_STORE_STORAGE_KEY = 'todo_selected_grocery_store';
 
 // Helper function for API calls with error handling
 const apiCall = async (url, options = {}) => {
     try {
-        const response = await fetch(url, {
+        const response = await apiFetch(url, {
             ...options,
             headers: {
                 'Content-Type': 'application/json',
@@ -32,9 +33,7 @@ const apiCall = async (url, options = {}) => {
 // Load grocery stores from server
 export const loadGroceryStores = async () => {
     try {
-        const data = await apiCall(`/api/grocery-stores?t=${Date.now()}`, { 
-            cache: 'no-store' 
-        });
+        const data = await apiCall('/api/grocery-stores');
         return data.stores || [];
     } catch (error) {
         // Return empty array if fetch fails

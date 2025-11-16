@@ -1,0 +1,41 @@
+<?php
+/**
+ * Shared HTML head section
+ * @param string $title Page title
+ * @param array $extraScripts Additional script tags to include
+ * @param bool $includeThemeScript Whether to include theme initialization script
+ */
+function renderHead($title = 'Todo', $extraScripts = [], $includeThemeScript = false) {
+    $defaultScripts = [
+        'sortablejs' => '<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>',
+        'jspdf' => '<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>',
+        'xlsx' => '<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>'
+    ];
+    
+    $scriptsToInclude = array_intersect_key($defaultScripts, array_flip($extraScripts));
+    ?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title><?php echo htmlspecialchars($title); ?></title>
+    <!-- Tailwind CSS (production version) -->
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <?php foreach ($scriptsToInclude as $script): ?>
+    <?php echo $script . "\n    "; ?>
+    <?php endforeach; ?>
+    <!-- Minimal styles without animations -->
+    <link rel="stylesheet" href="/assets/css/todo.css">
+    <?php if ($includeThemeScript): ?>
+    <script type="module" src="/assets/js/includes/theme-init.js"></script>
+    <?php endif; ?>
+</head>
+<body class="bg-gray-50 text-gray-800 min-h-screen dark:bg-gray-900 dark:text-gray-200">
+<?php
+}
+?>
+
