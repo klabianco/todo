@@ -109,18 +109,22 @@ require __DIR__ . '/../config/config.php';
             <div id="tasks-container">
                 <!-- Active tasks -->
                 <div class="flex justify-between items-center mb-4">
-                    <div class="flex gap-2">
+                    <div class="flex gap-2 items-center flex-wrap">
+                        <div class="flex items-center gap-2">
+                            <select id="grocery-store-select" class="text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-200 px-3 py-1 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="">No Store</option>
+                            </select>
+                            <button id="manage-stores-button" class="text-xs bg-gray-500 hover:bg-gray-600 text-white px-2 py-1 rounded-md flex items-center" title="Manage grocery stores">
+                                <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path>
+                                </svg>
+                            </button>
+                        </div>
                         <button id="ai-sort-button" class="text-xs bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-md flex items-center" title="Sort list order by grocery store layout (AI-powered)">
                             <svg class="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4"></path>
                             </svg>
                             Sort
-                        </button>
-                        <button id="get-recipe-button" class="text-xs bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded-md flex items-center" title="Generate a recipe based on your ingredients (AI-powered)">
-                            <svg class="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
-                            </svg>
-                            Get Recipe
                         </button>
                     </div>
                     <span id="task-count" class="text-sm text-gray-500 dark:text-gray-400">0 tasks</span>
@@ -134,29 +138,6 @@ require __DIR__ . '/../config/config.php';
                 <div id="empty-state" class="text-center py-6">
                     <p class="text-gray-500 dark:text-gray-400">Your list is empty</p>
                     <p class="text-sm text-gray-400 dark:text-gray-500 mt-1">Add a task to get started</p>
-                </div>
-                
-                <!-- Recipe Modal -->
-                <div id="recipe-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-3xl w-full flex flex-col" style="max-height: 90vh;">
-                        <div class="flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-between items-center">
-                            <h2 id="recipe-modal-title" class="text-2xl font-bold text-gray-800 dark:text-gray-200">Recipe</h2>
-                            <button id="close-recipe-modal" class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 px-4 py-2 rounded-md font-medium transition-colors">
-                                Close
-                            </button>
-                        </div>
-                        <div id="recipe-content" class="flex-1 overflow-y-auto p-6" style="overflow-y: auto; overflow-x: hidden;">
-                            <!-- Recipe will be displayed here -->
-                        </div>
-                        <div id="recipe-footer" class="hidden flex-shrink-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-end gap-3">
-                            <button id="get-next-recipe-button" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-md font-medium transition-colors flex items-center">
-                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                                </svg>
-                                Next Recipe
-                            </button>
-                        </div>
-                    </div>
                 </div>
                 
                 <!-- Export Modal -->
@@ -270,6 +251,45 @@ require __DIR__ . '/../config/config.php';
                             </button>
                             <button id="confirm-import-url" class="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-md">
                                 Import from URL
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Grocery Stores Management Modal -->
+                <div id="grocery-stores-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full">
+                        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                            <h2 class="text-xl font-bold text-gray-800 dark:text-gray-200">Manage Grocery Stores</h2>
+                        </div>
+                        <div class="p-6">
+                            <!-- Add new store form -->
+                            <div class="mb-6">
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Add New Store</label>
+                                <div class="flex flex-col gap-2">
+                                    <textarea 
+                                        id="new-store-input" 
+                                        placeholder="Store name and address..." 
+                                        rows="3"
+                                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                                    ></textarea>
+                                    <button id="add-store-button" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md self-end">
+                                        Add
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Stores list -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Your Stores</label>
+                                <div id="stores-list" class="space-y-2 max-h-64 overflow-y-auto">
+                                    <!-- Stores will be inserted here -->
+                                </div>
+                            </div>
+                        </div>
+                        <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+                            <button id="close-stores-modal" class="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-md">
+                                Close
                             </button>
                         </div>
                     </div>

@@ -6,6 +6,7 @@ import * as utils from './utils.js';
 import * as storage from './storage.js';
 import * as ui from './ui.js';
 import * as tasks from './tasks.js';
+import * as groceryStores from './grocery-stores.js';
 
 // App state
 let taskNavigationStack = [];
@@ -27,6 +28,237 @@ const handleDeleteTask = async (id) => {
 const handleToggleSticky = async (id) => {
     await tasks.toggleTaskSticky(id);
     await renderTasks();
+};
+
+// Initialize grocery store dropdown
+const initializeGroceryStoreDropdown = async () => {
+    const select = document.getElementById('grocery-store-select');
+    if (!select) return;
+    
+    // Load stores and populate dropdown
+    const stores = await groceryStores.loadGroceryStores();
+    const selectedStore = groceryStores.getSelectedGroceryStore();
+    
+    // Clear existing options except "No Store"
+    select.innerHTML = '<option value="">No Store</option>';
+    
+    // Add stores to dropdown
+    stores.forEach(store => {
+        const option = document.createElement('option');
+        option.value = store.id;
+        // Show first line (name) in dropdown, or full text if single line
+        const displayName = store.name.split('\n')[0];
+        option.textContent = displayName;
+        if (selectedStore && selectedStore.id === store.id) {
+            option.selected = true;
+        }
+        select.appendChild(option);
+    });
+    
+    // Handle selection change
+    select.addEventListener('change', async (e) => {
+        const storeId = e.target.value;
+        if (storeId) {
+            const store = await groceryStores.getGroceryStoreById(storeId);
+            if (store) {
+                groceryStores.setSelectedGroceryStore(store);
+            }
+        } else {
+            groceryStores.setSelectedGroceryStore(null);
+        }
+    });
+};
+
+// Setup grocery store management modal
+const setupGroceryStoreManagement = () => {
+    const manageButton = document.getElementById('manage-stores-button');
+    const modal = document.getElementById('grocery-stores-modal');
+    const closeButton = document.getElementById('close-stores-modal');
+    const addButton = document.getElementById('add-store-button');
+    const newStoreInput = document.getElementById('new-store-input');
+    const storesList = document.getElementById('stores-list');
+    
+    if (!manageButton || !modal) return;
+    
+    // Track which store is being edited
+    let editingStoreId = null;
+    
+    // Helper to refresh both list and dropdown
+    const refreshStores = async () => {
+        await renderStoresList();
+        await initializeGroceryStoreDropdown();
+    };
+    
+    // Helper to handle errors consistently
+    const handleError = (error, action) => {
+        alert(`Failed to ${action} store: ${error.message}`);
+    };
+    
+    // Helper to create a button element
+    const createButton = (text, className, onClick) => {
+        const button = document.createElement('button');
+        button.textContent = text;
+        button.className = className;
+        button.addEventListener('click', onClick);
+        return button;
+    };
+    
+    // Helper to create edit mode UI
+    const createEditMode = (store) => {
+        const editTextarea = document.createElement('textarea');
+        editTextarea.value = store.name;
+        editTextarea.rows = 3;
+        editTextarea.className = 'flex-1 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 mr-2 resize-none';
+        editTextarea.focus();
+        
+        const handleSave = async () => {
+            const newText = editTextarea.value.trim();
+            if (newText && newText !== store.name) {
+                try {
+                    await groceryStores.updateGroceryStore(store.id, newText);
+                    editingStoreId = null;
+                    await refreshStores();
+                } catch (error) {
+                    handleError(error, 'update');
+                }
+            } else {
+                editingStoreId = null;
+                await renderStoresList();
+            }
+        };
+        
+        const handleCancel = async () => {
+            editingStoreId = null;
+            await renderStoresList();
+        };
+        
+        editTextarea.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                handleSave();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                handleCancel();
+            }
+        });
+        
+        return {
+            textarea: editTextarea,
+            saveButton: createButton('Save', 'px-3 py-1 bg-green-500 hover:bg-green-600 text-white rounded text-xs mr-1', handleSave),
+            cancelButton: createButton('Cancel', 'px-3 py-1 bg-gray-400 hover:bg-gray-500 text-white rounded text-xs', handleCancel)
+        };
+    };
+    
+    // Helper to create view mode UI
+    const createViewMode = (store) => {
+        const nameDiv = document.createElement('div');
+        nameDiv.className = 'flex-1 text-gray-800 dark:text-gray-200 whitespace-pre-wrap';
+        nameDiv.textContent = store.name;
+        
+        const editButton = createButton('Edit', 'px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded text-xs mr-1', async () => {
+            editingStoreId = store.id;
+            await renderStoresList();
+        });
+        
+        const deleteButton = createButton('Delete', 'px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded text-xs', async () => {
+            const storeName = store.name.split('\n')[0];
+            if (confirm(`Delete "${storeName}"?`)) {
+                try {
+                    await groceryStores.deleteGroceryStore(store.id);
+                    if (editingStoreId === store.id) {
+                        editingStoreId = null;
+                    }
+                    await refreshStores();
+                } catch (error) {
+                    handleError(error, 'delete');
+                }
+            }
+        });
+        
+        return { nameDiv, editButton, deleteButton };
+    };
+    
+    // Render stores list
+    const renderStoresList = async () => {
+        if (!storesList) return;
+        
+        const stores = await groceryStores.loadGroceryStores();
+        storesList.innerHTML = '';
+        
+        if (stores.length === 0) {
+            storesList.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-sm">No stores yet. Add one above!</p>';
+            editingStoreId = null;
+            return;
+        }
+        
+        stores.forEach(store => {
+            const storeItem = document.createElement('div');
+            storeItem.className = 'flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded-md';
+            
+            if (editingStoreId === store.id) {
+                // Edit mode
+                const { textarea, saveButton, cancelButton } = createEditMode(store);
+                storeItem.appendChild(textarea);
+                storeItem.appendChild(saveButton);
+                storeItem.appendChild(cancelButton);
+            } else {
+                // View mode
+                const { nameDiv, editButton, deleteButton } = createViewMode(store);
+                storeItem.appendChild(nameDiv);
+                storeItem.appendChild(editButton);
+                storeItem.appendChild(deleteButton);
+            }
+            
+            storesList.appendChild(storeItem);
+        });
+    };
+    
+    // Open modal
+    manageButton.addEventListener('click', async () => {
+        await renderStoresList();
+        modal.classList.remove('hidden');
+        newStoreInput.value = '';
+        newStoreInput.focus();
+    });
+    
+    // Close modal
+    if (closeButton) {
+        closeButton.addEventListener('click', () => {
+            modal.classList.add('hidden');
+        });
+    }
+    
+    // Close on outside click
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.classList.add('hidden');
+        }
+    });
+    
+    // Add store
+    if (addButton && newStoreInput) {
+        const handleAddStore = async () => {
+            const storeText = newStoreInput.value.trim();
+            if (storeText) {
+                try {
+                    await groceryStores.addGroceryStore(storeText);
+                    newStoreInput.value = '';
+                    await refreshStores();
+                } catch (error) {
+                    handleError(error, 'add');
+                }
+            }
+        };
+        
+        addButton.addEventListener('click', handleAddStore);
+        // For textarea, use Ctrl+Enter or Cmd+Enter to submit
+        newStoreInput.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                handleAddStore();
+            }
+        });
+    }
 };
 
 // Initialize the application
@@ -58,7 +290,7 @@ export const init = async () => {
     ui.setupSharedUI(isOwner);
     
     // Set up event listeners
-    setupEventListeners();
+    await setupEventListeners();
     
     // Process subscriptions from localStorage
     if (!isSharedList) {
@@ -376,7 +608,7 @@ const handleDeleteSharedList = async () => {
 };
 
 // Set up all event listeners
-const setupEventListeners = () => {
+const setupEventListeners = async () => {
 
     // Back to personal list button
     if (ui.domElements.backToPersonalButton) {
@@ -483,39 +715,10 @@ const setupEventListeners = () => {
         aiSortButton.addEventListener('click', handleAISortClick);
     }
 
-    // Set up Get Recipe button
-    const getRecipeButton = document.getElementById('get-recipe-button');
-    if (getRecipeButton) {
-        getRecipeButton.addEventListener('click', handleGetRecipeClick);
-    }
-
-    // Set up recipe modal close button
-    const closeRecipeModal = document.getElementById('close-recipe-modal');
-    const recipeModal = document.getElementById('recipe-modal');
-    if (closeRecipeModal && recipeModal) {
-        closeRecipeModal.addEventListener('click', () => {
-            recipeModal.classList.add('hidden');
-            // Re-enable body scroll
-            document.body.style.overflow = '';
-        });
-        
-        // Prevent body scroll when modal is open
-        recipeModal.addEventListener('click', (e) => {
-            if (e.target === recipeModal) {
-                recipeModal.classList.add('hidden');
-                document.body.style.overflow = '';
-            }
-        });
-    }
+    // Set up grocery store dropdown and management
+    await initializeGroceryStoreDropdown();
+    setupGroceryStoreManagement();
     
-    // Set up Get Next Recipe button
-    const getNextRecipeButton = document.getElementById('get-next-recipe-button');
-    if (getNextRecipeButton) {
-        getNextRecipeButton.addEventListener('click', async () => {
-            await generateAndDisplayRecipe(null, false);
-        });
-    }
-
     // Set up completed tasks toggle
     if (ui.domElements.completedToggle) {
         ui.domElements.completedToggle.addEventListener('click', ui.toggleCompletedTasksList);
@@ -756,306 +959,11 @@ const handleAISortClick = async () => {
     }
 };
 
-// Get tasks for recipe generation (shared logic)
-const getTasksForRecipe = async () => {
-    const allTasks = await storage.loadTasks();
-    const context = utils.getCurrentViewContext(allTasks, currentFocusedTaskId, utils.findTaskById);
-    
-    if (!context) return [];
-    
-    // For recipe, we want all tasks (active and completed) from current view
-    return context.tasks;
-};
-
-// Generate and display recipe (shared logic)
-const generateAndDisplayRecipe = async (buttonElement, showModal = true) => {
-    const recipeModal = document.getElementById('recipe-modal');
-    const recipeContent = document.getElementById('recipe-content');
-    const recipeFooter = document.getElementById('recipe-footer');
-    const getNextRecipeButton = document.getElementById('get-next-recipe-button');
-    
-    if (!recipeModal || !recipeContent) return;
-    
-    // Hide footer during loading
-    if (recipeFooter) {
-        recipeFooter.classList.add('hidden');
-    }
-    
-    // Show loading state
-    if (buttonElement) {
-        const loadingHTML = `
-            <svg class="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            Generating...
-        `;
-        buttonElement.disabled = true;
-        buttonElement.style.opacity = '0.6';
-        buttonElement.style.cursor = 'not-allowed';
-        const originalHTML = buttonElement.innerHTML;
-        buttonElement.innerHTML = loadingHTML;
-        
-        try {
-            // Get tasks for recipe
-            const allTasksForRecipe = await getTasksForRecipe();
-            
-            if (allTasksForRecipe.length === 0) {
-                alert('No ingredients found. Please add some items to your list.');
-                return;
-            }
-            
-            // Show loading in modal content
-            recipeContent.innerHTML = `
-                <div class="flex flex-col items-center justify-center py-12">
-                    <svg class="animate-spin h-12 w-12 text-purple-500 mb-4" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <p class="text-gray-600 dark:text-gray-400">Generating recipe...</p>
-                </div>
-            `;
-            
-            if (showModal) {
-                recipeModal.classList.remove('hidden');
-                // Prevent body scroll when modal is open
-                document.body.style.overflow = 'hidden';
-            }
-            
-            // Call recipe API with extended timeout (5 minutes)
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minutes
-            
-            const response = await fetch('/api/recipe', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tasks: allTasksForRecipe }),
-                signal: controller.signal
-            });
-            
-            clearTimeout(timeoutId);
-            
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-                throw new Error(errorData.error || `Failed to generate recipe: ${response.status}`);
-            }
-            
-            const recipe = await response.json();
-            
-            // Display recipe in modal
-            displayRecipe(recipe);
-            
-            // Show footer after recipe is displayed
-            if (recipeFooter) {
-                recipeFooter.classList.remove('hidden');
-            }
-            
-            // Modal is already shown above, no need to show again
-        } catch (error) {
-            console.error('Error generating recipe:', error);
-            let errorMessage = error.message;
-            if (error.name === 'AbortError' || error.message.includes('fetch')) {
-                errorMessage = 'Request timed out. The AI is taking longer than expected. Please try again with fewer ingredients or try again later.';
-            }
-            recipeContent.innerHTML = `
-                <div class="text-center py-12">
-                    <p class="text-red-600 dark:text-red-400 mb-4">Failed to generate recipe</p>
-                    <p class="text-sm text-gray-600 dark:text-gray-400">${escapeHtml(errorMessage)}</p>
-                </div>
-            `;
-            // Don't show footer on error
-            if (showModal) {
-                recipeModal.classList.remove('hidden');
-            }
-        } finally {
-            buttonElement.disabled = false;
-            buttonElement.style.opacity = '';
-            buttonElement.style.cursor = '';
-            buttonElement.innerHTML = originalHTML;
-        }
-    } else {
-        // For get next recipe button, use simpler loading
-        if (getNextRecipeButton) {
-            getNextRecipeButton.disabled = true;
-            getNextRecipeButton.style.opacity = '0.6';
-        }
-        
-        // Hide footer during loading
-        if (recipeFooter) {
-            recipeFooter.classList.add('hidden');
-        }
-        
-        try {
-            const allTasksForRecipe = await getTasksForRecipe();
-            
-            if (allTasksForRecipe.length === 0) {
-                alert('No ingredients found. Please add some items to your list.');
-                return;
-            }
-            
-            recipeContent.innerHTML = `
-                <div class="flex flex-col items-center justify-center py-12">
-                    <svg class="animate-spin h-12 w-12 text-purple-500 mb-4" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <p class="text-gray-600 dark:text-gray-400">Generating next recipe...</p>
-                </div>
-            `;
-            
-            // Call recipe API with extended timeout (5 minutes)
-            const controller2 = new AbortController();
-            const timeoutId2 = setTimeout(() => controller2.abort(), 300000); // 5 minutes
-            
-            const response = await fetch('/api/recipe', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tasks: allTasksForRecipe }),
-                signal: controller2.signal
-            });
-            
-            clearTimeout(timeoutId2);
-            
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-                throw new Error(errorData.error || `Failed to generate recipe: ${response.status}`);
-            }
-            
-            const recipe = await response.json();
-            displayRecipe(recipe);
-            
-            // Show footer after recipe is displayed
-            if (recipeFooter) {
-                recipeFooter.classList.remove('hidden');
-            }
-        } catch (error) {
-            console.error('Error generating recipe:', error);
-            let errorMessage = error.message;
-            if (error.name === 'AbortError' || error.message.includes('fetch')) {
-                errorMessage = 'Request timed out. The AI is taking longer than expected. Please try again with fewer ingredients or try again later.';
-            }
-            recipeContent.innerHTML = `
-                <div class="text-center py-12">
-                    <p class="text-red-600 dark:text-red-400 mb-4">Failed to generate recipe</p>
-                    <p class="text-sm text-gray-600 dark:text-gray-400">${escapeHtml(errorMessage)}</p>
-                </div>
-            `;
-            // Don't show footer on error
-        } finally {
-            if (getNextRecipeButton) {
-                getNextRecipeButton.disabled = false;
-                getNextRecipeButton.style.opacity = '';
-            }
-        }
-    }
-};
-
-// Handle Get Recipe button click
-const handleGetRecipeClick = async () => {
-    const getRecipeButton = document.getElementById('get-recipe-button');
-    await generateAndDisplayRecipe(getRecipeButton, true);
-};
-
-// Display recipe in modal
-const displayRecipe = (recipe) => {
-    const recipeContent = document.getElementById('recipe-content');
-    const recipeModalTitle = document.getElementById('recipe-modal-title');
-    if (!recipeContent) return;
-    
-    // Update modal title
-    if (recipeModalTitle && recipe.title) {
-        // Decode HTML entities (like &amp; to &) before displaying
-        const decodedTitle = decodeHtmlEntities(recipe.title);
-        recipeModalTitle.textContent = decodedTitle;
-    }
-    
-    // Reset scroll position to top
-    recipeContent.scrollTop = 0;
-    
-    let html = `
-        <div class="space-y-8">
-            <div>
-                <h4 class="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4 pb-2 border-b border-gray-300 dark:border-gray-600">Ingredients</h4>
-                <ul class="space-y-2 text-gray-700 dark:text-gray-300">
-    `;
-    
-    // Display ingredients
-    if (Array.isArray(recipe.ingredients)) {
-        recipe.ingredients.forEach(ingredient => {
-            html += `<li class="flex items-start">
-                <span class="mr-2 text-purple-500 dark:text-purple-400">•</span>
-                <span class="text-base">${escapeHtml(ingredient)}</span>
-            </li>`;
-        });
-    }
-    
-    // Display additional ingredients if any
-    if (Array.isArray(recipe.additionalIngredients) && recipe.additionalIngredients.length > 0) {
-        html += `</ul>
-                <div class="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <p class="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-3 uppercase tracking-wide">Additional Ingredients (Optional)</p>
-                    <ul class="space-y-2 text-gray-600 dark:text-gray-400">`;
-        recipe.additionalIngredients.forEach(ingredient => {
-            html += `<li class="flex items-start">
-                <span class="mr-2 text-gray-400 dark:text-gray-500">•</span>
-                <span class="text-base">${escapeHtml(ingredient)}</span>
-            </li>`;
-        });
-        html += `</ul></div>`;
-    } else {
-        html += `</ul>`;
-    }
-    
-    html += `
-            </div>
-            
-            <div>
-                <h4 class="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4 pb-2 border-b border-gray-300 dark:border-gray-600">Instructions</h4>
-                <ol class="space-y-4 text-gray-700 dark:text-gray-300">
-    `;
-    
-    // Display instructions
-    if (Array.isArray(recipe.instructions)) {
-        recipe.instructions.forEach((instruction, index) => {
-            html += `<li class="flex items-start">
-                <span class="flex-shrink-0 w-8 h-8 rounded-full bg-purple-500 text-white flex items-center justify-center font-semibold mr-3 mt-0.5">${index + 1}</span>
-                <span class="text-base leading-relaxed">${escapeHtml(instruction)}</span>
-            </li>`;
-        });
-    }
-    
-    html += `
-                </ol>
-            </div>
-    `;
-    
-    // Display notes if available
-    if (recipe.notes) {
-        html += `
-            <div class="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-5 border border-purple-200 dark:border-purple-800">
-                <h4 class="text-sm font-semibold text-purple-800 dark:text-purple-300 mb-2 uppercase tracking-wide">Notes</h4>
-                <p class="text-sm text-purple-700 dark:text-purple-400 leading-relaxed">${escapeHtml(recipe.notes)}</p>
-            </div>
-        `;
-    }
-    
-    html += `</div>`;
-    
-    recipeContent.innerHTML = html;
-};
-
 // Helper function to escape HTML
 const escapeHtml = (text) => {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
-};
-
-// Helper to decode HTML entities (like &amp; to &)
-const decodeHtmlEntities = (text) => {
-    const textarea = document.createElement('textarea');
-    textarea.innerHTML = text;
-    return textarea.value;
 };
 
 // Handle Export button click

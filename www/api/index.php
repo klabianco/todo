@@ -439,74 +439,6 @@ switch ($resource) {
         }
         break;
 
-    case 'recipe':
-        // AI-powered recipe generation endpoint - receives all tasks (active and completed)
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            json_response(['error' => 'Method not allowed'], 405);
-        }
-        
-        // Increase execution time limit for AI operations (5 minutes)
-        set_time_limit(300);
-        ini_set('max_execution_time', 300);
-        
-        require __DIR__ . '/../../config/config.php';
-        
-        $data = get_request_body();
-        $tasks = $data['tasks'] ?? [];
-        
-        if (empty($tasks)) {
-            json_response(['error' => 'No ingredients provided'], 400);
-        }
-        
-        try {
-            // Extract all task texts (both active and completed)
-            $ingredients = array_column($tasks, 'task');
-            
-            // Create AI instance and set up prompt for recipe generation
-            $ai = new AI();
-            $ai->setJsonResponse(true);
-            $ai->setSystemMessage("You are a creative chef assistant. Your job is to generate delicious, practical recipes based on available ingredients. You can suggest 1-2 additional ingredients that complement the dish, and assume common pantry staples (salt, pepper, oil, butter, etc.) are available. Return a well-formatted recipe with a title, ingredients list, and step-by-step instructions.");
-            $ai->setPrompt("Create a recipe using these ingredients:\n\n" . 
-                         implode("\n", array_map(function($ing) { return "- " . $ing; }, $ingredients)) . 
-                         "\n\nReturn a JSON object with this structure:\n{\n  \"title\": \"Recipe Name\",\n  \"ingredients\": [\"ingredient1\", \"ingredient2\", ...],\n  \"instructions\": [\"step1\", \"step2\", ...],\n  \"additionalIngredients\": [\"optional ingredient1\", ...],\n  \"notes\": \"optional cooking tips or variations\"\n}\n\nMake it creative and delicious! You can add 1-2 complementary ingredients and assume common pantry staples are available.");
-            
-            // Try AI models with fallback
-            global $aiModelFallbacks;
-            $response = try_ai_models($ai, $aiModelFallbacks);
-            
-            // Check if we got an error instead of a response
-            if (is_array($response) && isset($response['error'])) {
-                error_log('AI recipe: All models failed. Last error: ' . $response['error']);
-                json_response(['error' => 'AI service unavailable. Please check API key and model availability.'], 500);
-            }
-            
-            // Parse AI response
-            $aiResult = parse_ai_json_response($response);
-            if ($aiResult === null) {
-                error_log('AI recipe: Response is empty or invalid after parsing');
-                json_response(['error' => 'AI service returned invalid response'], 500);
-            }
-            
-            // Validate recipe structure
-            if (!isset($aiResult['title']) || !isset($aiResult['ingredients']) || !isset($aiResult['instructions'])) {
-                error_log('AI recipe invalid response format. Response: ' . substr($response, 0, 1000));
-                error_log('Parsed result: ' . json_encode($aiResult));
-                json_response(['error' => 'Invalid AI response format'], 500);
-            }
-            
-            json_response([
-                'title' => $aiResult['title'],
-                'ingredients' => is_array($aiResult['ingredients']) ? $aiResult['ingredients'] : [],
-                'instructions' => is_array($aiResult['instructions']) ? $aiResult['instructions'] : [],
-                'additionalIngredients' => $aiResult['additionalIngredients'] ?? [],
-                'notes' => $aiResult['notes'] ?? ''
-            ]);
-        } catch (Exception $e) {
-            error_log('AI recipe error: ' . $e->getMessage());
-            json_response(['error' => 'Recipe generation failed: ' . $e->getMessage()], 500);
-        }
-        break;
-
     case 'import-url':
         // AI-powered URL import endpoint - fetches URL content and extracts items
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -630,6 +562,97 @@ switch ($resource) {
         } catch (Exception $e) {
             error_log('AI import-url error: ' . $e->getMessage());
             json_response(['error' => 'Import failed: ' . $e->getMessage()], 500);
+        }
+        break;
+
+    case 'grocery-stores':
+        // Grocery stores endpoint - shared across all users
+        $stores_file = $data_dir . '/grocery-stores.json';
+        
+        // Helper function to find store index by ID
+        function find_store_index($stores, $id) {
+            foreach ($stores as $index => $store) {
+                if ($store['id'] === $id) {
+                    return $index;
+                }
+            }
+            return null;
+        }
+        
+        // Helper function to validate store name
+        function validate_store_name($name) {
+            $name = trim($name ?? '');
+            if (empty($name)) {
+                json_response(['error' => 'Store name is required'], 400);
+            }
+            return $name;
+        }
+        
+        switch ($_SERVER['REQUEST_METHOD']) {
+            case 'GET':
+                // Get all grocery stores
+                $stores = read_json_file($stores_file, []);
+                json_response(['stores' => $stores]);
+                break;
+                
+            case 'POST':
+                // Add a new grocery store
+                $data = get_request_body();
+                $name = validate_store_name($data['name'] ?? '');
+                
+                $stores = read_json_file($stores_file, []);
+                $newStore = [
+                    'id' => 'store-' . bin2hex(random_bytes(8)),
+                    'name' => $name,
+                    'created' => date('c')
+                ];
+                $stores[] = $newStore;
+                write_json_file($stores_file, $stores);
+                json_response(['store' => $newStore, 'success' => true]);
+                break;
+                
+            case 'PUT':
+                // Update an existing grocery store
+                if (!$id) {
+                    json_response(['error' => 'Store ID is required'], 400);
+                }
+                
+                $data = get_request_body();
+                $name = validate_store_name($data['name'] ?? '');
+                
+                $stores = read_json_file($stores_file, []);
+                $storeIndex = find_store_index($stores, $id);
+                
+                if ($storeIndex === null) {
+                    json_response(['error' => 'Store not found'], 404);
+                }
+                
+                $stores[$storeIndex]['name'] = $name;
+                $stores[$storeIndex]['updated'] = date('c');
+                write_json_file($stores_file, $stores);
+                json_response(['store' => $stores[$storeIndex], 'success' => true]);
+                break;
+                
+            case 'DELETE':
+                // Delete a grocery store
+                if (!$id) {
+                    json_response(['error' => 'Store ID is required'], 400);
+                }
+                
+                $stores = read_json_file($stores_file, []);
+                $storeIndex = find_store_index($stores, $id);
+                
+                if ($storeIndex === null) {
+                    json_response(['error' => 'Store not found'], 404);
+                }
+                
+                unset($stores[$storeIndex]);
+                write_json_file($stores_file, array_values($stores));
+                json_response(['success' => true]);
+                break;
+                
+            default:
+                json_response(['error' => 'Method not allowed'], 405);
         }
         break;
 
