@@ -3,6 +3,7 @@
  * Shared utilities for displaying stores
  */
 import { escapeHtml, apiFetch } from './utils.js';
+import { normalizeAisleLayout, getAisleLayoutPreview } from './store-utils.js';
 
 // Load stores from API
 export const loadStoresFromAPI = async () => {
@@ -31,8 +32,11 @@ const parseStoreData = (store) => {
     if (store.phone) {
         detailParts.push(store.phone);
     }
-    if (store.profile) {
-        detailParts.push(store.profile);
+    if (store.aisle_layout) {
+        const { preview, hasMore } = getAisleLayoutPreview(store.aisle_layout, 3);
+        if (preview) {
+            detailParts.push(`Store Layout:\n${preview}${hasMore ? '...' : ''}`);
+        }
     }
     
     // If no structured data, fall back to old format
@@ -51,120 +55,31 @@ const parseStoreData = (store) => {
     };
 };
 
-// Render photo upload button HTML
-const renderPhotoUploadButton = (storeId) => `
-    <label class="cursor-pointer">
-        <input 
-            type="file" 
-            accept="image/*" 
-            multiple
-            class="hidden store-photo-input" 
-            data-store-id="${storeId}"
-        />
-        <span class="text-xs bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded-md inline-flex items-center">
-            <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-            </svg>
-            Add Photos
-        </span>
-    </label>
-`;
-
-// Get photo ID (handles both old string format and new object format)
-const getPhotoId = (photo) => {
-    return typeof photo === 'string' ? photo : (photo.id || photo);
-};
-
-// Get photo date (taken if available, otherwise added)
-const getPhotoDate = (photo) => {
-    if (typeof photo === 'string') {
-        return null; // Old format, no date info
-    }
-    return photo.date_taken || photo.date_added || null;
-};
-
-// Format photo date for display
-const formatPhotoDate = (dateString) => {
-    if (!dateString) return '';
-    try {
-        const date = new Date(dateString);
-        return date.toLocaleDateString();
-    } catch {
-        return '';
-    }
-};
-
-// Render photo grid HTML
-const renderPhotoGrid = (photos, storeId) => {
-    if (!photos || photos.length === 0) return '';
-    
-    return `
-        <div class="mt-3 grid grid-cols-3 gap-2">
-            ${photos.map(photo => {
-                const photoId = getPhotoId(photo);
-                const photoDate = getPhotoDate(photo);
-                const displayDate = formatPhotoDate(photoDate);
-                
-                return `
-                    <div class="relative group">
-                        <img 
-                            src="/api/store-photos/${storeId}/${photoId}" 
-                            alt="Store photo" 
-                            class="w-full h-24 object-cover rounded-md"
-                            loading="lazy"
-                        />
-                        ${displayDate ? `
-                            <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs px-1 py-0.5 rounded-b-md opacity-0 group-hover:opacity-100 transition-opacity">
-                                ${displayDate}
-                            </div>
-                        ` : ''}
-                        <button 
-                            class="delete-photo-btn absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                            data-store-id="${storeId}"
-                            data-photo-id="${photoId}"
-                            title="Delete photo"
-                        >
-                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                            </svg>
-                        </button>
-                    </div>
-                `;
-            }).join('')}
-        </div>
-    `;
-};
-
 // Render a single store card
 export const renderStoreCard = (store, escapeHtmlFn = escapeHtml) => {
     const { name, details, createdDate } = parseStoreData(store);
     const photos = store.photos || [];
+    const photoCount = photos.length;
     
     return `
         <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 border border-gray-200 dark:border-gray-600 hover:shadow-md transition-shadow w-full">
             <div class="mb-2">
-                <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">${escapeHtmlFn(name)}</h3>
+                <a href="/store.php?id=${store.id}" class="block">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">${escapeHtmlFn(name)}</h3>
+                </a>
                 ${details ? `<div class="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap mt-2">${escapeHtmlFn(details)}</div>` : ''}
             </div>
             
-            ${renderPhotoGrid(photos, store.id)}
+            ${photoCount > 0 ? `
+                <div class="mt-3 mb-3">
+                    <a href="/store.php?id=${store.id}" class="text-sm text-blue-600 dark:text-blue-400 hover:underline">
+                        View ${photoCount} photo${photoCount !== 1 ? 's' : ''}
+                    </a>
+                </div>
+            ` : ''}
             
-            <div class="mt-3 flex items-center justify-between">
-                <div class="text-xs text-gray-500 dark:text-gray-500">
-                    Added: ${createdDate}
-                </div>
-                <div class="flex items-center gap-2">
-                    ${renderPhotoUploadButton(store.id)}
-                    <button 
-                        class="delete-store-btn text-xs bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded-md inline-flex items-center"
-                        data-store-id="${store.id}"
-                        title="Delete store"
-                    >
-                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                        </svg>
-                    </button>
-                </div>
+            <div class="mt-3 text-xs text-gray-500 dark:text-gray-500">
+                Added: ${createdDate}
             </div>
         </div>
     `;

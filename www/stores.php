@@ -154,7 +154,6 @@ renderThemeToggle();
         import { setupModalCloseHandlers, setupFileInputButton, showModal, hideModal } from '/assets/js/modules/modal-utils.js';
         import { withButtonLoading } from '/assets/js/modules/button-utils.js';
         import { onClick, onCtrlEnter } from '/assets/js/modules/event-utils.js';
-        import { uploadPhoto } from '/assets/js/modules/photo-utils.js';
         import { $ } from '/assets/js/modules/utils.js';
         import * as groceryStores from '/assets/js/modules/grocery-stores.js';
         
@@ -288,122 +287,6 @@ renderThemeToggle();
                 alert(`Failed to add store: ${error.message}`);
             });
         };
-        
-        // Handle photo uploads (single or multiple)
-        const handlePhotoUpload = async (storeId, files) => {
-            if (!files || files.length === 0) return;
-            
-            const fileArray = Array.from(files);
-            let successCount = 0;
-            let errorCount = 0;
-            const errors = [];
-            
-            // Upload all files sequentially
-            for (const file of fileArray) {
-                try {
-                    await uploadPhoto(`/api/store-photos/${storeId}`, file);
-                    successCount++;
-                } catch (error) {
-                    console.error('Error uploading photo:', error);
-                    errorCount++;
-                    errors.push(`${file.name}: ${error.message}`);
-                }
-            }
-            
-            // Reload stores after all uploads complete
-            await loadStores();
-            
-            // Show summary message if there were errors
-            if (errorCount > 0) {
-                const errorMsg = errors.length > 3 
-                    ? `${errors.slice(0, 3).join('\n')}\n...and ${errors.length - 3} more`
-                    : errors.join('\n');
-                alert(`Uploaded ${successCount} photo(s) successfully.\n\nFailed to upload ${errorCount} photo(s):\n${errorMsg}`);
-            }
-        };
-        
-        // Handle photo deletion
-        const handlePhotoDelete = async (storeId, photoId) => {
-            if (!confirm('Delete this photo?')) return;
-            
-            try {
-                const response = await fetch(`/api/store-photos/${storeId}/${photoId}`, {
-                    method: 'DELETE'
-                });
-                
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.error || 'Failed to delete photo');
-                }
-                
-                await loadStores();
-            } catch (error) {
-                console.error('Error deleting photo:', error);
-                alert(`Failed to delete photo: ${error.message}`);
-            }
-        };
-        
-        // Handle store deletion
-        const handleStoreDelete = async (storeId) => {
-            if (!confirm('Delete this store? This will also delete all associated photos.')) return;
-            
-            try {
-                await groceryStores.deleteGroceryStore(storeId);
-                // Remove from currentStores immediately for instant UI update
-                currentStores = currentStores.filter(store => store.id !== storeId);
-                
-                // Update UI immediately
-                if (currentStores.length === 0) {
-                    elements.emptyState.innerHTML = renderEmptyState();
-                    elements.emptyState.classList.remove('hidden');
-                    elements.storesList.innerHTML = '';
-                } else {
-                    elements.emptyState.classList.add('hidden');
-                    elements.storesList.innerHTML = currentStores.map(store => renderStoreCard(store)).join('');
-                }
-                
-                // Then reload from server to ensure consistency
-                await loadStores();
-            } catch (error) {
-                console.error('Error deleting store:', error);
-                alert(`Failed to delete store: ${error.message}`);
-                // Reload on error to ensure UI is in sync
-                await loadStores();
-            }
-        };
-        
-        // Setup photo upload handlers (delegated event listeners on container)
-        elements.container?.addEventListener('change', (e) => {
-            if (e.target.classList.contains('store-photo-input')) {
-                const files = e.target.files;
-                const storeId = e.target.dataset.storeId;
-                if (files && files.length > 0 && storeId) {
-                    handlePhotoUpload(storeId, files);
-                    e.target.value = ''; // Reset input
-                }
-            }
-        });
-        
-        // Setup photo delete handlers (delegated event listeners on container)
-        elements.container?.addEventListener('click', (e) => {
-            if (e.target.closest('.delete-photo-btn')) {
-                const btn = e.target.closest('.delete-photo-btn');
-                const storeId = btn.dataset.storeId;
-                const photoId = btn.dataset.photoId;
-                if (storeId && photoId) {
-                    handlePhotoDelete(storeId, photoId);
-                }
-            }
-            
-            // Handle store deletion
-            if (e.target.closest('.delete-store-btn')) {
-                const btn = e.target.closest('.delete-store-btn');
-                const storeId = btn.dataset.storeId;
-                if (storeId) {
-                    handleStoreDelete(storeId);
-                }
-            }
-        });
         
         // Setup event handlers
         onClick('add-store-button', handleAddStore);
