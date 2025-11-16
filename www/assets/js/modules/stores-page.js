@@ -76,23 +76,6 @@ export const renderErrorState = (message = 'Failed to load stores', showRetry = 
     `;
 };
 
-// Share stores list
-export const shareStoresList = async (stores) => {
-    const response = await apiFetch('/api/stores-lists', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ stores })
-    });
-    
-    if (!response.ok) {
-        throw new Error(`Failed to share stores: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    return data.shareId;
-};
 
 // Export stores to PDF
 export const exportStoresToPDF = (stores, filename) => {

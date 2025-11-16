@@ -44,6 +44,22 @@ renderThemeToggle();
         </header>
         
         <div class="bg-white rounded-lg shadow-md p-6 dark:bg-gray-800">
+            <!-- Add Store Form -->
+            <div class="mb-6 pb-6 border-b border-gray-200 dark:border-gray-700">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Add New Store</label>
+                <div class="flex flex-col gap-2">
+                    <textarea 
+                        id="new-store-input" 
+                        placeholder="Store name and address..." 
+                        rows="3"
+                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                    ></textarea>
+                    <button id="add-store-button" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md self-end">
+                        Add Store
+                    </button>
+                </div>
+            </div>
+            
             <div id="loading"></div>
             <div id="stores-container" class="hidden">
                 <div id="empty-state" class="hidden"></div>
@@ -135,46 +151,55 @@ renderThemeToggle();
             exportStoresToJSON
         } from '/assets/js/modules/stores-page.js';
         import { setupShareUrlHandlers, showShareUrl } from '/assets/js/modules/share-utils.js';
-        import { setupModalCloseHandlers, setupFileInputButton } from '/assets/js/modules/modal-utils.js';
+        import { setupModalCloseHandlers, setupFileInputButton, showModal, hideModal } from '/assets/js/modules/modal-utils.js';
+        import { withButtonLoading } from '/assets/js/modules/button-utils.js';
+        import { onClick, onCtrlEnter } from '/assets/js/modules/event-utils.js';
+        import { $ } from '/assets/js/modules/utils.js';
+        import * as groceryStores from '/assets/js/modules/grocery-stores.js';
         
         let currentStores = [];
         
-        const loading = document.getElementById('loading');
-        const container = document.getElementById('stores-container');
-        const emptyState = document.getElementById('empty-state');
-        const storesList = document.getElementById('stores-list');
-        const errorState = document.getElementById('error-state');
+        // Cache DOM elements
+        const elements = {
+            loading: $('loading'),
+            container: $('stores-container'),
+            emptyState: $('empty-state'),
+            storesList: $('stores-list'),
+            errorState: $('error-state'),
+            newStoreInput: $('new-store-input'),
+            addStoreButton: $('add-store-button')
+        };
         
         // Load and display stores
         const loadStores = async () => {
             try {
-                loading.innerHTML = renderLoadingSpinner('Loading stores...');
-                loading.classList.remove('hidden');
-                container.classList.add('hidden');
-                errorState.classList.add('hidden');
+                elements.loading.innerHTML = renderLoadingSpinner('Loading stores...');
+                elements.loading.classList.remove('hidden');
+                elements.container.classList.add('hidden');
+                elements.errorState.classList.add('hidden');
                 
                 currentStores = await loadStoresFromAPI();
                 
-                loading.classList.add('hidden');
+                elements.loading.classList.add('hidden');
                 
                 if (currentStores.length === 0) {
-                    emptyState.innerHTML = renderEmptyState();
-                    emptyState.classList.remove('hidden');
-                    container.classList.remove('hidden');
+                    elements.emptyState.innerHTML = renderEmptyState();
+                    elements.emptyState.classList.remove('hidden');
+                    elements.container.classList.remove('hidden');
                 } else {
-                    emptyState.classList.add('hidden');
-                    storesList.innerHTML = currentStores.map(store => renderStoreCard(store)).join('');
-                    container.classList.remove('hidden');
+                    elements.emptyState.classList.add('hidden');
+                    elements.storesList.innerHTML = currentStores.map(store => renderStoreCard(store)).join('');
+                    elements.container.classList.remove('hidden');
                 }
             } catch (error) {
                 console.error('Error loading stores:', error);
-                loading.classList.add('hidden');
-                container.classList.add('hidden');
-                errorState.innerHTML = renderErrorState();
-                errorState.classList.remove('hidden');
+                elements.loading.classList.add('hidden');
+                elements.container.classList.add('hidden');
+                elements.errorState.innerHTML = renderErrorState();
+                elements.errorState.classList.remove('hidden');
                 
                 // Set up retry button
-                const retryButton = document.getElementById('retry-button');
+                const retryButton = $('retry-button');
                 if (retryButton) {
                     retryButton.addEventListener('click', loadStores);
                 }
@@ -188,12 +213,9 @@ renderThemeToggle();
         };
         
         // Export stores
-        const handleExportStores = () => {
-            document.getElementById('export-stores-modal')?.classList.remove('hidden');
-        };
+        const handleExportStores = () => showModal('export-stores-modal');
         
         const handleConfirmExportStores = () => {
-            const exportModal = document.getElementById('export-stores-modal');
             const format = document.querySelector('input[name="export-stores-format"]:checked')?.value || 'json';
             const dateStr = new Date().toISOString().split('T')[0];
             const filename = `grocery-stores-${dateStr}`;
@@ -206,13 +228,11 @@ renderThemeToggle();
                 exportStoresToJSON(currentStores, `${filename}.json`);
             }
             
-            exportModal?.classList.add('hidden');
+            hideModal('export-stores-modal');
         };
         
         // Import stores
-        const handleImportStores = () => {
-            document.getElementById('import-stores-modal')?.classList.remove('hidden');
-        };
+        const handleImportStores = () => showModal('import-stores-modal');
         
         const handleImportStoresFile = async (event) => {
             const file = event.target.files[0];
@@ -239,15 +259,8 @@ renderThemeToggle();
                     }
                 }
                 
-                // Reload stores
                 await loadStores();
-                
-                const importModal = document.getElementById('import-stores-modal');
-                if (importModal) {
-                    importModal.classList.add('hidden');
-                }
-                
-                // Reset file input
+                hideModal('import-stores-modal');
                 event.target.value = '';
             } catch (error) {
                 console.error('Error importing stores:', error);
@@ -255,18 +268,37 @@ renderThemeToggle();
             }
         };
         
+        // Add store functionality
+        const handleAddStore = async () => {
+            if (!elements.newStoreInput || !elements.addStoreButton) return;
+            
+            const storeText = elements.newStoreInput.value.trim();
+            if (!storeText) return;
+            
+            await withButtonLoading(elements.addStoreButton, 'Adding...', async () => {
+                await groceryStores.addGroceryStore(storeText);
+                elements.newStoreInput.value = '';
+                await loadStores();
+            }).catch(error => {
+                console.error('Error adding store:', error);
+                alert(`Failed to add store: ${error.message}`);
+            });
+        };
+        
+        // Setup event handlers
+        onClick('add-store-button', handleAddStore);
+        onCtrlEnter('new-store-input', handleAddStore);
+        onClick('share-stores-button', handleShareStores);
+        onClick('export-stores-button', handleExportStores);
+        onClick('import-stores-button', handleImportStores);
+        onClick('confirm-export-stores', handleConfirmExportStores);
+        $('import-stores-file-input')?.addEventListener('change', handleImportStoresFile);
+        
         // Setup shared handlers
         setupShareUrlHandlers('stores');
         setupModalCloseHandlers('export-stores-modal', null, 'cancel-export-stores');
         setupModalCloseHandlers('import-stores-modal', null, 'cancel-import-stores');
         setupFileInputButton('import-stores-file-button', 'import-stores-file-input');
-        
-        // Event listeners
-        document.getElementById('share-stores-button')?.addEventListener('click', handleShareStores);
-        document.getElementById('export-stores-button')?.addEventListener('click', handleExportStores);
-        document.getElementById('import-stores-button')?.addEventListener('click', handleImportStores);
-        document.getElementById('confirm-export-stores')?.addEventListener('click', handleConfirmExportStores);
-        document.getElementById('import-stores-file-input')?.addEventListener('change', handleImportStoresFile);
         
         // Initial load
         loadStores();
