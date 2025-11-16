@@ -290,7 +290,7 @@ switch ($resource) {
                 $list_data['tasks'] = $data['tasks'] ?? [];
                 if (isset($data['focusId'])) {
                     $list_data['focusId'] = $data['focusId'];
-                }
+                        }
                         // Always update the lastModified timestamp with current server time
                         // This ensures changes are detected by viewers polling for updates
                         $list_data['lastModified'] = date('c');
@@ -319,11 +319,11 @@ switch ($resource) {
                                             return !isset($item['id']) || $item['id'] !== $id;
                             }));
                             write_json_file($subscribed_path, $updated_lists);
-                        }
-                    }
-                }
+                                    }
+                                }
+                            }
                 
-                unlink($file_path);
+                        unlink($file_path);
                 json_response(['success' => true]);
                 break;
                 
@@ -467,11 +467,9 @@ switch ($resource) {
             json_response(['error' => 'Method not allowed'], 405);
         }
         
-        // Increase execution time limit for AI operations (5 minutes)
-        set_time_limit(300);
-        ini_set('max_execution_time', 300);
-        
         require __DIR__ . '/../../config/config.php';
+        require __DIR__ . '/includes/ai-helpers.php';
+        set_ai_execution_time(300);
         
         $data = get_request_body();
         $url = $data['url'] ?? '';
@@ -537,27 +535,15 @@ switch ($resource) {
                 $title = isset($parsedUrl['host']) ? $parsedUrl['host'] : 'Imported List';
             }
             
-            // Create AI instance and set up prompt for extracting items
-            $ai = new AI();
-            $ai->setJsonResponse(true);
-            $ai->setSystemMessage("You are a helpful assistant that extracts actionable items (like ingredients, tasks, or items to buy) from web content. Extract all relevant items and return them as a simple list. For recipes, extract ingredients. For articles, extract actionable items or tasks mentioned.");
-            $ai->setPrompt("Extract all actionable items (ingredients, tasks, items to buy, etc.) from the following content. Return ONLY a valid JSON object with this exact structure:\n\n{\n  \"items\": [\"item1\", \"item2\", \"item3\", ...]\n}\n\nContent:\n" . $text . "\n\nReturn the items as a simple array of strings. Each item should be clear and actionable (e.g., \"2 cups flour\" or \"Buy milk\" or \"Call dentist\").");
+            // Extract items using AI
+            $systemMessage = "You are a helpful assistant that extracts actionable items (like ingredients, tasks, or items to buy) from web content. Extract all relevant items and return them as a simple list. For recipes, extract ingredients. For articles, extract actionable items or tasks mentioned.";
+            $prompt = "Extract all actionable items (ingredients, tasks, items to buy, etc.) from the following content. Return ONLY a valid JSON object with this exact structure:\n\n{\n  \"items\": [\"item1\", \"item2\", \"item3\", ...]\n}\n\nContent:\n" . $text . "\n\nReturn the items as a simple array of strings. Each item should be clear and actionable (e.g., \"2 cups flour\" or \"Buy milk\" or \"Call dentist\").";
             
-            // Try AI models with fallback
-            global $aiModelFallbacks;
-            $response = try_ai_models($ai, $aiModelFallbacks);
+            $aiResult = execute_ai_request($prompt, $systemMessage);
             
-            // Check if we got an error instead of a response
-            if (is_array($response) && isset($response['error'])) {
-                error_log('AI import-url: All models failed. Last error: ' . $response['error']);
-                json_response(['error' => 'AI service unavailable. Please check API key and model availability.'], 500);
-            }
-            
-            // Parse AI response
-            $aiResult = parse_ai_json_response($response);
-            if ($aiResult === null) {
-                error_log('AI import-url: Response is empty or invalid after parsing');
-                json_response(['error' => 'AI service returned invalid response'], 500);
+            if (isset($aiResult['error'])) {
+                error_log('AI import-url: ' . $aiResult['error']);
+                json_response(['error' => 'AI service unavailable: ' . $aiResult['error']], 500);
             }
             
             // Extract items from various possible JSON structures
@@ -739,30 +725,36 @@ switch ($resource) {
         }
         
         // Continue with grocery-stores case
-        switch ($_SERVER['REQUEST_METHOD']) {
-            case 'GET':
+                switch ($_SERVER['REQUEST_METHOD']) {
+                    case 'GET':
                 // Get all grocery stores
                 $stores = read_json_file($stores_file, []);
                 json_response(['stores' => $stores]);
                 break;
                 
             case 'POST':
-                // Add a new grocery store
-                $data = get_request_body();
-                $name = validate_store_name($data['name'] ?? '');
+                // Add a new grocery store with AI parsing
+                require __DIR__ . '/../../config/config.php';
+                require __DIR__ . '/includes/ai-helpers.php';
                 
-                $stores = read_json_file($stores_file, []);
-                $newStore = [
-                    'id' => 'store-' . bin2hex(random_bytes(8)),
-                    'name' => $name,
-                    'created' => date('c')
-                ];
-                $stores[] = $newStore;
-                write_json_file($stores_file, $stores);
-                json_response(['store' => $newStore, 'success' => true]);
+                $data = get_request_body();
+                $input = trim($data['name'] ?? '');
+                
+                if (empty($input)) {
+                    json_response(['error' => 'Store information is required'], 400);
+                }
+                
+                $result = create_store_with_ai($input, $stores_file);
+                
+                if (isset($result['error'])) {
+                    error_log("AI store parsing error: " . $result['error']);
+                    json_response(['error' => 'Failed to parse store information: ' . $result['error']], 500);
+                }
+                
+                json_response(['store' => $result['store'], 'success' => true]);
                 break;
                 
-            case 'PUT':
+                    case 'PUT':
                 // Update an existing grocery store
                 if (!$id) {
                     json_response(['error' => 'Store ID is required'], 400);
@@ -815,9 +807,9 @@ switch ($resource) {
                 unset($stores[$storeIndex]);
                 write_json_file($stores_file, array_values($stores));
                 json_response(['success' => true]);
-                break;
+                        break;
                 
-            default:
+                    default:
                 json_response(['error' => 'Method not allowed'], 405);
         }
         break;
@@ -852,7 +844,7 @@ switch ($resource) {
                     json_response(['error' => 'Stores list not found'], 404);
                 }
                 break;
-                
+
             case 'PUT':
                 if (!$id) {
                     json_response(['error' => 'Share ID is required'], 400);

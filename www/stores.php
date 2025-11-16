@@ -278,7 +278,8 @@ renderThemeToggle();
             const storeText = elements.newStoreInput.value.trim();
             if (!storeText) return;
             
-            await withButtonLoading(elements.addStoreButton, 'Adding...', async () => {
+            // Disable button and show loading state
+            await withButtonLoading(elements.addStoreButton, 'Processing...', async () => {
                 await groceryStores.addGroceryStore(storeText);
                 elements.newStoreInput.value = '';
                 await loadStores();

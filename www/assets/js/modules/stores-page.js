@@ -18,10 +18,35 @@ export const loadStoresFromAPI = async () => {
 
 // Helper to parse store data
 const parseStoreData = (store) => {
-    const parts = store.name.split('\n');
+    // Handle old format (name with newlines) and new format (structured data)
+    let name = store.name || '';
+    let details = '';
+    
+    // Build details from structured fields
+    const detailParts = [];
+    if (store.city || store.state) {
+        const location = [store.city, store.state].filter(Boolean).join(', ');
+        if (location) detailParts.push(location);
+    }
+    if (store.phone) {
+        detailParts.push(store.phone);
+    }
+    if (store.profile) {
+        detailParts.push(store.profile);
+    }
+    
+    // If no structured data, fall back to old format
+    if (detailParts.length === 0 && name.includes('\n')) {
+        const parts = name.split('\n');
+        name = parts[0];
+        details = parts.slice(1).join('\n');
+    } else {
+        details = detailParts.join('\n\n');
+    }
+    
     return {
-        name: parts[0],
-        details: parts.slice(1).join('\n'),
+        name: name,
+        details: details,
         createdDate: new Date(store.created).toLocaleDateString()
     };
 };
