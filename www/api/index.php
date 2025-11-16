@@ -797,6 +797,21 @@ switch ($resource) {
                     json_response(['error' => 'Store not found'], 404);
                 }
                 
+                // Delete associated photos directory
+                $photos_dir = get_store_photos_dir($id);
+                if (file_exists($photos_dir)) {
+                    // Recursively delete photos directory
+                    $files = new RecursiveIteratorIterator(
+                        new RecursiveDirectoryIterator($photos_dir, RecursiveDirectoryIterator::SKIP_DOTS),
+                        RecursiveIteratorIterator::CHILD_FIRST
+                    );
+                    foreach ($files as $fileinfo) {
+                        $todo = ($fileinfo->isDir() ? 'rmdir' : 'unlink');
+                        @$todo($fileinfo->getRealPath());
+                    }
+                    @rmdir($photos_dir);
+                }
+                
                 unset($stores[$storeIndex]);
                 write_json_file($stores_file, array_values($stores));
                 json_response(['success' => true]);

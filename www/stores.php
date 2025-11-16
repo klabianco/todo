@@ -342,6 +342,19 @@ renderThemeToggle();
             }
         };
         
+        // Handle store deletion
+        const handleStoreDelete = async (storeId) => {
+            if (!confirm('Delete this store? This will also delete all associated photos.')) return;
+            
+            try {
+                await groceryStores.deleteGroceryStore(storeId);
+                await loadStores();
+            } catch (error) {
+                console.error('Error deleting store:', error);
+                alert(`Failed to delete store: ${error.message}`);
+            }
+        };
+        
         // Setup photo upload handlers (delegated event listeners on container)
         elements.container?.addEventListener('change', (e) => {
             if (e.target.classList.contains('store-photo-input')) {
@@ -362,6 +375,15 @@ renderThemeToggle();
                 const photoId = btn.dataset.photoId;
                 if (storeId && photoId) {
                     handlePhotoDelete(storeId, photoId);
+                }
+            }
+            
+            // Handle store deletion
+            if (e.target.closest('.delete-store-btn')) {
+                const btn = e.target.closest('.delete-store-btn');
+                const storeId = btn.dataset.storeId;
+                if (storeId) {
+                    handleStoreDelete(storeId);
                 }
             }
         });
