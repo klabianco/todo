@@ -32,6 +32,7 @@ const renderPhotoUploadButton = (storeId) => `
         <input 
             type="file" 
             accept="image/*" 
+            multiple
             class="hidden store-photo-input" 
             data-store-id="${storeId}"
         />
@@ -39,7 +40,7 @@ const renderPhotoUploadButton = (storeId) => `
             <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
             </svg>
-            Add Photo
+            Add Photos
         </span>
     </label>
 `;

@@ -288,14 +288,36 @@ renderThemeToggle();
             });
         };
         
-        // Handle photo uploads
-        const handlePhotoUpload = async (storeId, file) => {
-            try {
-                await uploadPhoto(`/api/store-photos/${storeId}`, file);
-                await loadStores();
-            } catch (error) {
-                console.error('Error uploading photo:', error);
-                alert(`Failed to upload photo: ${error.message}`);
+        // Handle photo uploads (single or multiple)
+        const handlePhotoUpload = async (storeId, files) => {
+            if (!files || files.length === 0) return;
+            
+            const fileArray = Array.from(files);
+            let successCount = 0;
+            let errorCount = 0;
+            const errors = [];
+            
+            // Upload all files sequentially
+            for (const file of fileArray) {
+                try {
+                    await uploadPhoto(`/api/store-photos/${storeId}`, file);
+                    successCount++;
+                } catch (error) {
+                    console.error('Error uploading photo:', error);
+                    errorCount++;
+                    errors.push(`${file.name}: ${error.message}`);
+                }
+            }
+            
+            // Reload stores after all uploads complete
+            await loadStores();
+            
+            // Show summary message if there were errors
+            if (errorCount > 0) {
+                const errorMsg = errors.length > 3 
+                    ? `${errors.slice(0, 3).join('\n')}\n...and ${errors.length - 3} more`
+                    : errors.join('\n');
+                alert(`Uploaded ${successCount} photo(s) successfully.\n\nFailed to upload ${errorCount} photo(s):\n${errorMsg}`);
             }
         };
         
@@ -323,10 +345,10 @@ renderThemeToggle();
         // Setup photo upload handlers (delegated event listeners on container)
         elements.container?.addEventListener('change', (e) => {
             if (e.target.classList.contains('store-photo-input')) {
-                const file = e.target.files[0];
+                const files = e.target.files;
                 const storeId = e.target.dataset.storeId;
-                if (file && storeId) {
-                    handlePhotoUpload(storeId, file);
+                if (files && files.length > 0 && storeId) {
+                    handlePhotoUpload(storeId, files);
                     e.target.value = ''; // Reset input
                 }
             }
