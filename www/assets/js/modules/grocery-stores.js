@@ -108,7 +108,6 @@ export const addGroceryStore = async (name, onStepUpdate = null) => {
     
     // Execute steps sequentially
     storeData = await executeStoreStep(trimmedName, 'basic', null, onStepUpdate);
-    storeData = await executeStoreStep(trimmedName, 'layout_description', storeData, onStepUpdate);
     storeData = await executeStoreStep(trimmedName, 'aisle_layout', storeData, onStepUpdate);
     
     // Final step: Save the store

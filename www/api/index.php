@@ -671,75 +671,48 @@ switch ($resource) {
                             if (isset($photo_analysis['error'])) {
                                 $analysis_error = is_string($photo_analysis['error']) ? $photo_analysis['error'] : json_encode($photo_analysis['error']);
                             } elseif (!empty($photo_analysis['items'])) {
-                                $current_layout = $stores[$storeIndex]['aisle_layout'] ?? null;
-                                $current_layout_description = $stores[$storeIndex]['layout_description'] ?? null;
+                                require __DIR__ . '/includes/store-helpers.php';
                                 
-                                // Ensure current_layout_description is a string
-                                if (!is_string($current_layout_description)) {
-                                    $current_layout_description = '';
-                                }
+                                // Clean the existing layout before working with it
+                                $current_layout = clean_aisle_layout($stores[$storeIndex]['aisle_layout'] ?? null);
                                 
-                                if ($create_new_section && is_array($current_layout)) {
-                                    // Create new section from photo
-                                    require __DIR__ . '/includes/store-helpers.php';
-                                    
-                                    $aisle_number = $photo_analysis['aisle_number'] ?? 'New Section';
-                                    $category = $photo_analysis['category'] ?? 'General';
-                                    $items = is_array($photo_analysis['items'] ?? null) ? $photo_analysis['items'] : [];
-                                    
-                                    // Add new section
-                                    $new_section = create_default_section($aisle_number, $category, $items, [$photo_metadata]);
+                                if ($create_new_section) {
+                                    // Create new section from photo - just add it directly, no AI update needed
+                                    $new_section = create_default_section(
+                                        $photo_analysis['aisle_number'] ?? 'New Section',
+                                        $photo_analysis['category'] ?? 'General',
+                                        is_array($photo_analysis['items'] ?? null) ? $photo_analysis['items'] : [],
+                                        [$photo_metadata]
+                                    );
                                     $current_layout[] = $new_section;
-                                    
-                                    // Update layout description
-                                    $updated_layout_result = update_aisle_layout_from_photo($current_layout, $photo_analysis, $current_layout_description);
-                                    update_layout_description_if_valid($stores[$storeIndex], $updated_layout_result);
-                                    
-                                    $stores[$storeIndex]['aisle_layout'] = $current_layout;
+                                    save_store_layout($stores[$storeIndex], $current_layout);
                                     $layout_updated = true;
                                 } elseif ($is_section_photo && is_array($current_layout) && isset($current_layout[$section_index])) {
                                     // Section-specific photo: only update that section
-                                    require __DIR__ . '/includes/store-helpers.php';
-                                    
                                     $section = &$current_layout[$section_index];
-                                    
-                                    // Update section items with photo analysis
                                     $section['items'] = is_array($photo_analysis['items'] ?? null) ? $photo_analysis['items'] : [];
                                     if (isset($photo_analysis['category'])) {
                                         $section['category'] = $photo_analysis['category'];
                                     }
-                                    
-                                    // Add photo to section
                                     add_photo_to_array($section, $photo_metadata, true);
                                     
-                                    // Update layout description (but keep it general)
-                                    $updated_layout_result = update_aisle_layout_from_photo($current_layout, $photo_analysis, $current_layout_description);
-                                    update_layout_description_if_valid($stores[$storeIndex], $updated_layout_result);
-                                    
-                                    $stores[$storeIndex]['aisle_layout'] = $current_layout;
-                                    $layout_updated = true;
+                                    // Update layout (may merge with other sections)
+                                    $updated_layout_result = update_aisle_layout_from_photo($current_layout, $photo_analysis);
+                                    $result = apply_layout_update_result($stores[$storeIndex], $updated_layout_result, $current_layout);
+                                    if (isset($result['error'])) {
+                                        $analysis_error = $result['error'];
+                                    } else {
+                                        $layout_updated = true;
+                                    }
                                 } else {
                                     // General photo: update entire layout
-                                    $updated_layout_result = update_aisle_layout_from_photo($current_layout, $photo_analysis, $current_layout_description);
-                                    
-                                    if (isset($updated_layout_result['error'])) {
-                                        $analysis_error = $updated_layout_result['error'];
-                                    } elseif (is_array($updated_layout_result) && isset($updated_layout_result['aisle_layout'])) {
-                                        // Update both aisle_layout and layout_description
-                                        $updated_layout = $updated_layout_result['aisle_layout'];
-                                        if ((is_array($updated_layout) && !empty($updated_layout)) || (is_string($updated_layout) && !empty($updated_layout))) {
-                                            $stores[$storeIndex]['aisle_layout'] = $updated_layout;
-                                            $layout_updated = true;
-                                        }
-                                        if (is_string($updated_layout_result['layout_description']) && !empty($updated_layout_result['layout_description'])) {
-                                            $stores[$storeIndex]['layout_description'] = $updated_layout_result['layout_description'];
-                                        }
+                                    $updated_layout_result = update_aisle_layout_from_photo($current_layout, $photo_analysis);
+                                    $result = apply_layout_update_result($stores[$storeIndex], $updated_layout_result);
+                                    if (isset($result['error'])) {
+                                        $analysis_error = $result['error'];
                                     } else {
-                                        $analysis_error = "Layout update returned invalid format: " . gettype($updated_layout_result);
+                                        $layout_updated = true;
                                     }
-                                    
-                                    // Add to general photos
-                                    require __DIR__ . '/includes/store-helpers.php';
                                     add_photo_to_array($stores[$storeIndex], $photo_metadata, false);
                                 }
                             } else {
@@ -769,7 +742,10 @@ switch ($resource) {
                             handle_photo_upload_fallback($stores[$storeIndex], $current_layout, $photo_metadata, $create_new_section, $is_section_photo, $section_index);
                         }
                         
-                        $stores[$storeIndex]['updated'] = date('c');
+                        // Updated timestamp is handled by save_store_layout, but ensure it's set if layout wasn't updated
+                        if (!$layout_updated) {
+                            $stores[$storeIndex]['updated'] = date('c');
+                        }
                         write_json_file($stores_file, $stores);
                         
                         $response_data = [
@@ -784,6 +760,7 @@ switch ($resource) {
                         
                         if ($layout_updated) {
                             $response_data['layout_updated'] = true;
+                            $response_data['store_layout'] = clean_aisle_layout($stores[$storeIndex]['aisle_layout']);
                             $response_data['detected_items'] = $photo_analysis['items'] ?? [];
                             $response_data['aisle'] = $photo_analysis['aisle_number'] ?? null;
                             $response_data['category'] = $photo_analysis['category'] ?? null;
@@ -869,7 +846,6 @@ switch ($resource) {
                         'state' => $store_data['state'] ?? null,
                         'phone' => $store_data['phone'] ?? null,
                         'aisle_layout' => $store_data['aisle_layout'] ?? null,
-                        'layout_description' => $store_data['layout_description'] ?? null,
                         'created' => date('c')
                     ];
                     
@@ -913,40 +889,13 @@ switch ($resource) {
                     $store_data = $basic_info;
                 }
                 
-                // Step 2: Generate layout description
-                if ($step === null || $step === 'layout_description') {
-                    if ($store_data === null) {
-                        json_response(['error' => 'Store basic information required'], 400);
-                    }
-                    
-                    $layout_result = generate_layout_description($store_data, $input);
-                    
-                    if (isset($layout_result['error'])) {
-                        error_log("AI layout description error: " . $layout_result['error']);
-                        json_response(['error' => 'Failed to generate layout description: ' . $layout_result['error']], 500);
-                    }
-                    
-                    $store_data['layout_description'] = $layout_result['layout_description'] ?? null;
-                    
-                    // If only step 2 requested, return updated store data
-                    if ($step === 'layout_description') {
-                        json_response([
-                            'step' => 'layout_description',
-                            'store_data' => $store_data,
-                            'success' => true
-                        ]);
-                        break;
-                    }
-                }
-                
-                // Step 3: Generate aisle layout (uses layout_description for consistency)
+                // Step 2: Generate aisle layout
                 if ($step === null || $step === 'aisle_layout') {
                     if ($store_data === null) {
                         json_response(['error' => 'Store basic information required'], 400);
                     }
                     
-                    $layout_description = $store_data['layout_description'] ?? '';
-                    $aisle_result = generate_aisle_layout($store_data, $layout_description, $input);
+                    $aisle_result = generate_aisle_layout($store_data, $input);
                     
                     if (isset($aisle_result['error'])) {
                         error_log("AI aisle layout error: " . $aisle_result['error']);
@@ -955,7 +904,7 @@ switch ($resource) {
                     
                     $store_data['aisle_layout'] = $aisle_result['aisle_layout'] ?? null;
                     
-                    // If only step 3 requested, return updated store data
+                    // If only step 2 requested, return updated store data
                     if ($step === 'aisle_layout') {
                         json_response([
                             'step' => 'aisle_layout',
@@ -976,7 +925,6 @@ switch ($resource) {
                     'state' => $store_data['state'] ?? null,
                     'phone' => $store_data['phone'] ?? null,
                     'aisle_layout' => $store_data['aisle_layout'] ?? null,
-                    'layout_description' => $store_data['layout_description'] ?? null,
                     'created' => date('c')
                 ];
                 

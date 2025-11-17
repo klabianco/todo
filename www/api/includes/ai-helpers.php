@@ -82,52 +82,8 @@ function format_store_location($city, $state) {
     return $parts ? implode(', ', $parts) : '';
 }
 
-// Step 2: Generate layout description (physical layout relative to entrance)
-function generate_layout_description($store_info, $input) {
-    set_ai_execution_time(600); // 10 minutes per step
-    
-    $store_name = $store_info['name'] ?? 'the store';
-    $location = format_store_location($store_info['city'] ?? null, $store_info['state'] ?? null);
-    
-    $systemMessage = "You are a helpful assistant that creates detailed physical store layout descriptions.";
-    
-    $prompt = "Based on this store information:\n" .
-              "Store: " . $store_name . "\n" .
-              ($location ? "Location: " . $location . "\n" : "") .
-              "Original input: " . $input . "\n\n" .
-              "Create a SHORT paragraph (2-4 sentences) describing the physical store layout and navigation. Describe where key sections are located in relation to the entrance.\n\n" .
-              "Include:\n" .
-              "- Which side aisles are on (left/right from entrance)\n" .
-              "- Where major departments are positioned (produce, bakery, deli, meat, dairy, etc.)\n" .
-              "- Brief navigation guidance\n\n" .
-              "Keep it concise - 2-4 sentences maximum. If specific layout information is not available, create a brief typical grocery store layout description.\n\n" .
-              "Return a JSON object with this field:\n" .
-              "- layout_description: A short paragraph (2-4 sentences) describing the physical layout\n\n" .
-              "Return ONLY a valid JSON object.";
-    
-    $ai = new AI();
-    $ai->setJsonResponse(true);
-    $ai->setSystemMessage($systemMessage);
-    $ai->setPrompt($prompt);
-    
-    global $aiModelFallbacks;
-    $response = try_ai_models($ai, $aiModelFallbacks);
-    
-    if (isset($response['error'])) {
-        return ['error' => $response['error']];
-    }
-    
-    $parsed = parse_ai_json_response($response);
-    
-    if ($parsed === null) {
-        return ['error' => 'Failed to parse layout description response'];
-    }
-    
-    return $parsed;
-}
-
-// Step 3: Generate aisle layout (item locations) - uses layout_description for consistency
-function generate_aisle_layout($store_info, $layout_description, $input) {
+// Step 2: Generate aisle layout (item locations)
+function generate_aisle_layout($store_info, $input) {
     set_ai_execution_time(600); // 10 minutes per step
     
     $store_name = $store_info['name'] ?? 'the store';
@@ -138,10 +94,8 @@ function generate_aisle_layout($store_info, $layout_description, $input) {
     $prompt = "Based on this store information:\n" .
               "Store: " . $store_name . "\n" .
               ($location ? "Location: " . $location . "\n" : "") .
-              "Store Layout Description:\n" . ($layout_description ?: "No layout description available.") . "\n\n" .
               "Original input: " . $input . "\n\n" .
               "Create a detailed aisle-by-aisle guide showing where items are located in the store.\n\n" .
-              "IMPORTANT: Use the layout description above to ensure consistency. The aisle layout should match the physical layout described.\n\n" .
               "Format it as a JSON array of objects, where each object represents an aisle/section. Each object should have:\n" .
               "- aisle_number: The aisle or section identifier (e.g., \"Aisle 1\", \"Produce Section\", \"Bakery\")\n" .
               "- items: An array of strings listing the items/products found in that aisle\n" .
@@ -324,7 +278,7 @@ function analyze_store_photo($photo_path) {
 }
 
 // Update store aisle layout based on photo analysis
-function update_aisle_layout_from_photo($current_layout, $photo_analysis, $current_layout_description = null) {
+function update_aisle_layout_from_photo($current_layout, $photo_analysis) {
     set_ai_execution_time(300);
     
     // Determine if current_layout is an array (new format) or string (legacy)
@@ -353,34 +307,24 @@ function update_aisle_layout_from_photo($current_layout, $photo_analysis, $curre
     
     $prompt = "You have a store's current layout and new information from a photo analysis.\n\n" .
               "Current aisle/item layout:\n" . ($layout_for_prompt ?: "No layout information yet.") . "\n\n" .
-              "Current layout description:\n" . ($current_layout_description ?: "No layout description yet.") . "\n\n" .
               "Photo analysis results:\n" .
               "- Section/Location: " . $section_name . "\n" .
               "- Category: " . $category . "\n" .
               "- Items found: " . $items . "\n\n" .
-              "Update BOTH the aisle/item layout AND the layout description:\n\n" .
-              "1. AISLE/ITEM LAYOUT: Update the item location list:\n" .
-              "   - If this section/location already exists, update it with the new items found in the photo.\n" .
-              "   - If this is a NEW section/location, ADD it as a new entry.\n" .
-              "   - Maintain consistency and organization. Keep existing sections that weren't updated.\n" .
-              "   - Return as a JSON array of objects, where each object has:\n" .
-              "     * aisle_number: The aisle/section identifier\n" .
-              "     * items: An array of item strings\n" .
-              "     * category: The category name\n\n" .
-              "2. LAYOUT DESCRIPTION: Update the physical layout description:\n" .
-              "   - Incorporate information about where this section is located in relation to the entrance.\n" .
-              "   - If the photo shows aisle numbers or directional cues, use them to update the description.\n" .
-              "   - Describe which side of the store this section is on (left/right from entrance).\n" .
-              "   - Update or add information about the position of key departments (produce, bakery, deli, etc.).\n" .
-              "   - Keep existing layout information that's still accurate.\n\n" .
-              "Return a JSON object with these two fields:\n" .
-              "- aisle_layout: The updated aisle/item layout as a JSON ARRAY of objects (not a string)\n" .
-              "- layout_description: The updated physical layout description as a STRING\n\n" .
+              "Update the aisle/item layout:\n" .
+              "- If this section/location already exists, update it with the new items found in the photo.\n" .
+              "- If this is a NEW section/location, ADD it as a new entry.\n" .
+              "- Maintain consistency and organization. Keep existing sections that weren't updated.\n" .
+              "- Return as a JSON array of objects, where each object has:\n" .
+              "  * aisle_number: The aisle/section identifier\n" .
+              "  * items: An array of item strings\n" .
+              "  * category: The category name\n\n" .
+              "Return ONLY a JSON array of objects (not wrapped in an object).\n\n" .
               "Example response format:\n" .
-              "{\n" .
-              "  \"aisle_layout\": [{\"aisle_number\": \"Aisle 1\", \"items\": [\"Produce\", \"Vegetables\"], \"category\": \"Produce\"}, {\"aisle_number\": \"Aisle 5\", \"items\": [\"Milk\", \"Cheese\"], \"category\": \"Dairy\"}],\n" .
-              "  \"layout_description\": \"Upon entering, produce is immediately to the right. Aisle 5 is on the left side...\"\n" .
-              "}";
+              "[\n" .
+              "  {\"aisle_number\": \"Aisle 1\", \"items\": [\"Produce\", \"Vegetables\"], \"category\": \"Produce\"},\n" .
+              "  {\"aisle_number\": \"Aisle 5\", \"items\": [\"Milk\", \"Cheese\"], \"category\": \"Dairy\"}\n" .
+              "]";
     
     $ai = new AI();
     $ai->setJsonResponse(true);
@@ -397,13 +341,22 @@ function update_aisle_layout_from_photo($current_layout, $photo_analysis, $curre
     // Parse the JSON response
     $parsed = parse_ai_json_response($response);
     
-    if ($parsed === null || !is_array($parsed)) {
+    if ($parsed === null) {
         return ['error' => 'Failed to parse layout update response'];
     }
     
-    // Extract layout - should be an array
-    $updated_layout = $parsed['aisle_layout'] ?? null;
-    $updated_description = $parsed['layout_description'] ?? $current_layout_description;
+    // Extract layout - should be an array (may be direct array or wrapped in object)
+    $updated_layout = null;
+    if (is_array($parsed) && isset($parsed[0]) && is_array($parsed[0])) {
+        // Direct array response
+        $updated_layout = $parsed;
+    } elseif (is_array($parsed) && isset($parsed['aisle_layout'])) {
+        // Wrapped in object
+        $updated_layout = $parsed['aisle_layout'];
+    } else {
+        // Try to use parsed directly if it's an array
+        $updated_layout = is_array($parsed) ? $parsed : null;
+    }
     
     // Ensure layout is an array (new format)
     if (!is_array($updated_layout)) {
@@ -493,17 +446,8 @@ function update_aisle_layout_from_photo($current_layout, $photo_analysis, $curre
         unset($aisle); // Break reference
     }
     
-    // Ensure description is a string
-    if (!is_string($updated_description)) {
-        $updated_description = is_string($current_layout_description) ? $current_layout_description : '';
-    }
-    
-    // Clean the description
-    $updated_description = trim(preg_replace('/^```(?:text)?\s*|\s*```$/m', '', trim($updated_description)));
-    
     return [
-        'aisle_layout' => $updated_layout,
-        'layout_description' => $updated_description
+        'aisle_layout' => $updated_layout
     ];
 }
 

@@ -56,14 +56,55 @@ function add_photo_to_array(&$target, $photo_metadata, $is_section = false) {
 }
 }
 
-// Update layout description if valid
-if (!function_exists('update_layout_description_if_valid')) {
-function update_layout_description_if_valid(&$store, $updated_layout_result) {
-    if (isset($updated_layout_result['layout_description']) && 
-        is_string($updated_layout_result['layout_description']) && 
-        !empty($updated_layout_result['layout_description'])) {
-        $store['layout_description'] = $updated_layout_result['layout_description'];
+// Clean and normalize aisle_layout to ensure it's a clean indexed array
+if (!function_exists('clean_aisle_layout')) {
+function clean_aisle_layout($aisle_layout) {
+    if (!is_array($aisle_layout)) {
+        return [];
     }
+    
+    $cleaned = [];
+    foreach ($aisle_layout as $key => $section) {
+        // Only include numeric-indexed sections (skip any string keys that might be corruption)
+        if (is_numeric($key) && is_array($section)) {
+            $cleaned[] = $section;
+        }
+    }
+    
+    return array_values($cleaned);
+}
+}
+
+// Save layout to store and mark as updated
+if (!function_exists('save_store_layout')) {
+function save_store_layout(&$store, $layout) {
+    $store['aisle_layout'] = clean_aisle_layout($layout);
+    $store['updated'] = date('c');
+}
+}
+
+// Handle layout update result from AI
+if (!function_exists('apply_layout_update_result')) {
+function apply_layout_update_result(&$store, $updated_layout_result, $fallback_layout = null) {
+    if (isset($updated_layout_result['error'])) {
+        return ['error' => $updated_layout_result['error']];
+    }
+    
+    if (is_array($updated_layout_result) && isset($updated_layout_result['aisle_layout'])) {
+        $updated_layout = $updated_layout_result['aisle_layout'];
+        if ((is_array($updated_layout) && !empty($updated_layout)) || (is_string($updated_layout) && !empty($updated_layout))) {
+            save_store_layout($store, $updated_layout);
+            return ['success' => true, 'layout_updated' => true];
+        }
+    }
+    
+    // Fallback to provided layout if available
+    if ($fallback_layout !== null) {
+        save_store_layout($store, $fallback_layout);
+        return ['success' => true, 'layout_updated' => true];
+    }
+    
+    return ['error' => 'Layout update returned invalid format: ' . gettype($updated_layout_result)];
 }
 }
 

@@ -45,16 +45,6 @@ export const renderStoreInfo = (store, onSectionUpdate = null) => {
         detailParts.push(`<div class="text-xs text-gray-500 dark:text-gray-500 mt-2 mb-4">Added: ${createdDate}</div>`);
     }
     
-    // Layout description section
-    if (store.layout_description) {
-        detailParts.push(`
-            <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3">Store Layout Description</h3>
-                <div class="text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 p-4 rounded-md border border-gray-200 dark:border-gray-600 whitespace-pre-wrap">${escapeHtml(store.layout_description)}</div>
-            </div>
-        `);
-    }
-    
     // Aisle layout section - handle both JSON array format and legacy string format
     let aisleLayout = store.aisle_layout;
     
@@ -244,15 +234,8 @@ export const renderStoreInfo = (store, onSectionUpdate = null) => {
                     ${sectionsHtml}
                 </div>
             </div>
-        `);
-    } else if (!store.layout_description) {
-        // Show message if no layout available
-        detailParts.push(`
-            <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                <div class="text-gray-500 dark:text-gray-400 italic">No store layout information available.</div>
-            </div>
-        `);
-    }
+              `);
+          }
     
     return detailParts.join('');
 };

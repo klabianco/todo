@@ -287,7 +287,6 @@ renderThemeToggle();
                 state: storeData.state || null,
                 phone: storeData.phone || null,
                 aisle_layout: storeData.aisle_layout || null,
-                layout_description: storeData.layout_description || null,
                 created: new Date().toISOString(),
                 photos: []
             };
@@ -304,11 +303,8 @@ renderThemeToggle();
             if (!tempStore.name) {
                 // Step 1: Extracting basic info
                 statusText = '📍 Extracting store information...';
-            } else if (!tempStore.layout_description) {
-                // Step 2: Generating layout description
-                statusText = '🗺️ Generating layout description...';
             } else if (!tempStore.aisle_layout) {
-                // Step 3: Creating item locations
+                // Step 2: Creating item locations
                 statusText = '📋 Creating item locations...';
             }
             // If all data is present, no status text (complete)
@@ -333,7 +329,6 @@ renderThemeToggle();
                         ${statusText ? `<span class="text-sm font-normal text-blue-600 dark:text-blue-400 ml-2">${statusText}</span>` : ''}
                     </h3>
                     ${details ? `<div class="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap mt-2">${escapeHtml(details)}</div>` : ''}
-                    ${tempStore.layout_description ? `<div class="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap mt-2 italic">${escapeHtml(tempStore.layout_description)}</div>` : ''}
                 </div>
                 <div class="mt-3 text-xs text-gray-500 dark:text-gray-500">
                     ${tempStore.aisle_layout ? '✓ Complete' : statusText ? 'Processing...' : ''}
