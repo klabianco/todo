@@ -2,12 +2,36 @@
  * Store detail page functionality
  */
 import { loadStoresFromAPI } from './stores-page.js';
-import { handleMultiplePhotoUploads, renderPhoto } from './store-photo-utils.js';
 import { normalizeAisleLayout } from './store-utils.js';
-import { escapeHtml, $, formatStoreLocation } from './utils.js';
+import { escapeHtml, $, formatStoreLocation, apiFetch } from './utils.js';
+
+// Helper function for API calls with error handling
+const apiCall = async (url, options = {}) => {
+    try {
+        const { timeout, ...fetchOptions } = options;
+        const response = await apiFetch(url, {
+            ...fetchOptions,
+            timeout: timeout,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || `API request failed: ${response.status}`);
+        }
+        
+        return await response.json();
+    } catch (error) {
+        console.error('API call error:', error);
+        throw error;
+    }
+};
 
 // Render store info HTML
-export const renderStoreInfo = (store) => {
+export const renderStoreInfo = (store, onSectionUpdate = null) => {
     const detailParts = [];
     const location = formatStoreLocation(store.city, store.state);
     if (location) {
@@ -53,27 +77,133 @@ export const renderStoreInfo = (store) => {
         }
     }
     
-    if (Array.isArray(aisleLayout) && aisleLayout.length > 0) {
-        // New JSON array format
-        const sectionsHtml = aisleLayout.map(aisle => {
+    // Ensure aisleLayout is an array (even if empty)
+    if (!Array.isArray(aisleLayout)) {
+        aisleLayout = [];
+    }
+    
+    // Always show the section management UI, even if there are no sections
+    if (Array.isArray(aisleLayout)) {
+        // New JSON array format with edit/delete/add functionality
+        const sectionId = (aisle, index) => `section-${index}-${(aisle.aisle_number || 'unknown').replace(/\s+/g, '-').toLowerCase()}`;
+        
+        const sectionsHtml = aisleLayout.length > 0 ? aisleLayout.map((aisle, index) => {
+            if (!aisle || typeof aisle !== 'object') {
+                return '';
+            }
+            
             const aisleNumber = escapeHtml(aisle.aisle_number || 'Unknown');
             const category = aisle.category ? `<span class="text-xs text-gray-500 dark:text-gray-400 ml-2">(${escapeHtml(aisle.category)})</span>` : '';
-            const items = Array.isArray(aisle.items) ? aisle.items.map(item => escapeHtml(item)).join(', ') : '';
+            
+            // Ensure items is an array and format it
+            let items = '';
+            if (Array.isArray(aisle.items)) {
+                items = aisle.items.filter(item => item != null).map(item => escapeHtml(String(item))).join(', ');
+            } else if (aisle.items != null) {
+                if (typeof aisle.items === 'string') {
+                    items = escapeHtml(aisle.items);
+                } else {
+                    items = '';
+                }
+            }
+            
+            // Get section photos
+            const sectionPhotos = Array.isArray(aisle.photos) ? aisle.photos : [];
+            const photoCount = sectionPhotos.length;
             
             return `
-                <div class="py-3 px-4">
-                    <div class="font-semibold text-gray-800 dark:text-gray-200 mb-1">
-                        ${aisleNumber}${category}
+                <div class="section-item py-4 px-4" data-section-index="${index}">
+                    <div class="flex items-start justify-between mb-2">
+                        <div class="flex-1">
+                            <div class="font-semibold text-gray-800 dark:text-gray-200 mb-1">
+                                <span class="section-title-display">${aisleNumber}</span>${category}
+                            </div>
+                            <div class="section-items-display text-gray-600 dark:text-gray-400 text-sm mt-1">
+                                ${items ? `<div>${items}</div>` : '<div class="text-gray-400 italic">No items listed</div>'}
+                            </div>
+                        </div>
+                        <div class="flex gap-2 ml-4">
+                            <button class="edit-section-btn text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm" data-section-index="${index}" title="Edit section">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                </svg>
+                            </button>
+                            <button class="delete-section-btn text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 text-sm" data-section-index="${index}" title="Delete section">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                </svg>
+                            </button>
+                        </div>
                     </div>
-                    ${items ? `<div class="text-gray-600 dark:text-gray-400 text-sm">${items}</div>` : ''}
+                    
+                    <!-- Section Photos -->
+                    <div class="section-photos mt-3">
+                        <div class="flex items-center justify-start mb-2">
+                            <label class="cursor-pointer">
+                                <input 
+                                    type="file" 
+                                    accept="image/*" 
+                                    multiple
+                                    class="hidden section-photo-input" 
+                                    data-section-index="${index}"
+                                />
+                                <span class="text-xs bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded inline-flex items-center">
+                                    <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                                    </svg>
+                                    Add Photos
+                                </span>
+                            </label>
+                        </div>
+                        <div class="section-photos-grid grid grid-cols-4 gap-2" data-section-index="${index}">
+                            ${sectionPhotos.map(photo => {
+                                const photoUrl = `/api/store-photos/${store.id}/${photo.id}`;
+                                return `
+                                    <div class="relative group view-photo cursor-pointer" data-photo-url="${photoUrl}">
+                                        <img src="${photoUrl}" alt="Section photo" class="w-full h-20 object-cover rounded border border-gray-300 dark:border-gray-600">
+                                        <button class="delete-section-photo-btn absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity" data-section-index="${index}" data-photo-id="${photo.id}">
+                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                `;
+                            }).join('')}
+                            ${photoCount === 0 ? '<div class="col-span-4 text-xs text-gray-400 text-center py-2">No photos yet</div>' : ''}
+                        </div>
+                    </div>
                 </div>
             `;
-        }).join('');
+        }).join('') : '<div class="py-8 text-center text-gray-500 dark:text-gray-400 italic">No sections yet. Add your first section using the buttons above!</div>';
         
         detailParts.push(`
             <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3">Item Locations by Section</h3>
-                <div class="bg-gray-50 dark:bg-gray-700 rounded-md border border-gray-200 dark:border-gray-600 divide-y divide-gray-200 dark:divide-gray-600">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Item Locations by Section</h3>
+                    <div class="flex gap-2">
+                        <label class="cursor-pointer">
+                            <input 
+                                type="file" 
+                                accept="image/*" 
+                                class="hidden add-section-photo-input" 
+                                id="add-section-photo-input"
+                            />
+                            <span class="text-sm bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded-md inline-flex items-center">
+                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                </svg>
+                                Add Section from Photo
+                            </span>
+                        </label>
+                        <button id="add-section-btn" class="text-sm bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-md inline-flex items-center">
+                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                            </svg>
+                            Add Section Manually
+                        </button>
+                    </div>
+                </div>
+                <div class="bg-gray-50 dark:bg-gray-700 rounded-md border border-gray-200 dark:border-gray-600 ${aisleLayout.length > 0 ? 'divide-y divide-gray-200 dark:divide-gray-600' : ''}">
                     ${sectionsHtml}
                 </div>
             </div>
@@ -128,7 +258,7 @@ export const renderStoreInfo = (store) => {
 };
 
 // Load and display store
-export const loadStore = async (storeId, elements) => {
+export const loadStore = async (storeId, elements, onSectionUpdate = null) => {
     try {
         elements.loading.classList.remove('hidden');
         elements.container.classList.add('hidden');
@@ -142,14 +272,7 @@ export const loadStore = async (storeId, elements) => {
         }
         
         elements.name.textContent = escapeHtml(store.name);
-        elements.info.innerHTML = renderStoreInfo(store);
-        
-        const photos = store.photos || [];
-        if (photos.length > 0) {
-            elements.photosGrid.innerHTML = photos.map(photo => renderPhoto(photo, storeId, 'large')).join('');
-        } else {
-            elements.photosGrid.innerHTML = '<p class="col-span-3 text-center text-gray-500 dark:text-gray-400 py-8">No photos yet. Add some photos to get started!</p>';
-        }
+        elements.info.innerHTML = renderStoreInfo(store, onSectionUpdate);
         
         elements.loading.classList.add('hidden');
         elements.container.classList.remove('hidden');
@@ -166,14 +289,9 @@ export const handlePhotoDelete = async (storeId, photoId, onComplete) => {
     if (!confirm('Delete this photo?')) return;
     
     try {
-        const response = await fetch(`/api/store-photos/${storeId}/${photoId}`, {
+        await apiCall(`/api/store-photos/${storeId}/${photoId}`, {
             method: 'DELETE'
         });
-        
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || 'Failed to delete photo');
-        }
         
         if (onComplete) {
             await onComplete();
@@ -268,19 +386,230 @@ export const setupPhotoModal = () => {
     }
 };
 
+// Handle section editing
+export const setupSectionManagement = (storeId, onUpdate) => {
+    const container = document.getElementById('store-info');
+    if (!container) return;
+    
+    // Prevent duplicate event listeners by checking if already set up
+    if (container.dataset.sectionManagementSetup === 'true') {
+        return;
+    }
+    container.dataset.sectionManagementSetup = 'true';
+    
+    // Handle all click events via event delegation (only set up once)
+    container.addEventListener('click', async (e) => {
+        if (e.target.closest('#add-section-btn')) {
+            e.preventDefault();
+            const aisleNumber = prompt('Enter section/aisle name:');
+            if (!aisleNumber) return;
+            
+            const category = prompt('Enter category (optional):') || '';
+            const itemsInput = prompt('Enter items (comma-separated):') || '';
+            const items = itemsInput.split(',').map(item => item.trim()).filter(Boolean);
+            
+            try {
+                await apiCall(`/api/grocery-stores/${storeId}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({
+                        action: 'add_section',
+                        section: {
+                            aisle_number: aisleNumber,
+                            category: category,
+                            items: items,
+                            photos: []
+                        }
+                    })
+                });
+                
+                if (onUpdate) await onUpdate();
+            } catch (error) {
+                console.error('Error adding section:', error);
+                alert(`Failed to add section: ${error.message}`);
+            }
+        }
+        
+        // Edit section
+        if (e.target.closest('.edit-section-btn')) {
+            e.preventDefault();
+            const btn = e.target.closest('.edit-section-btn');
+            const sectionIndex = parseInt(btn.dataset.sectionIndex);
+            
+            const sectionItem = btn.closest('.section-item');
+            const titleDisplay = sectionItem.querySelector('.section-title-display');
+            const itemsDisplay = sectionItem.querySelector('.section-items-display');
+            
+            const currentTitle = titleDisplay.textContent.trim();
+            const currentItems = itemsDisplay.textContent.trim();
+            
+            const newTitle = prompt('Edit section name:', currentTitle);
+            if (newTitle === null) return;
+            
+            const newCategory = prompt('Edit category (optional):', '') || '';
+            const newItemsInput = prompt('Edit items (comma-separated):', currentItems);
+            const newItems = newItemsInput ? newItemsInput.split(',').map(item => item.trim()).filter(Boolean) : [];
+            
+            try {
+                await apiCall(`/api/grocery-stores/${storeId}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({
+                        action: 'update_section',
+                        section_index: sectionIndex,
+                        section: {
+                            aisle_number: newTitle,
+                            category: newCategory,
+                            items: newItems
+                        }
+                    })
+                });
+                
+                if (onUpdate) await onUpdate();
+            } catch (error) {
+                console.error('Error updating section:', error);
+                alert(`Failed to update section: ${error.message}`);
+            }
+        }
+        
+        // Delete section
+        if (e.target.closest('.delete-section-btn')) {
+            e.preventDefault();
+            const btn = e.target.closest('.delete-section-btn');
+            const sectionIndex = parseInt(btn.dataset.sectionIndex);
+            
+            if (!confirm('Delete this section? This will also delete all photos associated with it.')) return;
+            
+            try {
+                await apiCall(`/api/grocery-stores/${storeId}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({
+                        action: 'delete_section',
+                        section_index: sectionIndex
+                    })
+                });
+                
+                if (onUpdate) await onUpdate();
+            } catch (error) {
+                console.error('Error deleting section:', error);
+                alert(`Failed to delete section: ${error.message}`);
+            }
+        }
+        
+        // Delete section photo (handled in same click handler)
+        if (e.target.closest('.delete-section-photo-btn')) {
+            e.stopPropagation();
+            const btn = e.target.closest('.delete-section-photo-btn');
+            const sectionIndex = parseInt(btn.dataset.sectionIndex);
+            const photoId = btn.dataset.photoId;
+            
+            if (!confirm('Delete this photo?')) return;
+            
+            try {
+                await apiCall(`/api/grocery-stores/${storeId}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({
+                        action: 'delete_section_photo',
+                        section_index: sectionIndex,
+                        photo_id: photoId
+                    })
+                });
+                
+                if (onUpdate) await onUpdate();
+            } catch (error) {
+                console.error('Error deleting section photo:', error);
+                alert(`Failed to delete photo: ${error.message}`);
+            }
+        }
+    });
+    
+    // Handle all change events via event delegation (only set up once)
+    container.addEventListener('change', async (e) => {
+        // Add section from photo
+        if (e.target.id === 'add-section-photo-input') {
+            const files = e.target.files;
+            if (!files || files.length === 0) return;
+            
+            await handleAddSectionFromPhoto(storeId, files[0], onUpdate);
+            e.target.value = '';
+        }
+        // Section photo upload
+        else if (e.target.classList.contains('section-photo-input')) {
+            const sectionIndex = parseInt(e.target.dataset.sectionIndex);
+            const files = e.target.files;
+            if (!files || files.length === 0) return;
+            
+            await handleSectionPhotoUpload(storeId, sectionIndex, files, onUpdate);
+            e.target.value = '';
+        }
+    });
+};
+
+// Handle adding a new section from photo
+const handleAddSectionFromPhoto = async (storeId, file, onUpdate) => {
+    const { showLoadingOverlay, updateLoadingOverlay, hideLoadingOverlay } = await import('./overlay-utils.js');
+    
+    showLoadingOverlay('Creating section from photo...', 'Uploading and analyzing photo...');
+    
+    try {
+        updateLoadingOverlay('Creating section from photo...', 'Uploading photo...');
+        
+        const formData = new FormData();
+        formData.append('photo', file);
+        formData.append('create_new_section', '1');
+        
+        await apiFetch(`/api/store-photos/${storeId}`, {
+            method: 'POST',
+            body: formData,
+            timeout: 600000 // 10 minutes for AI processing
+        });
+        
+        if (onUpdate) await onUpdate();
+    } catch (error) {
+        console.error('Error creating section from photo:', error);
+        alert(`Failed to create section from photo: ${error.message}`);
+    } finally {
+        hideLoadingOverlay();
+    }
+};
+
+// Handle section-specific photo upload
+const handleSectionPhotoUpload = async (storeId, sectionIndex, files, onUpdate) => {
+    const { showLoadingOverlay, updateLoadingOverlay, hideLoadingOverlay } = await import('./overlay-utils.js');
+    
+    showLoadingOverlay('Uploading photos...', `Uploading ${files.length} photo(s) to section`);
+    
+    try {
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            updateLoadingOverlay('Uploading photos...', `Uploading photo ${i + 1} of ${files.length}`);
+            
+            const formData = new FormData();
+            formData.append('photo', file);
+            formData.append('section_index', sectionIndex);
+            
+            await apiFetch(`/api/store-photos/${storeId}`, {
+                method: 'POST',
+                body: formData,
+                timeout: 600000 // 10 minutes for AI processing
+            });
+        }
+        
+        if (onUpdate) await onUpdate();
+    } catch (error) {
+        console.error('Error uploading section photos:', error);
+        alert(`Failed to upload photos: ${error.message}`);
+    } finally {
+        hideLoadingOverlay();
+    }
+};
+
 // Handle store deletion
 export const handleStoreDelete = async (storeId) => {
     if (!confirm('Delete this store? This will also delete all associated photos.')) return;
     
     try {
-        const response = await fetch(`/api/grocery-stores/${storeId}`, {
+        await apiCall(`/api/grocery-stores/${storeId}`, {
             method: 'DELETE'
         });
-        
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || 'Failed to delete store');
-        }
         
         // Redirect to stores listing page
         window.location.href = '/stores.php';

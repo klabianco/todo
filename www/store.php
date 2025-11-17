@@ -37,30 +37,6 @@ renderThemeToggle();
                     </div>
                 </div>
                 
-                <div id="photos-section" class="mt-6">
-                    <div class="flex items-center justify-between mb-4">
-                        <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-200">Photos</h2>
-                        <label class="cursor-pointer">
-                            <input 
-                                type="file" 
-                                accept="image/*" 
-                                multiple
-                                class="hidden store-photo-input" 
-                                id="photo-upload-input"
-                            />
-                            <span class="text-sm bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md inline-flex items-center">
-                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-                                </svg>
-                                Add Photos
-                            </span>
-                        </label>
-                    </div>
-                    <div id="photos-grid" class="grid grid-cols-3 gap-4">
-                        <!-- Photos will be inserted here -->
-                    </div>
-                </div>
-                
                 <div class="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
                     <button 
                         id="delete-store-button"
@@ -99,7 +75,7 @@ renderThemeToggle();
         <?php renderFooter(); ?>
     </body>
     <script type="module">
-        import { loadStore, setupPhotoUpload, setupPhotoDelete, setupPhotoModal, handleStoreDelete } from '/assets/js/modules/store-detail.js';
+        import { loadStore, setupPhotoUpload, setupPhotoDelete, setupPhotoModal, handleStoreDelete, setupSectionManagement } from '/assets/js/modules/store-detail.js';
         import { $ } from '/assets/js/modules/utils.js';
         
         const storeId = new URLSearchParams(window.location.search).get('id');
@@ -113,16 +89,18 @@ renderThemeToggle();
             container: $('store-container'),
             error: $('error-state'),
             name: $('store-name'),
-            info: $('store-info'),
-            photosGrid: $('photos-grid'),
-            photoInput: $('photo-upload-input')
+            info: $('store-info')
         };
         
-        const reloadStore = () => loadStore(storeId, elements);
+        const reloadStore = () => {
+            loadStore(storeId, elements).then(() => {
+                // setupSectionManagement checks internally if already set up
+                // Since we use event delegation, we only need to set it up once
+                setupSectionManagement(storeId, reloadStore);
+            });
+        };
         
-        // Setup event handlers
-        setupPhotoUpload(storeId, elements.photoInput, reloadStore);
-        setupPhotoDelete(storeId, elements.photosGrid, reloadStore);
+        // Setup photo modal (for viewing section photos)
         setupPhotoModal();
         $('delete-store-button')?.addEventListener('click', () => handleStoreDelete(storeId));
         $('retry-button')?.addEventListener('click', reloadStore);

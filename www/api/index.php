@@ -643,6 +643,11 @@ switch ($resource) {
                             json_response($validation_error, 400);
                         }
                         
+                        // Check if this is a section-specific upload or new section creation
+                        $section_index = isset($_POST['section_index']) ? (int)$_POST['section_index'] : null;
+                        $create_new_section = isset($_POST['create_new_section']) && $_POST['create_new_section'] === '1';
+                        $is_section_photo = $section_index !== null && $section_index >= 0;
+                        
                         $save_result = save_uploaded_photo($file, $store_id, $data_dir);
                         if (isset($save_result['error'])) {
                             json_response($save_result, 500);
@@ -666,37 +671,76 @@ switch ($resource) {
                             if (isset($photo_analysis['error'])) {
                                 $analysis_error = is_string($photo_analysis['error']) ? $photo_analysis['error'] : json_encode($photo_analysis['error']);
                             } elseif (!empty($photo_analysis['items'])) {
-                                // Update store layout and layout description based on photo analysis
-                                $current_layout = $stores[$storeIndex]['aisle_layout'] ?? '';
-                                $current_layout_description = $stores[$storeIndex]['layout_description'] ?? '';
+                                $current_layout = $stores[$storeIndex]['aisle_layout'] ?? null;
+                                $current_layout_description = $stores[$storeIndex]['layout_description'] ?? null;
                                 
-                                // Ensure current_layout is a string (it might be stored as an object/array)
-                                if (is_array($current_layout) || is_object($current_layout)) {
-                                    require __DIR__ . '/includes/store-helpers.php';
-                                    $current_layout = normalize_aisle_layout($current_layout) ?? '';
-                                }
-                                if (!is_string($current_layout)) {
-                                    $current_layout = '';
-                                }
+                                // Ensure current_layout_description is a string
                                 if (!is_string($current_layout_description)) {
                                     $current_layout_description = '';
                                 }
                                 
-                                $updated_layout_result = update_aisle_layout_from_photo($current_layout, $photo_analysis, $current_layout_description);
-                                
-                                if (isset($updated_layout_result['error'])) {
-                                    $analysis_error = $updated_layout_result['error'];
-                                } elseif (is_array($updated_layout_result) && isset($updated_layout_result['aisle_layout'])) {
-                                    // Update both aisle_layout and layout_description
-                                    if (is_string($updated_layout_result['aisle_layout']) && !empty($updated_layout_result['aisle_layout'])) {
-                                        $stores[$storeIndex]['aisle_layout'] = $updated_layout_result['aisle_layout'];
-                                        $layout_updated = true;
+                                if ($create_new_section && is_array($current_layout)) {
+                                    // Create new section from photo
+                                    require __DIR__ . '/includes/store-helpers.php';
+                                    
+                                    $aisle_number = $photo_analysis['aisle_number'] ?? 'New Section';
+                                    $category = $photo_analysis['category'] ?? 'General';
+                                    $items = is_array($photo_analysis['items'] ?? null) ? $photo_analysis['items'] : [];
+                                    
+                                    // Add new section
+                                    $new_section = create_default_section($aisle_number, $category, $items, [$photo_metadata]);
+                                    $current_layout[] = $new_section;
+                                    
+                                    // Update layout description
+                                    $updated_layout_result = update_aisle_layout_from_photo($current_layout, $photo_analysis, $current_layout_description);
+                                    update_layout_description_if_valid($stores[$storeIndex], $updated_layout_result);
+                                    
+                                    $stores[$storeIndex]['aisle_layout'] = $current_layout;
+                                    $layout_updated = true;
+                                } elseif ($is_section_photo && is_array($current_layout) && isset($current_layout[$section_index])) {
+                                    // Section-specific photo: only update that section
+                                    require __DIR__ . '/includes/store-helpers.php';
+                                    
+                                    $section = &$current_layout[$section_index];
+                                    
+                                    // Update section items with photo analysis
+                                    $section['items'] = is_array($photo_analysis['items'] ?? null) ? $photo_analysis['items'] : [];
+                                    if (isset($photo_analysis['category'])) {
+                                        $section['category'] = $photo_analysis['category'];
                                     }
-                                    if (is_string($updated_layout_result['layout_description']) && !empty($updated_layout_result['layout_description'])) {
-                                        $stores[$storeIndex]['layout_description'] = $updated_layout_result['layout_description'];
-                                    }
+                                    
+                                    // Add photo to section
+                                    add_photo_to_array($section, $photo_metadata, true);
+                                    
+                                    // Update layout description (but keep it general)
+                                    $updated_layout_result = update_aisle_layout_from_photo($current_layout, $photo_analysis, $current_layout_description);
+                                    update_layout_description_if_valid($stores[$storeIndex], $updated_layout_result);
+                                    
+                                    $stores[$storeIndex]['aisle_layout'] = $current_layout;
+                                    $layout_updated = true;
                                 } else {
-                                    $analysis_error = "Layout update returned invalid format: " . gettype($updated_layout_result);
+                                    // General photo: update entire layout
+                                    $updated_layout_result = update_aisle_layout_from_photo($current_layout, $photo_analysis, $current_layout_description);
+                                    
+                                    if (isset($updated_layout_result['error'])) {
+                                        $analysis_error = $updated_layout_result['error'];
+                                    } elseif (is_array($updated_layout_result) && isset($updated_layout_result['aisle_layout'])) {
+                                        // Update both aisle_layout and layout_description
+                                        $updated_layout = $updated_layout_result['aisle_layout'];
+                                        if ((is_array($updated_layout) && !empty($updated_layout)) || (is_string($updated_layout) && !empty($updated_layout))) {
+                                            $stores[$storeIndex]['aisle_layout'] = $updated_layout;
+                                            $layout_updated = true;
+                                        }
+                                        if (is_string($updated_layout_result['layout_description']) && !empty($updated_layout_result['layout_description'])) {
+                                            $stores[$storeIndex]['layout_description'] = $updated_layout_result['layout_description'];
+                                        }
+                                    } else {
+                                        $analysis_error = "Layout update returned invalid format: " . gettype($updated_layout_result);
+                                    }
+                                    
+                                    // Add to general photos
+                                    require __DIR__ . '/includes/store-helpers.php';
+                                    add_photo_to_array($stores[$storeIndex], $photo_metadata, false);
                                 }
                             } else {
                                 if (empty($photo_analysis)) {
@@ -706,22 +750,25 @@ switch ($resource) {
                                 } elseif (!isset($photo_analysis['items']) || empty($photo_analysis['items'])) {
                                     $analysis_error = "No items detected in photo";
                                 }
+                                
+                                // Still add photo even if analysis fails
+                                require __DIR__ . '/includes/store-helpers.php';
+                                handle_photo_upload_fallback($stores[$storeIndex], $current_layout, $photo_metadata, $create_new_section, $is_section_photo, $section_index);
                             }
                         } catch (Exception $e) {
                             $analysis_error = is_string($e->getMessage()) ? $e->getMessage() : 'Exception: ' . get_class($e);
                             error_log("Exception analyzing photo: " . $analysis_error);
                             // Continue with photo upload even if analysis fails
+                            require __DIR__ . '/includes/store-helpers.php';
+                            handle_photo_upload_fallback($stores[$storeIndex], $current_layout, $photo_metadata, $create_new_section, $is_section_photo, $section_index);
                         } catch (Throwable $e) {
                             $analysis_error = is_string($e->getMessage()) ? $e->getMessage() : 'Fatal error: ' . get_class($e);
                             error_log("Fatal error analyzing photo: " . $analysis_error);
                             // Continue with photo upload even if analysis fails
+                            require __DIR__ . '/includes/store-helpers.php';
+                            handle_photo_upload_fallback($stores[$storeIndex], $current_layout, $photo_metadata, $create_new_section, $is_section_photo, $section_index);
                         }
                         
-                        // Update store to include photo reference with metadata
-                        if (!isset($stores[$storeIndex]['photos'])) {
-                            $stores[$storeIndex]['photos'] = [];
-                        }
-                        $stores[$storeIndex]['photos'][] = $photo_metadata;
                         $stores[$storeIndex]['updated'] = date('c');
                         write_json_file($stores_file, $stores);
                         
@@ -960,6 +1007,175 @@ switch ($resource) {
                 $stores[$storeIndex]['updated'] = date('c');
                 write_json_file($stores_file, $stores);
                 json_response(['store' => $stores[$storeIndex], 'success' => true]);
+                break;
+                
+            case 'PATCH':
+                // Handle section management operations
+                if (!$id) {
+                    json_response(['error' => 'Store ID is required'], 400);
+                }
+                
+                $data = get_request_body();
+                $action = $data['action'] ?? '';
+                
+                $stores = read_json_file($stores_file, []);
+                $storeIndex = find_store_index($stores, $id);
+                
+                if ($storeIndex === null) {
+                    json_response(['error' => 'Store not found'], 404);
+                }
+                
+                $store = &$stores[$storeIndex];
+                $aisle_layout = $store['aisle_layout'] ?? [];
+                
+                // Ensure aisle_layout is an array
+                if (!is_array($aisle_layout)) {
+                    require __DIR__ . '/includes/store-helpers.php';
+                    $aisle_layout = normalize_aisle_layout($aisle_layout) ?? [];
+                    if (!is_array($aisle_layout)) {
+                        $aisle_layout = [];
+                    }
+                }
+                
+                switch ($action) {
+                    case 'add_section':
+                        $section = $data['section'] ?? null;
+                        if (!$section || !isset($section['aisle_number'])) {
+                            json_response(['error' => 'Section data is required'], 400);
+                        }
+                        
+                        // Ensure photos array exists
+                        if (!isset($section['photos']) || !is_array($section['photos'])) {
+                            $section['photos'] = [];
+                        }
+                        
+                        $aisle_layout[] = [
+                            'aisle_number' => $section['aisle_number'],
+                            'category' => $section['category'] ?? '',
+                            'items' => is_array($section['items'] ?? null) ? $section['items'] : [],
+                            'photos' => $section['photos']
+                        ];
+                        
+                        $store['aisle_layout'] = $aisle_layout;
+                        $store['updated'] = date('c');
+                        write_json_file($stores_file, $stores);
+                        json_response(['store' => $store, 'success' => true]);
+                        break;
+                        
+                    case 'update_section':
+                        $section_index = $data['section_index'] ?? null;
+                        $section = $data['section'] ?? null;
+                        
+                        if ($section_index === null || !is_numeric($section_index)) {
+                            json_response(['error' => 'Section index is required'], 400);
+                        }
+                        
+                        if (!$section || !isset($section['aisle_number'])) {
+                            json_response(['error' => 'Section data is required'], 400);
+                        }
+                        
+                        $section_index = (int)$section_index;
+                        if ($section_index < 0 || $section_index >= count($aisle_layout)) {
+                            json_response(['error' => 'Invalid section index'], 400);
+                        }
+                        
+                        // Preserve existing photos
+                        $existing_photos = $aisle_layout[$section_index]['photos'] ?? [];
+                        if (!is_array($existing_photos)) {
+                            $existing_photos = [];
+                        }
+                        
+                        $aisle_layout[$section_index] = [
+                            'aisle_number' => $section['aisle_number'],
+                            'category' => $section['category'] ?? '',
+                            'items' => is_array($section['items'] ?? null) ? $section['items'] : [],
+                            'photos' => $existing_photos
+                        ];
+                        
+                        $store['aisle_layout'] = $aisle_layout;
+                        $store['updated'] = date('c');
+                        write_json_file($stores_file, $stores);
+                        json_response(['store' => $store, 'success' => true]);
+                        break;
+                        
+                    case 'delete_section':
+                        $section_index = $data['section_index'] ?? null;
+                        
+                        if ($section_index === null || !is_numeric($section_index)) {
+                            json_response(['error' => 'Section index is required'], 400);
+                        }
+                        
+                        $section_index = (int)$section_index;
+                        if ($section_index < 0 || $section_index >= count($aisle_layout)) {
+                            json_response(['error' => 'Invalid section index'], 400);
+                        }
+                        
+                        // Delete photos associated with this section
+                        $section_photos = $aisle_layout[$section_index]['photos'] ?? [];
+                        if (is_array($section_photos)) {
+                            require __DIR__ . '/includes/photo-helpers.php';
+                            foreach ($section_photos as $photo) {
+                                if (isset($photo['id'])) {
+                                    $photo_path = get_store_photos_dir($id) . '/' . $photo['id'];
+                                    if (file_exists($photo_path)) {
+                                        @unlink($photo_path);
+                                    }
+                                }
+                            }
+                        }
+                        
+                        array_splice($aisle_layout, $section_index, 1);
+                        
+                        $store['aisle_layout'] = $aisle_layout;
+                        $store['updated'] = date('c');
+                        write_json_file($stores_file, $stores);
+                        json_response(['store' => $store, 'success' => true]);
+                        break;
+                        
+                    case 'delete_section_photo':
+                        $section_index = $data['section_index'] ?? null;
+                        $photo_id = $data['photo_id'] ?? null;
+                        
+                        if ($section_index === null || !is_numeric($section_index)) {
+                            json_response(['error' => 'Section index is required'], 400);
+                        }
+                        
+                        if (!$photo_id) {
+                            json_response(['error' => 'Photo ID is required'], 400);
+                        }
+                        
+                        $section_index = (int)$section_index;
+                        if ($section_index < 0 || $section_index >= count($aisle_layout)) {
+                            json_response(['error' => 'Invalid section index'], 400);
+                        }
+                        
+                        $section_photos = &$aisle_layout[$section_index]['photos'];
+                        if (!is_array($section_photos)) {
+                            $section_photos = [];
+                        }
+                        
+                        // Remove photo from array
+                        $section_photos = array_filter($section_photos, function($photo) use ($photo_id) {
+                            return isset($photo['id']) && $photo['id'] !== $photo_id;
+                        });
+                        $section_photos = array_values($section_photos); // Re-index
+                        
+                        // Delete photo file
+                        require __DIR__ . '/includes/photo-helpers.php';
+                        $photo_path = get_store_photos_dir($id) . '/' . $photo_id;
+                        if (file_exists($photo_path)) {
+                            @unlink($photo_path);
+                        }
+                        
+                        $store['aisle_layout'] = $aisle_layout;
+                        $store['updated'] = date('c');
+                        write_json_file($stores_file, $stores);
+                        json_response(['store' => $store, 'success' => true]);
+                        break;
+                        
+                    default:
+                        json_response(['error' => 'Invalid action'], 400);
+                }
                 break;
                 
             case 'DELETE':

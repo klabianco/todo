@@ -327,6 +327,24 @@ function analyze_store_photo($photo_path) {
 function update_aisle_layout_from_photo($current_layout, $photo_analysis, $current_layout_description = null) {
     set_ai_execution_time(300);
     
+    // Determine if current_layout is an array (new format) or string (legacy)
+    $is_array_format = is_array($current_layout);
+    $layout_for_prompt = '';
+    
+    if ($is_array_format) {
+        // Convert array to readable format for AI prompt
+        $layout_lines = [];
+        foreach ($current_layout as $aisle) {
+            if (is_array($aisle) && isset($aisle['aisle_number'])) {
+                $items = is_array($aisle['items']) ? implode(', ', $aisle['items']) : '';
+                $layout_lines[] = $aisle['aisle_number'] . ': ' . $items;
+            }
+        }
+        $layout_for_prompt = implode("\n", $layout_lines);
+    } else {
+        $layout_for_prompt = is_string($current_layout) ? $current_layout : '';
+    }
+    
     $systemMessage = "You are a helpful assistant that updates store layouts based on photo analysis.";
     
     $section_name = $photo_analysis['aisle_number'] ?? 'Unknown Section';
@@ -334,7 +352,7 @@ function update_aisle_layout_from_photo($current_layout, $photo_analysis, $curre
     $items = implode(', ', $photo_analysis['items'] ?? []);
     
     $prompt = "You have a store's current layout and new information from a photo analysis.\n\n" .
-              "Current aisle/item layout:\n" . ($current_layout ?: "No layout information yet.") . "\n\n" .
+              "Current aisle/item layout:\n" . ($layout_for_prompt ?: "No layout information yet.") . "\n\n" .
               "Current layout description:\n" . ($current_layout_description ?: "No layout description yet.") . "\n\n" .
               "Photo analysis results:\n" .
               "- Section/Location: " . $section_name . "\n" .
@@ -345,7 +363,10 @@ function update_aisle_layout_from_photo($current_layout, $photo_analysis, $curre
               "   - If this section/location already exists, update it with the new items found in the photo.\n" .
               "   - If this is a NEW section/location, ADD it as a new entry.\n" .
               "   - Maintain consistency and organization. Keep existing sections that weren't updated.\n" .
-              "   - Format: \"Aisle 5: Milk, cheese, yogurt, butter\" (one section per line)\n\n" .
+              "   - Return as a JSON array of objects, where each object has:\n" .
+              "     * aisle_number: The aisle/section identifier\n" .
+              "     * items: An array of item strings\n" .
+              "     * category: The category name\n\n" .
               "2. LAYOUT DESCRIPTION: Update the physical layout description:\n" .
               "   - Incorporate information about where this section is located in relation to the entrance.\n" .
               "   - If the photo shows aisle numbers or directional cues, use them to update the description.\n" .
@@ -353,16 +374,16 @@ function update_aisle_layout_from_photo($current_layout, $photo_analysis, $curre
               "   - Update or add information about the position of key departments (produce, bakery, deli, etc.).\n" .
               "   - Keep existing layout information that's still accurate.\n\n" .
               "Return a JSON object with these two fields:\n" .
-              "- aisle_layout: The updated aisle/item layout as a STRING (one section per line)\n" .
+              "- aisle_layout: The updated aisle/item layout as a JSON ARRAY of objects (not a string)\n" .
               "- layout_description: The updated physical layout description as a STRING\n\n" .
               "Example response format:\n" .
               "{\n" .
-              "  \"aisle_layout\": \"Aisle 1: Produce...\\nAisle 5: Milk, cheese...\",\n" .
+              "  \"aisle_layout\": [{\"aisle_number\": \"Aisle 1\", \"items\": [\"Produce\", \"Vegetables\"], \"category\": \"Produce\"}, {\"aisle_number\": \"Aisle 5\", \"items\": [\"Milk\", \"Cheese\"], \"category\": \"Dairy\"}],\n" .
               "  \"layout_description\": \"Upon entering, produce is immediately to the right. Aisle 5 is on the left side...\"\n" .
               "}";
     
     $ai = new AI();
-    $ai->setJsonResponse(true); // We want JSON for this response
+    $ai->setJsonResponse(true);
     $ai->setSystemMessage($systemMessage);
     $ai->setPrompt($prompt);
     
@@ -380,20 +401,104 @@ function update_aisle_layout_from_photo($current_layout, $photo_analysis, $curre
         return ['error' => 'Failed to parse layout update response'];
     }
     
-    // Extract both fields
-    $updated_layout = $parsed['aisle_layout'] ?? $current_layout;
+    // Extract layout - should be an array
+    $updated_layout = $parsed['aisle_layout'] ?? null;
     $updated_description = $parsed['layout_description'] ?? $current_layout_description;
     
-    // Ensure both are strings
-    if (!is_string($updated_layout)) {
-        $updated_layout = $current_layout ?: '';
-    }
-    if (!is_string($updated_description)) {
-        $updated_description = $current_layout_description ?: '';
+    // Ensure layout is an array (new format)
+    if (!is_array($updated_layout)) {
+        // If AI returned a string, try to parse it or fall back to merging manually
+        if (is_string($updated_layout)) {
+            $decoded = json_decode($updated_layout, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                $updated_layout = $decoded;
+            } else {
+                // Fallback: merge new section into existing array
+                if ($is_array_format && is_array($current_layout)) {
+                    $updated_layout = $current_layout;
+                    // Find and update or add the section
+                    $found = false;
+                    foreach ($updated_layout as &$aisle) {
+                        if (isset($aisle['aisle_number']) && $aisle['aisle_number'] === $section_name) {
+                            $aisle['items'] = is_array($photo_analysis['items'] ?? null) ? $photo_analysis['items'] : [];
+                            $aisle['category'] = $category;
+                            $found = true;
+                            break;
+                        }
+                    }
+                    if (!$found) {
+                        $updated_layout[] = [
+                            'aisle_number' => $section_name,
+                            'items' => is_array($photo_analysis['items'] ?? null) ? $photo_analysis['items'] : [],
+                            'category' => $category
+                        ];
+                    }
+                } else {
+                    // Legacy format - keep as string
+                    $updated_layout = $updated_layout ?: $current_layout;
+                }
+            }
+        } else {
+            // Fallback: merge new section into existing array
+            if ($is_array_format && is_array($current_layout)) {
+                $updated_layout = $current_layout;
+                $found = false;
+                foreach ($updated_layout as &$aisle) {
+                    if (isset($aisle['aisle_number']) && $aisle['aisle_number'] === $section_name) {
+                        $aisle['items'] = is_array($photo_analysis['items'] ?? null) ? $photo_analysis['items'] : [];
+                        $aisle['category'] = $category;
+                        $found = true;
+                        break;
+                    }
+                }
+                if (!$found) {
+                    $updated_layout[] = [
+                        'aisle_number' => $section_name,
+                        'items' => is_array($photo_analysis['items'] ?? null) ? $photo_analysis['items'] : [],
+                        'category' => $category
+                    ];
+                }
+            } else {
+                $updated_layout = $current_layout;
+            }
+        }
     }
     
-    // Clean the responses
-    $updated_layout = trim(preg_replace('/^```(?:text)?\s*|\s*```$/m', '', trim($updated_layout)));
+    // Validate and clean up the array structure - ensure items is always an array
+    if (is_array($updated_layout)) {
+        foreach ($updated_layout as &$aisle) {
+            if (is_array($aisle)) {
+                // Ensure items is an array
+                if (!isset($aisle['items']) || !is_array($aisle['items'])) {
+                    // If items exists but isn't an array, try to convert it
+                    if (isset($aisle['items']) && is_string($aisle['items'])) {
+                        // Try to parse as JSON array
+                        $decoded = json_decode($aisle['items'], true);
+                        if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                            $aisle['items'] = $decoded;
+                        } else {
+                            // Split by comma if it's a comma-separated string
+                            $aisle['items'] = array_filter(array_map('trim', explode(',', $aisle['items'])));
+                        }
+                    } else {
+                        $aisle['items'] = [];
+                    }
+                }
+                // Ensure aisle_number exists
+                if (!isset($aisle['aisle_number']) || empty($aisle['aisle_number'])) {
+                    $aisle['aisle_number'] = 'Unknown';
+                }
+            }
+        }
+        unset($aisle); // Break reference
+    }
+    
+    // Ensure description is a string
+    if (!is_string($updated_description)) {
+        $updated_description = is_string($current_layout_description) ? $current_layout_description : '';
+    }
+    
+    // Clean the description
     $updated_description = trim(preg_replace('/^```(?:text)?\s*|\s*```$/m', '', trim($updated_description)));
     
     return [
