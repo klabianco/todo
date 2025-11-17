@@ -379,22 +379,65 @@ switch ($resource) {
         
         $data = get_request_body();
         $tasks = $data['tasks'] ?? [];
+        $store = $data['store'] ?? null;
         
         if (empty($tasks)) {
             json_response(['tasks' => []]);
         }
         
         try {
+            require __DIR__ . '/includes/store-helpers.php';
+            
             // Extract task text for AI processing
             $taskTexts = array_column($tasks, 'task');
+            
+            // Build prompt based on whether we have store layout data
+            $systemMessage = "You are a grocery shopping assistant. Your job is to sort grocery items in the optimal order for shopping, optimizing for shopping efficiency.";
+            $prompt = "Sort these grocery items in the optimal order for shopping";
+            
+            if ($store && isset($store['aisle_layout']) && !empty($store['aisle_layout'])) {
+                // Use store-specific layout
+                $aisle_layout = clean_aisle_layout($store['aisle_layout']);
+                
+                if (!empty($aisle_layout) && is_array($aisle_layout)) {
+                    // Format aisle layout for the prompt
+                    $layout_text = "Store: " . ($store['name'] ?? 'Unknown') . "\n\n";
+                    $layout_text .= "Aisle/Section Layout:\n";
+                    foreach ($aisle_layout as $section) {
+                        if (is_array($section) && isset($section['aisle_number'])) {
+                            $aisle_name = $section['aisle_number'] ?? 'Unknown';
+                            $category = $section['category'] ?? '';
+                            $items = is_array($section['items'] ?? null) ? implode(', ', $section['items']) : '';
+                            $layout_text .= "- {$aisle_name}" . ($category ? " ({$category})" : '') . ": {$items}\n";
+                        }
+                    }
+                    
+                    $systemMessage .= " You have access to the specific store's aisle layout. Use this layout to sort items in the exact order they appear in the store, following the aisle/section sequence.";
+                    $prompt .= " at " . ($store['name'] ?? 'this store') . ". Use the store's aisle layout below to sort items in the exact order they appear in the store aisles/sections.\n\n" .
+                              $layout_text . "\n\n" .
+                              "Items to sort:\n" . json_encode($taskTexts, JSON_PRETTY_PRINT) . "\n\n" .
+                              "Sort the items according to the store's aisle layout above. Items should be ordered based on which aisle/section they belong to, following the sequence of aisles in the store. " .
+                              "If an item matches multiple sections, place it in the first matching section. If an item doesn't match any section, place it at the end.";
+                } else {
+                    // Store selected but no valid layout - fall back to generic sorting
+                    $systemMessage .= " Group similar items together (e.g., all fruits together, all meats together, dairy together, etc.). Think about typical supermarket layout: produce first, then meats, dairy, frozen foods, pantry items, etc.";
+                    $prompt .= " at a supermarket. Return ONLY a valid JSON object with this exact structure:\n\n{\n  \"sortedItems\": [\"item1\", \"item2\", \"item3\", ...]\n}\n\nItems to sort:\n" . 
+                              json_encode($taskTexts, JSON_PRETTY_PRINT) . 
+                              "\n\nReturn the items in the order they should be shopped, grouped by category (produce together, meats together, dairy together, etc.). The 'sortedItems' array must contain exactly the same item strings as provided, just reordered.";
+                }
+            } else {
+                // No store selected - use generic sorting
+                $systemMessage .= " Group similar items together (e.g., all fruits together, all meats together, dairy together, etc.). Think about typical supermarket layout: produce first, then meats, dairy, frozen foods, pantry items, etc.";
+                $prompt .= " at a supermarket. Return ONLY a valid JSON object with this exact structure:\n\n{\n  \"sortedItems\": [\"item1\", \"item2\", \"item3\", ...]\n}\n\nItems to sort:\n" . 
+                          json_encode($taskTexts, JSON_PRETTY_PRINT) . 
+                          "\n\nReturn the items in the order they should be shopped, grouped by category (produce together, meats together, dairy together, etc.). The 'sortedItems' array must contain exactly the same item strings as provided, just reordered.";
+            }
             
             // Create AI instance and set up prompt for grocery sorting
             $ai = new AI();
             $ai->setJsonResponse(true);
-            $ai->setSystemMessage("You are a grocery shopping assistant. Your job is to sort grocery items in the order they would typically be found in a supermarket, optimizing for shopping efficiency. Group similar items together (e.g., all fruits together, all meats together, dairy together, etc.). Think about typical supermarket layout: produce first, then meats, dairy, frozen foods, pantry items, etc. You MUST return a valid JSON object with a 'sortedItems' array containing strings.");
-            $ai->setPrompt("Sort these grocery items in the optimal order for shopping at a supermarket. Return ONLY a valid JSON object with this exact structure:\n\n{\n  \"sortedItems\": [\"item1\", \"item2\", \"item3\", ...]\n}\n\nItems to sort:\n" . 
-                         json_encode($taskTexts, JSON_PRETTY_PRINT) . 
-                         "\n\nReturn the items in the order they should be shopped, grouped by category (produce together, meats together, dairy together, etc.). The 'sortedItems' array must contain exactly the same item strings as provided, just reordered.");
+            $ai->setSystemMessage($systemMessage . " You MUST return a valid JSON object with a 'sortedItems' array containing strings.");
+            $ai->setPrompt($prompt);
             
             // Try AI models with fallback
             global $aiModelFallbacks;

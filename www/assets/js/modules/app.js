@@ -705,11 +705,34 @@ const handleAISortClick = async () => {
             return;
         }
         
+        // Get selected store and fetch full store data if available
+        const selectedStore = groceryStores.getSelectedGroceryStore();
+        let storeData = null;
+        if (selectedStore && selectedStore.id) {
+            // Fetch fresh store data to ensure we have the latest aisle_layout
+            try {
+                const stores = await groceryStores.loadGroceryStores();
+                const fullStore = stores.find(s => s.id === selectedStore.id);
+                if (fullStore && fullStore.aisle_layout) {
+                    storeData = {
+                        id: fullStore.id,
+                        name: fullStore.name,
+                        aisle_layout: fullStore.aisle_layout
+                    };
+                }
+            } catch (error) {
+                console.error('Error loading store data for sorting:', error);
+            }
+        }
+        
         // Call AI sort API
         const response = await fetch('/api/sort', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tasks: tasksToSort })
+            body: JSON.stringify({ 
+                tasks: tasksToSort,
+                store: storeData
+            })
         });
         
         if (!response.ok) {
