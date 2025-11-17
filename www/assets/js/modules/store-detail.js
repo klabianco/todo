@@ -518,6 +518,16 @@ export const setupSectionManagement = (storeId, onUpdate) => {
                 console.error('Error deleting section photo:', error);
                 alert(`Failed to delete photo: ${error.message}`);
             }
+            return;
+        }
+        
+        // Handle photo view clicks
+        const photoContainer = e.target.closest('.view-photo');
+        if (photoContainer) {
+            const photoUrl = photoContainer.dataset.photoUrl;
+            if (photoUrl) {
+                showPhotoModal(photoUrl);
+            }
         }
     });
     
