@@ -231,8 +231,19 @@ function build_aisle_index_map_from_layout($aisle_layout) {
         $name = $section['aisle_number'] ?? null;
         if (!is_string($name) || trim($name) === '') continue;
         $name = trim($name);
-        if (!isset($map[$name])) {
-            $map[$name] = $idx;
+        // Prefer numeric aisle ordering when possible (e.g. "Aisle 18 (...)")
+        $sortIndex = null;
+        if (preg_match('/\baisle\s*(\d+)\b/i', $name, $m)) {
+            $sortIndex = (int)$m[1];
+        } elseif (preg_match('/\b(\d+)\b/', $name, $m)) {
+            $sortIndex = (int)$m[1];
+        } else {
+            // Non-numeric sections go after numbered aisles, keep relative order
+            $sortIndex = 100000 + $idx;
+        }
+
+        if (!isset($map[$name]) || $sortIndex < $map[$name]) {
+            $map[$name] = $sortIndex;
         }
         $idx++;
     }

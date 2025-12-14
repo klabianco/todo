@@ -672,16 +672,33 @@ const enableAllInteractions = () => {
 const sortTasksByAisle = (tasks) => {
     if (!Array.isArray(tasks) || tasks.length === 0) return tasks || [];
 
+    const parseAisleNumber = (aisle) => {
+        if (aisle == null) return null;
+        const s = String(aisle);
+        // Prefer explicit "Aisle 18" pattern
+        let m = s.match(/\baisle\s*(\d+)\b/i);
+        if (m && m[1]) return Number(m[1]);
+        // Fallback: first standalone number anywhere
+        m = s.match(/\b(\d+)\b/);
+        if (m && m[1]) return Number(m[1]);
+        return null;
+    };
+
     // Stable sort: decorate with original index
     const decorated = tasks.map((t, idx) => ({
         t,
         idx,
-        aisleIndex: Number.isFinite(Number(t?.aisle_index)) ? Number(t.aisle_index) : 9999,
         aisle: (t?.aisle ?? '').toString(),
+        aisleNum: parseAisleNumber(t?.aisle),
+        aisleIndex: Number.isFinite(Number(t?.aisle_index)) ? Number(t.aisle_index) : 9999,
         text: (t?.task ?? '').toString()
     }));
 
     decorated.sort((a, b) => {
+        const aHasNum = Number.isFinite(a.aisleNum);
+        const bHasNum = Number.isFinite(b.aisleNum);
+        if (aHasNum && bHasNum && a.aisleNum !== b.aisleNum) return a.aisleNum - b.aisleNum;
+        if (aHasNum !== bHasNum) return aHasNum ? -1 : 1; // numbered aisles first
         if (a.aisleIndex !== b.aisleIndex) return a.aisleIndex - b.aisleIndex;
         const aisleCmp = a.aisle.localeCompare(b.aisle);
         if (aisleCmp !== 0) return aisleCmp;
