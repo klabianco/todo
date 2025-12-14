@@ -90,7 +90,7 @@ renderContainerStart();
                 <!-- Active tasks -->
                 <div class="flex justify-between items-center mb-4">
                     <div class="flex gap-2 items-center flex-wrap">
-                        <button id="ai-sort-button" class="text-xs bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-md flex items-center" title="Sort list order by grocery store layout (AI-powered)">
+                        <button id="ai-sort-button" class="text-xs bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-md flex items-center" title="Assign aisle/department to each item (AI) and sort">
                             <svg class="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4"></path>
                             </svg>

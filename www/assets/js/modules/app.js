@@ -668,6 +668,31 @@ const enableAllInteractions = () => {
     hideLoadingOverlay();
 };
 
+// Sort tasks programmatically by aisle assignment
+const sortTasksByAisle = (tasks) => {
+    if (!Array.isArray(tasks) || tasks.length === 0) return tasks || [];
+
+    // Stable sort: decorate with original index
+    const decorated = tasks.map((t, idx) => ({
+        t,
+        idx,
+        aisleIndex: Number.isFinite(Number(t?.aisle_index)) ? Number(t.aisle_index) : 9999,
+        aisle: (t?.aisle ?? '').toString(),
+        text: (t?.task ?? '').toString()
+    }));
+
+    decorated.sort((a, b) => {
+        if (a.aisleIndex !== b.aisleIndex) return a.aisleIndex - b.aisleIndex;
+        const aisleCmp = a.aisle.localeCompare(b.aisle);
+        if (aisleCmp !== 0) return aisleCmp;
+        const textCmp = a.text.localeCompare(b.text);
+        if (textCmp !== 0) return textCmp;
+        return a.idx - b.idx;
+    });
+
+    return decorated.map(d => d.t);
+};
+
 // Handle AI sort button click
 const handleAISortClick = async () => {
     const aiSortButton = document.getElementById('ai-sort-button');
@@ -725,7 +750,7 @@ const handleAISortClick = async () => {
             }
         }
         
-        // Call AI sort API
+        // Call AI aisle assignment API (same endpoint), then sort programmatically
         const response = await fetch('/api/sort', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -741,7 +766,8 @@ const handleAISortClick = async () => {
             throw new Error(`Failed to sort tasks: ${response.status}`);
         }
         
-        const { tasks: sortedActiveTasks = tasksToSort } = await response.json();
+        const { tasks: annotatedActiveTasks = tasksToSort } = await response.json();
+        const sortedActiveTasks = sortTasksByAisle(annotatedActiveTasks);
         
         // Reload and update tasks
         const updatedTasks = await storage.loadTasks();

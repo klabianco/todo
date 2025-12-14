@@ -190,6 +190,108 @@ function extract_sorted_items($aiResult) {
     return null;
 }
 
+// Helper function to extract aisle assignments from AI response
+function extract_aisle_assignments($aiResult) {
+    $keys = ['assignments', 'aisles', 'items', 'results'];
+    foreach ($keys as $key) {
+        if (isset($aiResult[$key]) && is_array($aiResult[$key])) {
+            return $aiResult[$key];
+        }
+    }
+
+    // If response is directly an array
+    if (is_array($aiResult) && isset($aiResult[0])) {
+        return $aiResult;
+    }
+
+    return null;
+}
+
+function normalize_assignment_row($row) {
+    if (!is_array($row)) return null;
+    $id = $row['id'] ?? $row['task_id'] ?? $row['taskId'] ?? null;
+    $aisle = $row['aisle_number'] ?? $row['aisle'] ?? $row['section'] ?? $row['department'] ?? null;
+    $text = $row['task'] ?? $row['text'] ?? null;
+
+    if (!$id && !$text) return null;
+
+    return [
+        'id' => $id,
+        'task' => $text,
+        'aisle' => is_string($aisle) ? trim($aisle) : $aisle,
+    ];
+}
+
+function build_aisle_index_map_from_layout($aisle_layout) {
+    $map = [];
+    if (!is_array($aisle_layout)) return $map;
+    $idx = 0;
+    foreach ($aisle_layout as $section) {
+        if (!is_array($section)) continue;
+        $name = $section['aisle_number'] ?? null;
+        if (!is_string($name) || trim($name) === '') continue;
+        $name = trim($name);
+        if (!isset($map[$name])) {
+            $map[$name] = $idx;
+        }
+        $idx++;
+    }
+    return $map;
+}
+
+function apply_aisle_assignments_to_tasks($tasks, $assignments, $aisleIndexByName, $unknownIndex = 9999) {
+    // Index tasks by id (preferred) and also by text (fallback)
+    $byId = [];
+    $byText = [];
+    foreach ($tasks as $i => $t) {
+        if (isset($t['id'])) {
+            $byId[(string)$t['id']] = $i;
+        }
+        if (isset($t['task']) && is_string($t['task'])) {
+            $byText[$t['task']][] = $i;
+        }
+    }
+
+    // Start with unknown for all
+    $updated = $tasks;
+    foreach ($updated as &$t) {
+        $t['aisle'] = $t['aisle'] ?? null;
+        $t['aisle_index'] = $t['aisle_index'] ?? $unknownIndex;
+    }
+    unset($t);
+
+    foreach ($assignments as $row) {
+        $norm = normalize_assignment_row($row);
+        if (!$norm) continue;
+
+        $aisle = $norm['aisle'];
+        if (!is_string($aisle) || $aisle === '') {
+            $aisle = 'Unknown';
+        }
+
+        $idx = $aisleIndexByName[$aisle] ?? $unknownIndex;
+
+        $taskIndex = null;
+        if (!empty($norm['id'])) {
+            $id = (string)$norm['id'];
+            if (isset($byId[$id])) {
+                $taskIndex = $byId[$id];
+            }
+        }
+
+        if ($taskIndex === null && !empty($norm['task']) && isset($byText[$norm['task']]) && !empty($byText[$norm['task']])) {
+            // Handle duplicates by consuming first unused index
+            $taskIndex = array_shift($byText[$norm['task']]);
+        }
+
+        if ($taskIndex === null) continue;
+        $updated[$taskIndex]['aisle'] = $aisle;
+        $updated[$taskIndex]['aisle_index'] = $idx;
+    }
+
+    return $updated;
+}
+
 // Helper function to reorder tasks based on sorted items
 function reorder_tasks($tasks, $sortedItems) {
     // Build task map (handles duplicates)
@@ -369,7 +471,7 @@ switch ($resource) {
         break;
 
     case 'sort':
-        // AI-powered grocery sorting endpoint - only receives active tasks from frontend
+        // AI-powered grocery aisle assignment endpoint (frontend sorts programmatically)
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             json_response(['error' => 'Method not allowed'], 405);
         }
@@ -388,18 +490,28 @@ switch ($resource) {
         try {
             require __DIR__ . '/includes/store-helpers.php';
             
-            // Extract task text for AI processing
-            $taskTexts = array_column($tasks, 'task');
+            // Extract minimal task data for AI processing (use ids to handle duplicates safely)
+            $taskItems = [];
+            foreach ($tasks as $t) {
+                if (!isset($t['id']) || !isset($t['task'])) continue;
+                $taskItems[] = [
+                    'id' => (string)$t['id'],
+                    'task' => (string)$t['task'],
+                ];
+            }
             
             // Build prompt based on whether we have store layout data
-            $systemMessage = "You are a grocery shopping assistant. Your job is to sort grocery items in the optimal order for shopping, optimizing for shopping efficiency.";
-            $prompt = "Sort these grocery items in the optimal order for shopping";
+            $systemMessage = "You are a grocery shopping assistant. Your job is to assign each item to the correct aisle/section (or department) so the app can sort programmatically.";
+            $prompt = "Assign an aisle/section to each grocery item below.";
+            $aisleIndexByName = [];
+            $unknownIndex = 9999;
             
             if ($store && isset($store['aisle_layout']) && !empty($store['aisle_layout'])) {
                 // Use store-specific layout
                 $aisle_layout = clean_aisle_layout($store['aisle_layout']);
                 
                 if (!empty($aisle_layout) && is_array($aisle_layout)) {
+                    $aisleIndexByName = build_aisle_index_map_from_layout($aisle_layout);
                     // Format aisle layout for the prompt
                     $layout_text = "Store: " . ($store['name'] ?? 'Unknown') . "\n\n";
                     $layout_text .= "Aisle/Section Layout:\n";
@@ -412,31 +524,89 @@ switch ($resource) {
                         }
                     }
                     
-                    $systemMessage .= " You have access to the specific store's aisle layout. Use this layout to sort items in the exact order they appear in the store, following the aisle/section sequence.";
-                    $prompt .= " at " . ($store['name'] ?? 'this store') . ". Use the store's aisle layout below to sort items in the exact order they appear in the store aisles/sections.\n\n" .
+                    $systemMessage .= " You have access to the specific store's aisle layout. You MUST choose an aisle_number that exactly matches one of the aisle/section names from the layout, or 'Unknown' if no match.";
+                    $prompt .= " for shopping at " . ($store['name'] ?? 'this store') . ". Use the store's aisle layout below to assign each item to the best matching aisle/section.\n\n" .
                               $layout_text . "\n\n" .
-                              "Items to sort:\n" . json_encode($taskTexts, JSON_PRETTY_PRINT) . "\n\n" .
-                              "Sort the items according to the store's aisle layout above. Items should be ordered based on which aisle/section they belong to, following the sequence of aisles in the store. " .
-                              "If an item matches multiple sections, place it in the first matching section. If an item doesn't match any section, place it at the end.";
+                              "Items (each has an id):\n" . json_encode($taskItems, JSON_PRETTY_PRINT) . "\n\n" .
+                              "Return ONLY a valid JSON object with this exact structure:\n\n" .
+                              "{\n" .
+                              "  \"assignments\": [\n" .
+                              "    {\"id\": \"<id>\", \"aisle_number\": \"<exact aisle/section name from layout or 'Unknown'>\"}\n" .
+                              "  ]\n" .
+                              "}\n\n" .
+                              "Rules:\n" .
+                              "- The assignments array MUST contain one entry per input item id.\n" .
+                              "- Do NOT reorder or omit items.\n" .
+                              "- Only use aisle_number values that exactly match a layout aisle/section name, or 'Unknown'.\n";
                 } else {
                     // Store selected but no valid layout - fall back to generic sorting
-                    $systemMessage .= " Group similar items together (e.g., all fruits together, all meats together, dairy together, etc.). Think about typical supermarket layout: produce first, then meats, dairy, frozen foods, pantry items, etc.";
-                    $prompt .= " at a supermarket. Return ONLY a valid JSON object with this exact structure:\n\n{\n  \"sortedItems\": [\"item1\", \"item2\", \"item3\", ...]\n}\n\nItems to sort:\n" . 
-                              json_encode($taskTexts, JSON_PRETTY_PRINT) . 
-                              "\n\nReturn the items in the order they should be shopped, grouped by category (produce together, meats together, dairy together, etc.). The 'sortedItems' array must contain exactly the same item strings as provided, just reordered.";
+                    $departments = [
+                        'Produce',
+                        'Bakery',
+                        'Meat & Seafood',
+                        'Deli',
+                        'Dairy',
+                        'Frozen',
+                        'Pantry',
+                        'Beverages',
+                        'Snacks',
+                        'Household',
+                        'Health & Beauty',
+                        'Pharmacy',
+                        'Other',
+                    ];
+                    $aisleIndexByName = array_flip($departments);
+                    $systemMessage .= " Choose a department for each item from the provided list.";
+                    $prompt .= "\n\nNo store layout is available. Assign each item to ONE of these departments (use exact spelling):\n" .
+                              json_encode($departments, JSON_PRETTY_PRINT) . "\n\n" .
+                              "Items (each has an id):\n" . json_encode($taskItems, JSON_PRETTY_PRINT) . "\n\n" .
+                              "Return ONLY a valid JSON object with this exact structure:\n\n" .
+                              "{\n" .
+                              "  \"assignments\": [\n" .
+                              "    {\"id\": \"<id>\", \"aisle_number\": \"<one department from list>\"}\n" .
+                              "  ]\n" .
+                              "}\n\n" .
+                              "Rules:\n" .
+                              "- The assignments array MUST contain one entry per input item id.\n" .
+                              "- Do NOT reorder or omit items.\n";
                 }
             } else {
-                // No store selected - use generic sorting
-                $systemMessage .= " Group similar items together (e.g., all fruits together, all meats together, dairy together, etc.). Think about typical supermarket layout: produce first, then meats, dairy, frozen foods, pantry items, etc.";
-                $prompt .= " at a supermarket. Return ONLY a valid JSON object with this exact structure:\n\n{\n  \"sortedItems\": [\"item1\", \"item2\", \"item3\", ...]\n}\n\nItems to sort:\n" . 
-                          json_encode($taskTexts, JSON_PRETTY_PRINT) . 
-                          "\n\nReturn the items in the order they should be shopped, grouped by category (produce together, meats together, dairy together, etc.). The 'sortedItems' array must contain exactly the same item strings as provided, just reordered.";
+                // No store selected - use generic department assignment
+                $departments = [
+                    'Produce',
+                    'Bakery',
+                    'Meat & Seafood',
+                    'Deli',
+                    'Dairy',
+                    'Frozen',
+                    'Pantry',
+                    'Beverages',
+                    'Snacks',
+                    'Household',
+                    'Health & Beauty',
+                    'Pharmacy',
+                    'Other',
+                ];
+                $aisleIndexByName = array_flip($departments);
+                $systemMessage .= " Choose a department for each item from the provided list.";
+                $prompt .= "\n\nNo store selected. Assign each item to ONE of these departments (use exact spelling):\n" .
+                          json_encode($departments, JSON_PRETTY_PRINT) . "\n\n" .
+                          "Items (each has an id):\n" . json_encode($taskItems, JSON_PRETTY_PRINT) . "\n\n" .
+                          "Return ONLY a valid JSON object with this exact structure:\n\n" .
+                          "{\n" .
+                          "  \"assignments\": [\n" .
+                          "    {\"id\": \"<id>\", \"aisle_number\": \"<one department from list>\"}\n" .
+                          "  ]\n" .
+                          "}\n\n" .
+                          "Rules:\n" .
+                          "- The assignments array MUST contain one entry per input item id.\n" .
+                          "- Do NOT reorder or omit items.\n";
             }
             
-            // Create AI instance and set up prompt for grocery sorting
+            // Create AI instance and set up prompt for aisle assignment
             $ai = new AI();
             $ai->setJsonResponse(true);
-            $ai->setSystemMessage($systemMessage . " You MUST return a valid JSON object with a 'sortedItems' array containing strings.");
+            $ai->setSystemMessage($systemMessage . " You MUST return a valid JSON object with an 'assignments' array.");
             $ai->setPrompt($prompt);
             
             // Try AI models with fallback
@@ -456,23 +626,18 @@ switch ($resource) {
                 json_response(['tasks' => $tasks, 'error' => 'AI service returned invalid response']);
             }
             
-            // Extract sorted items
-            $sortedItems = extract_sorted_items($aiResult);
-            if ($sortedItems === null || !is_array($sortedItems)) {
-                error_log('AI sort invalid response format. Response: ' . substr($response, 0, 1000));
+            // Extract assignments
+            $assignments = extract_aisle_assignments($aiResult);
+            if ($assignments === null || !is_array($assignments)) {
+                error_log('AI aisle assign invalid response format. Response: ' . substr($response, 0, 1000));
                 error_log('Parsed result: ' . json_encode($aiResult));
                 json_response(['tasks' => $tasks, 'error' => 'Invalid AI response format']);
             }
-            
-            // Verify count match (warn but don't fail)
-            if (count($sortedItems) !== count($tasks)) {
-                error_log('AI sort count mismatch: sent ' . count($tasks) . ', got ' . count($sortedItems));
-            }
-            
-            // Reorder tasks based on AI sorting
-            $sortedTasks = reorder_tasks($tasks, $sortedItems);
-            
-            json_response(['tasks' => $sortedTasks]);
+
+            // Apply aisle assignment to tasks (frontend will sort)
+            $updatedTasks = apply_aisle_assignments_to_tasks($tasks, $assignments, $aisleIndexByName, $unknownIndex);
+
+            json_response(['tasks' => $updatedTasks]);
         } catch (Exception $e) {
             error_log('AI sort error: ' . $e->getMessage());
             json_response(['tasks' => $tasks, 'error' => 'Sorting failed, returning original order']);
