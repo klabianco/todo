@@ -33,6 +33,13 @@ export const domElements = {
 let activeSortable = null;
 let completedSortable = null;
 
+// UI preferences
+let showAisles = false; // default OFF
+export const setShowAisles = (value) => {
+    showAisles = !!value;
+};
+export const getShowAisles = () => showAisles;
+
 // Toggle empty state visibility
 export const toggleEmptyState = isEmpty => {
     domElements.emptyState.style.display = isEmpty ? 'block' : 'none';
@@ -133,10 +140,11 @@ export const createTaskElement = (
     
     // Task text + optional aisle badge
     const textContainer = document.createElement('div');
-    textContainer.className = 'flex items-start gap-2 flex-1 min-w-0';
+    // Two-row layout: aisle badge on first row, task text on second row
+    textContainer.className = 'flex flex-col gap-1 flex-1 min-w-0';
 
     const span = document.createElement('span');
-    span.className = `${task.completed ? 'line-through text-gray-500 dark:text-gray-400' : 'dark:text-gray-100'} flex-1 min-w-0`;
+    span.className = `${task.completed ? 'line-through text-gray-500 dark:text-gray-400' : 'dark:text-gray-100'} min-w-0`;
     span.textContent = task.task;
     span.draggable = true;
     
@@ -151,20 +159,22 @@ export const createTaskElement = (
         e.dataTransfer.setData('text/plain', task.id);
     });
     
-    // Always show aisle badge (even before AI assigns one)
-    const aisleLabelRaw = (task && task.aisle != null) ? String(task.aisle) : '';
-    const aisleLabel = aisleLabelRaw.trim() || 'N/A';
-    const isUnassigned = aisleLabel === 'N/A';
+    // Optional aisle badge (toggleable; when ON show N/A if not assigned)
+    if (showAisles) {
+        const aisleLabelRaw = (task && task.aisle != null) ? String(task.aisle) : '';
+        const aisleLabel = aisleLabelRaw.trim() || 'N/A';
+        const isUnassigned = aisleLabel === 'N/A';
 
-    const aisleBadge = document.createElement('span');
-    aisleBadge.className = `flex-shrink-0 text-xs px-2 py-0.5 rounded border ${
-        isUnassigned
-            ? 'border-gray-200 bg-white text-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-500'
-            : 'border-gray-200 bg-gray-50 text-gray-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300'
-    }`;
-    aisleBadge.textContent = aisleLabel;
-    aisleBadge.title = 'Aisle/department';
-    textContainer.appendChild(aisleBadge);
+        const aisleBadge = document.createElement('span');
+        aisleBadge.className = `self-start flex-shrink-0 text-xs px-2 py-0.5 rounded border ${
+            isUnassigned
+                ? 'border-gray-200 bg-white text-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-500'
+                : 'border-gray-200 bg-gray-50 text-gray-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300'
+        }`;
+        aisleBadge.textContent = aisleLabel;
+        aisleBadge.title = 'Aisle/department';
+        textContainer.appendChild(aisleBadge);
+    }
 
     textContainer.appendChild(span);
 

@@ -524,6 +524,21 @@ const setupEventListeners = async () => {
         aiSortButton.addEventListener('click', handleAISortClick);
     }
 
+    // Aisle badge toggle (default off)
+    const SHOW_AISLES_KEY = 'todo_show_aisles';
+    const showAislesToggle = document.getElementById('show-aisles-toggle');
+    const initialShowAisles = localStorage.getItem(SHOW_AISLES_KEY) === '1';
+    ui.setShowAisles(initialShowAisles);
+    if (showAislesToggle) {
+        showAislesToggle.checked = initialShowAisles;
+        showAislesToggle.addEventListener('change', async (e) => {
+            const enabled = !!e.target.checked;
+            localStorage.setItem(SHOW_AISLES_KEY, enabled ? '1' : '0');
+            ui.setShowAisles(enabled);
+            await renderTasks();
+        });
+    }
+
     // Set up grocery store dropdown and management
     await initializeGroceryStoreDropdown();
     

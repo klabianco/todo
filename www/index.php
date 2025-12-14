@@ -99,6 +99,10 @@ renderContainerStart();
                         <select id="grocery-store-select" class="text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-200 px-3 py-1 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                             <option value="">No Store</option>
                         </select>
+                        <label class="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300 select-none">
+                            <input id="show-aisles-toggle" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-500 dark:focus:ring-gray-500">
+                            <span>Aisles</span>
+                        </label>
                     </div>
                     <span id="task-count" class="text-sm text-gray-500 dark:text-gray-400">0 tasks</span>
                 </div>
