@@ -1,0 +1,240 @@
+/**
+ * Sorting utilities for the Todo app
+ * Handles AI-based aisle assignment and programmatic sorting
+ */
+import * as utils from './utils.js';
+import * as storage from './storage.js';
+import * as groceryStores from './grocery-stores.js';
+import * as ui from './ui.js';
+import { showLoadingOverlay, hideLoadingOverlay } from './overlay-utils.js';
+
+// Parse numeric aisle from aisle string (e.g., "Aisle 18 (Snacks)" -> 18)
+export const parseAisleNumber = (aisle) => {
+    if (aisle == null) return null;
+    const s = String(aisle);
+    // Prefer explicit "Aisle 18" pattern
+    let m = s.match(/\baisle\s*(\d+)\b/i);
+    if (m && m[1]) return Number(m[1]);
+    // Fallback: first standalone number anywhere
+    m = s.match(/\b(\d+)\b/);
+    if (m && m[1]) return Number(m[1]);
+    return null;
+};
+
+// Sort tasks by aisle assignment
+export const sortTasksByAisle = (tasks) => {
+    if (!Array.isArray(tasks) || tasks.length === 0) return tasks || [];
+
+    // Stable sort: decorate with original index
+    const decorated = tasks.map((t, idx) => ({
+        t,
+        idx,
+        aisle: (t?.aisle ?? '').toString(),
+        aisleNum: parseAisleNumber(t?.aisle),
+        aisleIndex: Number.isFinite(Number(t?.aisle_index)) ? Number(t.aisle_index) : 9999,
+        text: (t?.task ?? '').toString()
+    }));
+
+    decorated.sort((a, b) => {
+        const aHasNum = Number.isFinite(a.aisleNum);
+        const bHasNum = Number.isFinite(b.aisleNum);
+        if (aHasNum && bHasNum && a.aisleNum !== b.aisleNum) return a.aisleNum - b.aisleNum;
+        if (aHasNum !== bHasNum) return aHasNum ? -1 : 1; // numbered aisles first
+        if (a.aisleIndex !== b.aisleIndex) return a.aisleIndex - b.aisleIndex;
+        const aisleCmp = a.aisle.localeCompare(b.aisle);
+        if (aisleCmp !== 0) return aisleCmp;
+        const textCmp = a.text.localeCompare(b.text);
+        if (textCmp !== 0) return textCmp;
+        return a.idx - b.idx;
+    });
+
+    return decorated.map(d => d.t);
+};
+
+// Helper to determine which tasks to sort and get parent info
+export const getTasksToSort = (allTasks, currentFocusedTaskId) => {
+    const context = utils.getCurrentViewContext(allTasks, currentFocusedTaskId, utils.findTaskById);
+    if (!context) return null;
+    
+    return {
+        tasks: utils.filterTasks(context.tasks, { completed: false }),
+        parentTask: context.parentTask,
+        parentId: context.parentId
+    };
+};
+
+// Disable all interactions during sorting
+export const disableAllInteractions = () => {
+    if (ui.domElements.taskForm) {
+        ui.domElements.taskForm.style.pointerEvents = 'none';
+        ui.domElements.taskForm.style.opacity = '0.5';
+    }
+    if (ui.domElements.taskInput) {
+        ui.domElements.taskInput.disabled = true;
+    }
+    
+    const taskButtons = document.querySelectorAll('#active-task-list button, #completed-task-list button');
+    taskButtons.forEach(btn => {
+        btn.disabled = true;
+        btn.style.pointerEvents = 'none';
+        btn.style.opacity = '0.5';
+    });
+    
+    const checkboxes = document.querySelectorAll('#active-task-list input[type="checkbox"], #completed-task-list input[type="checkbox"]');
+    checkboxes.forEach(cb => {
+        cb.disabled = true;
+        cb.style.pointerEvents = 'none';
+    });
+    
+    if (window.activeSortable) window.activeSortable.option('disabled', true);
+    if (window.completedSortable) window.completedSortable.option('disabled', true);
+    
+    const otherButtons = document.querySelectorAll('#share-button, #back-to-personal-button, #completed-toggle');
+    otherButtons.forEach(btn => {
+        if (btn) {
+            btn.disabled = true;
+            btn.style.pointerEvents = 'none';
+            btn.style.opacity = '0.5';
+        }
+    });
+    
+    showLoadingOverlay('Sorting...', 'Please wait');
+};
+
+// Re-enable all interactions after sorting
+export const enableAllInteractions = () => {
+    if (ui.domElements.taskForm) {
+        ui.domElements.taskForm.style.pointerEvents = '';
+        ui.domElements.taskForm.style.opacity = '';
+    }
+    if (ui.domElements.taskInput) {
+        ui.domElements.taskInput.disabled = false;
+    }
+    
+    const taskButtons = document.querySelectorAll('#active-task-list button, #completed-task-list button');
+    taskButtons.forEach(btn => {
+        btn.disabled = false;
+        btn.style.pointerEvents = '';
+        btn.style.opacity = '';
+    });
+    
+    const checkboxes = document.querySelectorAll('#active-task-list input[type="checkbox"], #completed-task-list input[type="checkbox"]');
+    checkboxes.forEach(cb => {
+        cb.disabled = false;
+        cb.style.pointerEvents = '';
+    });
+    
+    if (window.activeSortable) window.activeSortable.option('disabled', false);
+    if (window.completedSortable) window.completedSortable.option('disabled', false);
+    
+    const otherButtons = document.querySelectorAll('#share-button, #back-to-personal-button, #completed-toggle');
+    otherButtons.forEach(btn => {
+        if (btn) {
+            btn.disabled = false;
+            btn.style.pointerEvents = '';
+            btn.style.opacity = '';
+        }
+    });
+    
+    hideLoadingOverlay();
+};
+
+// Handle AI sort button click
+export const handleAISortClick = async (currentFocusedTaskId, renderTasks) => {
+    const aiSortButton = document.getElementById('ai-sort-button');
+    if (!aiSortButton) return;
+    
+    const loadingHTML = `
+        <svg class="animate-spin h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        Sorting...
+    `;
+    
+    const originalText = utils.setButtonLoading(aiSortButton, loadingHTML);
+    if (!originalText) return;
+    
+    disableAllInteractions();
+    
+    try {
+        const allTasks = await storage.loadTasks();
+        const sortInfo = getTasksToSort(allTasks, currentFocusedTaskId);
+        
+        if (!sortInfo) {
+            enableAllInteractions();
+            utils.restoreButtonState(aiSortButton, originalText);
+            return;
+        }
+        
+        const { active: tasksToSort, completed: completedTasksToPreserve } = utils.separateTasks(sortInfo.tasks);
+        
+        if (tasksToSort.length === 0) {
+            enableAllInteractions();
+            utils.restoreButtonState(aiSortButton, originalText);
+            return;
+        }
+        
+        // Get selected store and fetch full store data if available
+        const selectedStore = groceryStores.getSelectedGroceryStore();
+        let storeData = null;
+        if (selectedStore && selectedStore.id) {
+            try {
+                const stores = await groceryStores.loadGroceryStores();
+                const fullStore = stores.find(s => s.id === selectedStore.id);
+                if (fullStore && fullStore.aisle_layout) {
+                    storeData = {
+                        id: fullStore.id,
+                        name: fullStore.name,
+                        aisle_layout: fullStore.aisle_layout
+                    };
+                }
+            } catch (error) {
+                console.error('Error loading store data for sorting:', error);
+            }
+        }
+        
+        // Call AI aisle assignment API, then sort programmatically
+        const response = await fetch('/api/sort', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                tasks: tasksToSort,
+                store: storeData
+            })
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Sort API error:', errorText);
+            throw new Error(`Failed to sort tasks: ${response.status}`);
+        }
+        
+        const { tasks: annotatedActiveTasks = tasksToSort } = await response.json();
+        const sortedActiveTasks = sortTasksByAisle(annotatedActiveTasks);
+        
+        // Reload and update tasks
+        const updatedTasks = await storage.loadTasks();
+        
+        if (sortInfo.parentId) {
+            const parentResult = utils.findTaskById(updatedTasks, sortInfo.parentId);
+            if (parentResult?.task) {
+                parentResult.task.subtasks = [...sortedActiveTasks, ...completedTasksToPreserve];
+                await storage.saveTasks(updatedTasks);
+            } else {
+                throw new Error('Parent task not found');
+            }
+        } else {
+            const allSubtasks = updatedTasks.filter(task => task.parentId);
+            await storage.saveTasks([...sortedActiveTasks, ...completedTasksToPreserve, ...allSubtasks]);
+        }
+        
+        await renderTasks();
+    } catch (error) {
+        console.error('Error sorting tasks:', error);
+        alert('Failed to sort tasks. Please try again.');
+    } finally {
+        enableAllInteractions();
+        utils.restoreButtonState(aiSortButton, originalText);
+    }
+};

@@ -233,3 +233,46 @@ export const truncateText = (text, maxLength = 200) => {
     const cutPoint = lastPeriod > maxLength * 0.7 ? lastPeriod + 1 : lastSpace;
     return truncated.substring(0, cutPoint) + '...';
 };
+
+// Count tasks recursively (including nested subtasks)
+export const countTasks = (taskList) => {
+    let count = 0;
+    for (const task of taskList) {
+        count++;
+        if (task.subtasks && task.subtasks.length > 0) {
+            count += countTasks(task.subtasks);
+        }
+    }
+    return count;
+};
+
+// Reassign IDs to tasks recursively (for imports to avoid conflicts)
+export const reassignTaskIds = (taskList, newParentId = null) => {
+    return taskList.map(task => {
+        const newId = generateUUID();
+        const newTask = {
+            ...task,
+            id: newId,
+            parentId: newParentId,
+            created: new Date().toISOString()
+        };
+        // Remove aisle data since it may not apply to user's store
+        delete newTask.aisle;
+        delete newTask.aisle_index;
+        // Recursively reassign subtask IDs
+        if (task.subtasks && task.subtasks.length > 0) {
+            newTask.subtasks = reassignTaskIds(task.subtasks, newId);
+        }
+        return newTask;
+    });
+};
+
+// Insert task at top of active (non-completed) tasks
+export const insertAtActiveTop = (taskArray, ...tasksToInsert) => {
+    const firstActiveIndex = taskArray.findIndex(t => !t.completed);
+    if (firstActiveIndex === -1) {
+        taskArray.unshift(...tasksToInsert);
+    } else {
+        taskArray.splice(firstActiveIndex, 0, ...tasksToInsert);
+    }
+};
