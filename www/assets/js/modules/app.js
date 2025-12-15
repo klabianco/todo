@@ -1115,6 +1115,135 @@ const handleImportFile = async (event) => {
     }
 };
 
+// Check if URL is a todo share link and extract the share ID
+const extractShareIdFromUrl = (url) => {
+    try {
+        const parsed = new URL(url);
+        // Check if it's our domain
+        if (parsed.hostname === 'todo.o9p.net' || parsed.hostname === 'www.todo.o9p.net' || parsed.hostname === 'local.todo.o9p.net') {
+            const shareId = parsed.searchParams.get('share');
+            if (shareId) {
+                return shareId;
+            }
+        }
+    } catch (e) {
+        // Not a valid URL
+    }
+    return null;
+};
+
+// Handle importing from a share link
+const handleImportFromShareLink = async (shareId, importModal, importUrlInput) => {
+    showLoadingOverlay('Importing shared list...', 'Please wait');
+    
+    try {
+        // Fetch the shared list
+        const response = await utils.apiFetch(`/api/lists/${shareId}`);
+        
+        if (!response.ok) {
+            if (response.status === 404) {
+                throw new Error('Shared list not found. It may have been deleted.');
+            }
+            throw new Error('Failed to fetch shared list');
+        }
+        
+        const data = await response.json();
+        
+        if (!data.tasks || !Array.isArray(data.tasks) || data.tasks.length === 0) {
+            throw new Error('The shared list is empty');
+        }
+        
+        // Close modal
+        if (importModal) {
+            importModal.classList.add('hidden');
+        }
+        
+        // Get current tasks
+        const currentTasks = await storage.loadTasks();
+        
+        // Helper to reassign IDs to imported tasks (to avoid conflicts)
+        const reassignIds = (taskList, newParentId = null) => {
+            return taskList.map(task => {
+                const newId = utils.generateUUID();
+                const newTask = {
+                    ...task,
+                    id: newId,
+                    parentId: newParentId,
+                    created: new Date().toISOString()
+                };
+                // Remove aisle data since it may not apply to user's store
+                delete newTask.aisle;
+                delete newTask.aisle_index;
+                // Recursively reassign subtask IDs
+                if (task.subtasks && task.subtasks.length > 0) {
+                    newTask.subtasks = reassignIds(task.subtasks, newId);
+                }
+                return newTask;
+            });
+        };
+        
+        // Reassign IDs to avoid conflicts
+        const importedTasks = reassignIds(data.tasks);
+        
+        // Count total items (including nested subtasks)
+        const countTasks = (taskList) => {
+            let count = 0;
+            for (const task of taskList) {
+                count++;
+                if (task.subtasks && task.subtasks.length > 0) {
+                    count += countTasks(task.subtasks);
+                }
+            }
+            return count;
+        };
+        const totalImported = countTasks(importedTasks);
+        
+        // Add imported tasks to current list
+        if (currentFocusedTaskId) {
+            // In focus mode - add as subtasks of focused task
+            const focusedResult = utils.findTaskById(currentTasks, currentFocusedTaskId);
+            if (focusedResult && focusedResult.task) {
+                const focusedTask = focusedResult.task;
+                if (!focusedTask.subtasks) {
+                    focusedTask.subtasks = [];
+                }
+                // Set parentId for imported tasks
+                importedTasks.forEach(t => t.parentId = currentFocusedTaskId);
+                // Add at top of active subtasks
+                const firstActiveIndex = focusedTask.subtasks.findIndex(st => !st.completed);
+                if (firstActiveIndex === -1) {
+                    focusedTask.subtasks.unshift(...importedTasks);
+                } else {
+                    focusedTask.subtasks.splice(firstActiveIndex, 0, ...importedTasks);
+                }
+            }
+        } else {
+            // Not in focus mode - add at root level
+            const firstActiveIndex = currentTasks.findIndex(t => !t.completed);
+            if (firstActiveIndex === -1) {
+                currentTasks.unshift(...importedTasks);
+            } else {
+                currentTasks.splice(firstActiveIndex, 0, ...importedTasks);
+            }
+        }
+        
+        // Save tasks
+        await storage.saveTasks(currentTasks);
+        
+        // Re-render
+        await renderTasks();
+        
+        alert(`Successfully imported ${totalImported} item(s) from shared list!`);
+        
+        // Reset URL input
+        if (importUrlInput) {
+            importUrlInput.value = '';
+        }
+    } finally {
+        hideLoadingOverlay();
+    }
+};
+
 // Handle Import from URL
 const handleImportFromUrl = async () => {
     const importUrlInput = utils.$('import-url-input');
@@ -1136,7 +1265,31 @@ const handleImportFromUrl = async () => {
         return;
     }
     
-    // Show overlay for AI processing
+    // Check if this is a share link
+    const shareId = extractShareIdFromUrl(url);
+    if (shareId) {
+        // Handle share link import directly
+        const originalText = confirmImportUrlButton.innerHTML;
+        utils.setButtonLoading(confirmImportUrlButton, 'Importing...');
+        confirmImportUrlButton.disabled = true;
+        if (cancelImportButton) cancelImportButton.disabled = true;
+        if (importUrlInput) importUrlInput.disabled = true;
+        
+        try {
+            await handleImportFromShareLink(shareId, importModal, importUrlInput);
+        } catch (error) {
+            console.error('Error importing from share link:', error);
+            alert('Failed to import shared list: ' + error.message);
+        } finally {
+            utils.restoreButtonState(confirmImportUrlButton, originalText);
+            if (confirmImportUrlButton) confirmImportUrlButton.disabled = false;
+            if (cancelImportButton) cancelImportButton.disabled = false;
+            if (importUrlInput) importUrlInput.disabled = false;
+        }
+        return;
+    }
+    
+    // Not a share link - proceed with AI extraction
     showLoadingOverlay('Fetching URL and extracting items with AI...', 'Please wait');
     
     // Disable button and inputs during import

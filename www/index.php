@@ -206,10 +206,10 @@ renderContainerStart();
                                 <input 
                                     type="url" 
                                     id="import-url-input" 
-                                    placeholder="https://example.com/recipe" 
+                                    placeholder="https://todo.o9p.net?share=... or recipe URL" 
                                     class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
                                 >
-                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Paste a recipe or article URL to extract ingredients and create a list</p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Paste a share link to import a list, or a recipe/article URL to extract items</p>
                             </div>
                             <div class="mb-6">
                                 <div class="text-center text-gray-500 dark:text-gray-400 mb-2">OR</div>
