@@ -1,0 +1,10 @@
+<IfModule mod_headers.c>
+  <Files "apple-app-site-association">
+    Header set Content-Type "application/json"
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+  </Files>
+  <Files "assetlinks.json">
+    Header set Content-Type "application/json"
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+  </Files>
+</IfModule>
