@@ -77,6 +77,15 @@ export default function App() {
         sharedCookiesEnabled
         thirdPartyCookiesEnabled
         originWhitelist={['https://*']}
+        // Persistence settings
+        incognito={false}
+        cacheEnabled={true}
+        cacheMode="LOAD_DEFAULT"
+        // iOS cookie persistence
+        allowsBackForwardNavigationGestures={true}
+        // Android specific
+        setSupportMultipleWindows={false}
+        mixedContentMode="compatibility"
       />
       <StatusBar style="auto" />
     </SafeAreaView>

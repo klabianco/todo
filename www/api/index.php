@@ -103,7 +103,15 @@ function get_user_id() {
         return $_COOKIE['todoUserId'];
     }
     $id = bin2hex(random_bytes(16));
-    setcookie('todoUserId', $id, time() + 31536000, '/'); // 1 year
+    // Set cookie with proper attributes for WebView persistence
+    setcookie('todoUserId', $id, [
+        'expires' => time() + 31536000, // 1 year
+        'path' => '/',
+        'domain' => '', // Current domain
+        'secure' => true, // HTTPS only
+        'httponly' => true, // Prevent JS access
+        'samesite' => 'None' // Required for WebView cross-origin
+    ]);
     return $id;
 }
 

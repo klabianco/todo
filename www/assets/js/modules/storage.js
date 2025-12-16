@@ -10,6 +10,54 @@ let shareId = null;
 let sharedListFocusId = null;
 let activeDate = getCurrentDate();
 
+// User ID backup key for localStorage (helps with WebView cookie issues)
+const USER_ID_BACKUP_KEY = 'todo_user_id_backup';
+
+// Helper to get cookie value by name
+const getCookie = (name) => {
+    const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+    return match ? match[2] : null;
+};
+
+// Helper to set cookie
+const setCookie = (name, value, days = 365) => {
+    const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toUTCString();
+    document.cookie = `${name}=${value}; expires=${expires}; path=/; SameSite=None; Secure`;
+};
+
+// Restore user ID from localStorage backup if cookie is missing
+// This helps with WebView cookie persistence issues
+export const restoreUserIdIfNeeded = () => {
+    const cookieUserId = getCookie('todoUserId');
+    const backupUserId = localStorage.getItem(USER_ID_BACKUP_KEY);
+    
+    if (!cookieUserId && backupUserId) {
+        // Cookie missing but we have a backup - restore it
+        console.log('Restoring user ID from localStorage backup');
+        setCookie('todoUserId', backupUserId);
+        return backupUserId;
+    }
+    
+    if (cookieUserId && !backupUserId) {
+        // Cookie exists but no backup - create backup
+        localStorage.setItem(USER_ID_BACKUP_KEY, cookieUserId);
+    }
+    
+    return cookieUserId;
+};
+
+// Backup user ID to localStorage after successful API response
+const backupUserIdFromResponse = (response) => {
+    // Check if the response set a new cookie (via Set-Cookie header parsing isn't possible,
+    // but we can read the current cookie after the response)
+    setTimeout(() => {
+        const userId = getCookie('todoUserId');
+        if (userId) {
+            localStorage.setItem(USER_ID_BACKUP_KEY, userId);
+        }
+    }, 100);
+};
+
 // Cached user data
 let subscribedLists = [];
 let ownedLists = [];
@@ -341,6 +389,9 @@ export const updateOwnedListForDate = async (date, tasks) => {
 
 // Initialize storage
 export const initializeStorage = async () => {
+    // Restore user ID from localStorage backup if cookie is missing (WebView fix)
+    restoreUserIdIfNeeded();
+    
     if (isSharedList) {
         // For shared lists, try to load from server
         try {
@@ -355,6 +406,12 @@ export const initializeStorage = async () => {
         await loadUserLists();
         // If this date corresponds to an owned shared list, sync it from server
         await syncOwnedListForDate(activeDate);
+    }
+    
+    // Backup user ID after successful initialization
+    const userId = getCookie('todoUserId');
+    if (userId) {
+        localStorage.setItem(USER_ID_BACKUP_KEY, userId);
     }
 };
 
