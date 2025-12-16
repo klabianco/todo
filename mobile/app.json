@@ -20,7 +20,6 @@
       "associatedDomains": [
         "applinks:todo.o9p.net"
       ],
-      "buildNumber": "1",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -32,7 +31,6 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "net.o9p.todo",
-      "versionCode": 2,
       "intentFilters": [
         {
           "action": "VIEW",
