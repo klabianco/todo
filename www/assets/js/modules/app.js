@@ -84,7 +84,7 @@ export const init = async () => {
     ui.setupSharedUI(isOwner);
     
     await setupEventListeners();
-
+    
     // Process subscriptions from localStorage
     if (!isSharedList) {
         try {
@@ -337,14 +337,14 @@ const setupEventListeners = async () => {
     // Task form submission
     if (ui.domElements.taskForm) {
         ui.domElements.taskForm.addEventListener('submit', async e => {
-            e.preventDefault();
-            const taskText = ui.domElements.taskInput.value.trim();
-            if (taskText) {
+        e.preventDefault();
+        const taskText = ui.domElements.taskInput.value.trim();
+        if (taskText) {
                 await tasks.addTask(taskText, focusMode.getCurrentFocusedTaskId());
-                await renderTasks();
-                ui.domElements.taskInput.value = '';
-                ui.domElements.taskInput.focus();
-            }
+            await renderTasks();
+            ui.domElements.taskInput.value = '';
+            ui.domElements.taskInput.focus();
+        }
         });
     }
     

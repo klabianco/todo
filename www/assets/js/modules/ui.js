@@ -142,7 +142,7 @@ export const createTaskElement = (
     const textContainer = document.createElement('div');
     // Two-row layout: aisle badge on first row, task text on second row
     textContainer.className = 'flex flex-col gap-1 flex-1 min-w-0';
-
+    
     const span = document.createElement('span');
     span.className = `${task.completed ? 'line-through text-gray-500 dark:text-gray-400' : 'dark:text-gray-100'} min-w-0`;
     span.textContent = task.task;
@@ -177,7 +177,7 @@ export const createTaskElement = (
     }
 
     textContainer.appendChild(span);
-
+    
     leftDiv.appendChild(checkbox);
     leftDiv.appendChild(textContainer);
     
