@@ -25,7 +25,10 @@ export const parseLocationNumber = (location) => {
 // Parse time string to minutes since midnight for comparison
 export const parseTimeToMinutes = (timeStr) => {
     if (!timeStr || typeof timeStr !== 'string') return null;
-    const match = timeStr.match(/^(\d{1,2}):(\d{2})$/);
+    const trimmed = timeStr.trim();
+    if (!trimmed) return null;
+    // Match HH:MM or H:MM format
+    const match = trimmed.match(/^(\d{1,2}):(\d{2})$/);
     if (!match) return null;
     const hours = parseInt(match[1], 10);
     const minutes = parseInt(match[2], 10);

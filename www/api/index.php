@@ -677,15 +677,25 @@ switch ($resource) {
                 }
             }
 
-            // Final sort by time (frontend will also sort, but we return in time order)
-            usort($tasksWithLocations, function($a, $b) {
-                $aTime = $a['scheduledTime'] ?? null;
-                $bTime = $b['scheduledTime'] ?? null;
-                if ($aTime && $bTime) {
-                    return strcmp($aTime, $bTime);
+            // Helper to convert time string to minutes for proper comparison
+            $timeToMinutes = function($timeStr) {
+                if (!$timeStr || !is_string($timeStr)) return null;
+                $timeStr = trim($timeStr);
+                if (preg_match('/^(\d{1,2}):(\d{2})$/', $timeStr, $m)) {
+                    return intval($m[1]) * 60 + intval($m[2]);
                 }
-                if ($aTime && !$bTime) return -1;
-                if (!$aTime && $bTime) return 1;
+                return null;
+            };
+
+            // Final sort by time (frontend will also sort, but we return in time order)
+            usort($tasksWithLocations, function($a, $b) use ($timeToMinutes) {
+                $aMinutes = $timeToMinutes($a['scheduledTime'] ?? null);
+                $bMinutes = $timeToMinutes($b['scheduledTime'] ?? null);
+                if ($aMinutes !== null && $bMinutes !== null) {
+                    return $aMinutes - $bMinutes;
+                }
+                if ($aMinutes !== null && $bMinutes === null) return -1;
+                if ($aMinutes === null && $bMinutes !== null) return 1;
                 return 0;
             });
 
