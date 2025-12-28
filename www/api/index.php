@@ -220,6 +220,7 @@ function normalize_assignment_row($row) {
     $id = $row['id'] ?? $row['task_id'] ?? $row['taskId'] ?? null;
     $location = $row['aisle_number'] ?? $row['aisle'] ?? $row['section'] ?? $row['department'] ?? $row['location'] ?? null;
     $text = $row['task'] ?? $row['text'] ?? null;
+    $scheduledTime = $row['scheduledTime'] ?? $row['scheduled_time'] ?? $row['time'] ?? null;
 
     if (!$id && !$text) return null;
 
@@ -227,6 +228,7 @@ function normalize_assignment_row($row) {
         'id' => $id,
         'task' => $text,
         'location' => is_string($location) ? trim($location) : $location,
+        'scheduledTime' => is_string($scheduledTime) ? trim($scheduledTime) : null,
     ];
 }
 
@@ -306,6 +308,11 @@ function apply_location_assignments_to_tasks($tasks, $assignments, $locationInde
         if ($taskIndex === null) continue;
         $updated[$taskIndex]['location'] = $location;
         $updated[$taskIndex]['location_index'] = $idx;
+
+        // Apply scheduled time if provided
+        if (!empty($norm['scheduledTime'])) {
+            $updated[$taskIndex]['scheduledTime'] = $norm['scheduledTime'];
+        }
     }
 
     return $updated;
@@ -520,8 +527,8 @@ switch ($resource) {
             }
             
             // Build prompt based on whether we have store layout data
-            $systemMessage = "You are a grocery shopping assistant. Your job is to assign each item to the correct location/section (or department) so the app can sort programmatically.";
-            $prompt = "Assign a location/section to each grocery item below.";
+            $systemMessage = "You are a task/shopping assistant. Your job is to assign each item to the correct location/section (or department) AND assign a scheduled time for when to do each task, so the app can sort and schedule tasks programmatically.";
+            $prompt = "Assign a location/section and a scheduled time to each item below.";
             $locationIndexByName = [];
             $unknownIndex = 9999;
 
@@ -550,13 +557,14 @@ switch ($resource) {
                               "Return ONLY a valid JSON object with this exact structure:\n\n" .
                               "{\n" .
                               "  \"assignments\": [\n" .
-                              "    {\"id\": \"<id>\", \"aisle_number\": \"<exact aisle/section name from layout or 'Unknown'>\"}\n" .
+                              "    {\"id\": \"<id>\", \"aisle_number\": \"<exact aisle/section name from layout or 'Unknown'>\", \"scheduledTime\": \"HH:MM\"}\n" .
                               "  ]\n" .
                               "}\n\n" .
                               "Rules:\n" .
                               "- The assignments array MUST contain one entry per input item id.\n" .
                               "- Do NOT reorder or omit items.\n" .
-                              "- Only use aisle_number values that exactly match a layout aisle/section name, or 'Unknown'.\n";
+                              "- Only use aisle_number values that exactly match a layout aisle/section name, or 'Unknown'.\n" .
+                              "- Assign sequential scheduledTime values in 24-hour format (HH:MM), starting from 09:00 and incrementing by 15-30 minutes per task based on logical grouping by location.\n";
                 } else {
                     // Store selected but no valid layout - fall back to generic sorting
                     $departments = [
@@ -582,12 +590,13 @@ switch ($resource) {
                               "Return ONLY a valid JSON object with this exact structure:\n\n" .
                               "{\n" .
                               "  \"assignments\": [\n" .
-                              "    {\"id\": \"<id>\", \"aisle_number\": \"<one department from list>\"}\n" .
+                              "    {\"id\": \"<id>\", \"aisle_number\": \"<one department from list>\", \"scheduledTime\": \"HH:MM\"}\n" .
                               "  ]\n" .
                               "}\n\n" .
                               "Rules:\n" .
                               "- The assignments array MUST contain one entry per input item id.\n" .
-                              "- Do NOT reorder or omit items.\n";
+                              "- Do NOT reorder or omit items.\n" .
+                              "- Assign sequential scheduledTime values in 24-hour format (HH:MM), starting from 09:00 and incrementing by 15-30 minutes per task based on logical grouping by department.\n";
                 }
             } else {
                 // No store selected - use generic department assignment
@@ -614,12 +623,13 @@ switch ($resource) {
                           "Return ONLY a valid JSON object with this exact structure:\n\n" .
                           "{\n" .
                           "  \"assignments\": [\n" .
-                          "    {\"id\": \"<id>\", \"aisle_number\": \"<one department from list>\"}\n" .
+                          "    {\"id\": \"<id>\", \"aisle_number\": \"<one department from list>\", \"scheduledTime\": \"HH:MM\"}\n" .
                           "  ]\n" .
                           "}\n\n" .
                           "Rules:\n" .
                           "- The assignments array MUST contain one entry per input item id.\n" .
-                          "- Do NOT reorder or omit items.\n";
+                          "- Do NOT reorder or omit items.\n" .
+                          "- Assign sequential scheduledTime values in 24-hour format (HH:MM), starting from 09:00 and incrementing by 15-30 minutes per task based on logical grouping by department.\n";
             }
             
             // Create AI instance and set up prompt for aisle assignment

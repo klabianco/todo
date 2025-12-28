@@ -81,6 +81,7 @@ export const addTask = async (taskText, currentFocusedTaskId = null) => {
         sticky: false,
         subtasks: [],
         created: now,
+        scheduledTime: null,
         timestamps: {
             created: now,
             completedHistory: [],
@@ -135,6 +136,7 @@ export const addSubtask = async (parentId, subtaskText) => {
             subtasks: [],
             created: now,
             parentId: task.id,
+            scheduledTime: null,
             timestamps: {
                 created: now,
                 completedHistory: [],
@@ -310,6 +312,46 @@ export const editTask = async (taskId, newText) => {
             return true;
         }
         return false; // No change made
+    }
+    return false;
+};
+
+// Update task details (text, location, scheduledTime)
+export const updateTaskDetails = async (taskId, updates) => {
+    const tasks = await loadTasks();
+    const taskResult = findTaskById(tasks, taskId);
+
+    if (taskResult && taskResult.task) {
+        const task = taskResult.task;
+        let changed = false;
+
+        // Update text if provided and different
+        if (updates.text !== undefined && updates.text !== task.task) {
+            task.task = updates.text;
+            changed = true;
+        }
+
+        // Update location if provided
+        if (updates.location !== undefined && updates.location !== task.location) {
+            task.location = updates.location || null;
+            changed = true;
+        }
+
+        // Update scheduledTime if provided
+        if (updates.scheduledTime !== undefined && updates.scheduledTime !== task.scheduledTime) {
+            task.scheduledTime = updates.scheduledTime || null;
+            changed = true;
+        }
+
+        if (changed) {
+            // Track edit timestamp
+            const timestamps = ensureTimestamps(task);
+            timestamps.editedHistory = addToHistory(timestamps.editedHistory, new Date().toISOString());
+
+            await saveTasks(tasks);
+            return true;
+        }
+        return false; // No changes made
     }
     return false;
 };

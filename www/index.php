@@ -103,6 +103,10 @@ renderContainerStart();
                             <input id="show-locations-toggle" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-500 dark:focus:ring-gray-500">
                             <span>Locations</span>
                         </label>
+                        <label class="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300 select-none">
+                            <input id="show-times-toggle" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-500 dark:focus:ring-gray-500">
+                            <span>Times</span>
+                        </label>
                     </div>
                     <span id="task-count" class="text-sm text-gray-500 dark:text-gray-400">0 tasks</span>
                 </div>
@@ -232,7 +236,52 @@ renderContainerStart();
                         </div>
                     </div>
                 </div>
-                
+
+                <!-- Edit Task Modal -->
+                <div id="edit-task-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full">
+                        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                            <h2 class="text-xl font-bold text-gray-800 dark:text-gray-200">Edit Task</h2>
+                        </div>
+                        <div class="p-6 space-y-4">
+                            <input type="hidden" id="edit-task-id">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Task</label>
+                                <input
+                                    type="text"
+                                    id="edit-task-text"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                                >
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Location</label>
+                                <input
+                                    type="text"
+                                    id="edit-task-location"
+                                    placeholder="e.g., Aisle 5, Produce, etc."
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
+                                >
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Scheduled Time</label>
+                                <input
+                                    type="time"
+                                    id="edit-task-time"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                                >
+                            </div>
+                        </div>
+                        <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+                            <button id="cancel-edit-task" class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
+                                Cancel
+                            </button>
+                            <button id="save-edit-task" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md">
+                                Save
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Completed tasks section -->
                 <div id="completed-section" class="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700" style="display: none;">
                     <button id="completed-toggle" class="flex justify-between items-center w-full mb-2 text-left hover:opacity-80 transition-opacity">

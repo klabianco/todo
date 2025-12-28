@@ -30,6 +30,24 @@ const handleToggleSticky = async (id) => {
     await renderTasks();
 };
 
+// Open edit modal with task data
+const handleEditTask = (task) => {
+    const editTaskModal = document.getElementById('edit-task-modal');
+    const editTaskId = document.getElementById('edit-task-id');
+    const editTaskText = document.getElementById('edit-task-text');
+    const editTaskLocation = document.getElementById('edit-task-location');
+    const editTaskTime = document.getElementById('edit-task-time');
+
+    if (editTaskModal && editTaskId && editTaskText && editTaskLocation && editTaskTime) {
+        editTaskId.value = task.id;
+        editTaskText.value = task.task || '';
+        editTaskLocation.value = task.location || '';
+        editTaskTime.value = task.scheduledTime || '';
+        editTaskModal.classList.remove('hidden');
+        editTaskText.focus();
+    }
+};
+
 // Initialize grocery store dropdown
 const initializeGroceryStoreDropdown = async () => {
     const select = document.getElementById('grocery-store-select');
@@ -438,6 +456,59 @@ const setupEventListeners = async () => {
         });
     }
 
+    // Time badge toggle (default off)
+    const SHOW_TIMES_KEY = 'todo_show_times';
+    const showTimesToggle = document.getElementById('show-times-toggle');
+    const initialShowTimes = localStorage.getItem(SHOW_TIMES_KEY) === '1';
+    ui.setShowTimes(initialShowTimes);
+    if (showTimesToggle) {
+        showTimesToggle.checked = initialShowTimes;
+        showTimesToggle.addEventListener('change', async (e) => {
+            const enabled = !!e.target.checked;
+            localStorage.setItem(SHOW_TIMES_KEY, enabled ? '1' : '0');
+            ui.setShowTimes(enabled);
+            await renderTasks();
+        });
+    }
+
+    // Edit task modal handlers
+    const editTaskModal = document.getElementById('edit-task-modal');
+    const editTaskId = document.getElementById('edit-task-id');
+    const editTaskText = document.getElementById('edit-task-text');
+    const editTaskLocation = document.getElementById('edit-task-location');
+    const editTaskTime = document.getElementById('edit-task-time');
+    const cancelEditTask = document.getElementById('cancel-edit-task');
+    const saveEditTask = document.getElementById('save-edit-task');
+
+    if (cancelEditTask) {
+        cancelEditTask.addEventListener('click', () => {
+            editTaskModal.classList.add('hidden');
+        });
+    }
+
+    if (saveEditTask) {
+        saveEditTask.addEventListener('click', async () => {
+            const taskId = editTaskId.value;
+            const updates = {
+                text: editTaskText.value.trim(),
+                location: editTaskLocation.value.trim() || null,
+                scheduledTime: editTaskTime.value || null
+            };
+            await tasks.updateTaskDetails(taskId, updates);
+            editTaskModal.classList.add('hidden');
+            await renderTasks();
+        });
+    }
+
+    // Close edit modal on outside click
+    if (editTaskModal) {
+        editTaskModal.addEventListener('click', (e) => {
+            if (e.target === editTaskModal) {
+                editTaskModal.classList.add('hidden');
+            }
+        });
+    }
+
     // Grocery store dropdown
     await initializeGroceryStoreDropdown();
     
@@ -598,15 +669,15 @@ const renderTasks = async () => {
             activeSubtasks.forEach(subtask => {
                 const subtaskElement = ui.createTaskElement(
                     subtask, 0,
-                    handleToggleCompletion, handleDeleteTask, handleToggleSticky, focusHandler
+                    handleToggleCompletion, handleDeleteTask, handleToggleSticky, focusHandler, handleEditTask
                 );
                 ui.domElements.activeTaskList.appendChild(subtaskElement);
             });
-            
+
             completedSubtasks.forEach(subtask => {
                 const subtaskElement = ui.createTaskElement(
                     subtask, 0,
-                    handleToggleCompletion, handleDeleteTask, handleToggleSticky, focusHandler
+                    handleToggleCompletion, handleDeleteTask, handleToggleSticky, focusHandler, handleEditTask
                 );
                 ui.domElements.completedTaskList.appendChild(subtaskElement);
             });
@@ -625,15 +696,15 @@ const renderTasks = async () => {
         activeTopLevelTasks.forEach(task => {
             const taskElement = ui.createTaskElement(
                 task, 0,
-                handleToggleCompletion, handleDeleteTask, handleToggleSticky, focusHandler, false
+                handleToggleCompletion, handleDeleteTask, handleToggleSticky, focusHandler, handleEditTask, false
             );
             ui.domElements.activeTaskList.appendChild(taskElement);
         });
-        
+
         completedTopLevelTasks.forEach(task => {
             const taskElement = ui.createTaskElement(
                 task, 0,
-                handleToggleCompletion, handleDeleteTask, handleToggleSticky, focusHandler, false
+                handleToggleCompletion, handleDeleteTask, handleToggleSticky, focusHandler, handleEditTask, false
             );
             ui.domElements.completedTaskList.appendChild(taskElement);
         });
@@ -658,6 +729,7 @@ const renderTasks = async () => {
 };
 
 // Handle sorting of tasks (consolidated handler for both active and completed)
+// When tasks are reordered, their scheduledTime values are swapped to maintain time order
 const handleSortEnd = async (isCompleted) => {
     const listElement = isCompleted ? ui.domElements.completedTaskList : ui.domElements.activeTaskList;
     const orderedIds = Array.from(listElement.children).map(el => el.dataset.id);
@@ -672,9 +744,19 @@ const handleSortEnd = async (isCompleted) => {
             const completedSubtasks = task.subtasks.filter(st => st.completed);
             const sourceList = isCompleted ? completedSubtasks : activeSubtasks;
 
+            // Capture original times in position order before reordering
+            const originalTimes = sourceList.map(st => st.scheduledTime);
+
             const reorderedSubtasks = orderedIds
                 .map(id => sourceList.find(st => st.id === id))
                 .filter(Boolean);
+
+            // Swap times: assign original position times to new positions
+            reorderedSubtasks.forEach((st, index) => {
+                if (originalTimes[index] !== undefined) {
+                    st.scheduledTime = originalTimes[index];
+                }
+            });
 
             task.subtasks = isCompleted
                 ? [...activeSubtasks, ...reorderedSubtasks]
@@ -687,9 +769,19 @@ const handleSortEnd = async (isCompleted) => {
         const otherTasks = utils.filterTasks(allTasks, { parentId: true });
         const sourceList = isCompleted ? completedTopLevelTasks : activeTopLevelTasks;
 
+        // Capture original times in position order before reordering
+        const originalTimes = sourceList.map(t => t.scheduledTime);
+
         const reorderedTasks = orderedIds
             .map(id => sourceList.find(t => t.id === id))
             .filter(Boolean);
+
+        // Swap times: assign original position times to new positions
+        reorderedTasks.forEach((t, index) => {
+            if (originalTimes[index] !== undefined) {
+                t.scheduledTime = originalTimes[index];
+            }
+        });
 
         const finalTasks = isCompleted
             ? [...activeTopLevelTasks, ...reorderedTasks, ...otherTasks]
