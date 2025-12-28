@@ -497,26 +497,27 @@ switch ($resource) {
         break;
 
     case 'sort':
-        // AI-powered grocery aisle assignment endpoint (frontend sorts programmatically)
+        // AI-powered two-pass sorting: 1) Location agent, 2) Time agent
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             json_response(['error' => 'Method not allowed'], 405);
         }
-        
+
         require __DIR__ . '/../../config/config.php';
         require __DIR__ . '/includes/ai-helpers.php';
-        
+
         $data = get_request_body();
         $tasks = $data['tasks'] ?? [];
         $store = $data['store'] ?? null;
-        
+
         if (empty($tasks)) {
             json_response(['tasks' => []]);
         }
-        
+
         try {
             require __DIR__ . '/includes/store-helpers.php';
-            
-            // Extract minimal task data for AI processing (use ids to handle duplicates safely)
+            global $aiModelFallbacks;
+
+            // Extract minimal task data for AI processing
             $taskItems = [];
             foreach ($tasks as $t) {
                 if (!isset($t['id']) || !isset($t['task'])) continue;
@@ -525,22 +526,21 @@ switch ($resource) {
                     'task' => (string)$t['task'],
                 ];
             }
-            
-            // Build prompt based on whether we have store layout data
-            $systemMessage = "You are a task/shopping assistant. Your job is to assign each item to the correct location/section (or department) AND assign a logical scheduled time for when to do each task. Times must be in chronological order that makes sense (e.g., breakfast before lunch before dinner, morning errands before afternoon tasks). The resulting list will be sorted by time.";
-            $prompt = "Assign a location/section and a scheduled time to each item below.";
+
+            // ============================================================
+            // PASS 1: LOCATION AGENT - Assign locations/departments
+            // ============================================================
+            $locationSystemMessage = "You are a location assignment assistant. Your ONLY job is to assign each item to the correct location/section or department. Do NOT assign times.";
+            $locationPrompt = "Assign a location/section to each item below.";
             $locationIndexByName = [];
             $unknownIndex = 9999;
 
             if ($store && isset($store['aisle_layout']) && !empty($store['aisle_layout'])) {
-                // Use store-specific layout
                 $aisle_layout = clean_aisle_layout($store['aisle_layout']);
 
                 if (!empty($aisle_layout) && is_array($aisle_layout)) {
                     $locationIndexByName = build_location_index_map_from_layout($aisle_layout);
-                    // Format aisle layout for the prompt
-                    $layout_text = "Store: " . ($store['name'] ?? 'Unknown') . "\n\n";
-                    $layout_text .= "Aisle/Section Layout:\n";
+                    $layout_text = "Store: " . ($store['name'] ?? 'Unknown') . "\n\nAisle/Section Layout:\n";
                     foreach ($aisle_layout as $section) {
                         if (is_array($section) && isset($section['aisle_number'])) {
                             $aisle_name = $section['aisle_number'] ?? 'Unknown';
@@ -549,142 +549,147 @@ switch ($resource) {
                             $layout_text .= "- {$aisle_name}" . ($category ? " ({$category})" : '') . ": {$items}\n";
                         }
                     }
-                    
-                    $systemMessage .= " You have access to the specific store's aisle layout. You MUST choose an aisle_number that exactly matches one of the aisle/section names from the layout, or 'Unknown' if no match.";
-                    $prompt .= " for shopping at " . ($store['name'] ?? 'this store') . ". Use the store's aisle layout below to assign each item to the best matching aisle/section.\n\n" .
+
+                    $locationSystemMessage .= " You have access to the store's aisle layout. You MUST choose an aisle_number that exactly matches one from the layout, or 'Unknown'.";
+                    $locationPrompt .= " for shopping at " . ($store['name'] ?? 'this store') . ".\n\n" .
                               $layout_text . "\n\n" .
-                              "Items (each has an id):\n" . json_encode($taskItems, JSON_PRETTY_PRINT) . "\n\n" .
-                              "Return ONLY a valid JSON object with this exact structure:\n\n" .
-                              "{\n" .
-                              "  \"assignments\": [\n" .
-                              "    {\"id\": \"<id>\", \"aisle_number\": \"<exact aisle/section name from layout or 'Unknown'>\", \"scheduledTime\": \"HH:MM\"}\n" .
-                              "  ]\n" .
-                              "}\n\n" .
-                              "Rules:\n" .
-                              "- The assignments array MUST contain one entry per input item id.\n" .
-                              "- Do NOT reorder or omit items.\n" .
-                              "- Only use aisle_number values that exactly match a layout aisle/section name, or 'Unknown'.\n" .
-                              "- Assign scheduledTime in 24-hour format (HH:MM) based on LOGICAL timing for each task:\n" .
-                              "  * Meal-related: breakfast ~07:00-09:00, lunch ~12:00-13:00, dinner ~18:00-19:00\n" .
-                              "  * Morning tasks/errands: 09:00-12:00\n" .
-                              "  * Afternoon tasks: 13:00-17:00\n" .
-                              "  * Evening tasks: 18:00-21:00\n" .
-                              "  * Group related tasks together with similar times\n" .
-                              "- Times should reflect when tasks would LOGICALLY be done, not arbitrary sequential times.\n";
+                              "Items:\n" . json_encode($taskItems, JSON_PRETTY_PRINT) . "\n\n" .
+                              "Return ONLY a valid JSON object:\n{\n  \"assignments\": [\n    {\"id\": \"<id>\", \"aisle_number\": \"<exact aisle/section name or 'Unknown'>\"}\n  ]\n}\n\n" .
+                              "Rules:\n- One entry per item id.\n- Do NOT reorder or omit items.\n- Only use aisle_number values from the layout, or 'Unknown'.\n";
                 } else {
-                    // Store selected but no valid layout - fall back to generic sorting
-                    $departments = [
-                        'Produce',
-                        'Bakery',
-                        'Meat & Seafood',
-                        'Deli',
-                        'Dairy',
-                        'Frozen',
-                        'Pantry',
-                        'Beverages',
-                        'Snacks',
-                        'Household',
-                        'Health & Beauty',
-                        'Pharmacy',
-                        'Other',
-                    ];
+                    $departments = ['Produce', 'Bakery', 'Meat & Seafood', 'Deli', 'Dairy', 'Frozen', 'Pantry', 'Beverages', 'Snacks', 'Household', 'Health & Beauty', 'Pharmacy', 'Other'];
                     $locationIndexByName = array_flip($departments);
-                    $systemMessage .= " Choose a department for each item from the provided list.";
-                    $prompt .= "\n\nNo store layout is available. Assign each item to ONE of these departments (use exact spelling):\n" .
-                              json_encode($departments, JSON_PRETTY_PRINT) . "\n\n" .
-                              "Items (each has an id):\n" . json_encode($taskItems, JSON_PRETTY_PRINT) . "\n\n" .
-                              "Return ONLY a valid JSON object with this exact structure:\n\n" .
-                              "{\n" .
-                              "  \"assignments\": [\n" .
-                              "    {\"id\": \"<id>\", \"aisle_number\": \"<one department from list>\", \"scheduledTime\": \"HH:MM\"}\n" .
-                              "  ]\n" .
-                              "}\n\n" .
-                              "Rules:\n" .
-                              "- The assignments array MUST contain one entry per input item id.\n" .
-                              "- Do NOT reorder or omit items.\n" .
-                              "- Assign scheduledTime in 24-hour format (HH:MM) based on LOGICAL timing for each task:\n" .
-                              "  * Meal-related: breakfast ~07:00-09:00, lunch ~12:00-13:00, dinner ~18:00-19:00\n" .
-                              "  * Morning tasks/errands: 09:00-12:00\n" .
-                              "  * Afternoon tasks: 13:00-17:00\n" .
-                              "  * Evening tasks: 18:00-21:00\n" .
-                              "  * Group related tasks together with similar times\n" .
-                              "- Times should reflect when tasks would LOGICALLY be done, not arbitrary sequential times.\n";
+                    $locationSystemMessage .= " Choose a department from the provided list.";
+                    $locationPrompt .= "\n\nDepartments:\n" . json_encode($departments, JSON_PRETTY_PRINT) . "\n\n" .
+                              "Items:\n" . json_encode($taskItems, JSON_PRETTY_PRINT) . "\n\n" .
+                              "Return ONLY a valid JSON object:\n{\n  \"assignments\": [\n    {\"id\": \"<id>\", \"aisle_number\": \"<department>\"}\n  ]\n}\n\n" .
+                              "Rules:\n- One entry per item id.\n- Do NOT reorder or omit items.\n";
                 }
             } else {
-                // No store selected - use generic department assignment
-                $departments = [
-                    'Produce',
-                    'Bakery',
-                    'Meat & Seafood',
-                    'Deli',
-                    'Dairy',
-                    'Frozen',
-                    'Pantry',
-                    'Beverages',
-                    'Snacks',
-                    'Household',
-                    'Health & Beauty',
-                    'Pharmacy',
-                    'Other',
-                ];
+                $departments = ['Produce', 'Bakery', 'Meat & Seafood', 'Deli', 'Dairy', 'Frozen', 'Pantry', 'Beverages', 'Snacks', 'Household', 'Health & Beauty', 'Pharmacy', 'Other'];
                 $locationIndexByName = array_flip($departments);
-                $systemMessage .= " Choose a department for each item from the provided list.";
-                $prompt .= "\n\nNo store selected. Assign each item to ONE of these departments (use exact spelling):\n" .
-                          json_encode($departments, JSON_PRETTY_PRINT) . "\n\n" .
-                          "Items (each has an id):\n" . json_encode($taskItems, JSON_PRETTY_PRINT) . "\n\n" .
-                          "Return ONLY a valid JSON object with this exact structure:\n\n" .
-                          "{\n" .
-                          "  \"assignments\": [\n" .
-                          "    {\"id\": \"<id>\", \"aisle_number\": \"<one department from list>\", \"scheduledTime\": \"HH:MM\"}\n" .
-                          "  ]\n" .
-                          "}\n\n" .
-                          "Rules:\n" .
-                          "- The assignments array MUST contain one entry per input item id.\n" .
-                          "- Do NOT reorder or omit items.\n" .
-                          "- Assign scheduledTime in 24-hour format (HH:MM) based on LOGICAL timing for each task:\n" .
-                          "  * Meal-related: breakfast ~07:00-09:00, lunch ~12:00-13:00, dinner ~18:00-19:00\n" .
-                          "  * Morning tasks/errands: 09:00-12:00\n" .
-                          "  * Afternoon tasks: 13:00-17:00\n" .
-                          "  * Evening tasks: 18:00-21:00\n" .
-                          "  * Group related tasks together with similar times\n" .
-                          "- Times should reflect when tasks would LOGICALLY be done, not arbitrary sequential times.\n";
+                $locationSystemMessage .= " Choose a department from the provided list.";
+                $locationPrompt .= "\n\nDepartments:\n" . json_encode($departments, JSON_PRETTY_PRINT) . "\n\n" .
+                          "Items:\n" . json_encode($taskItems, JSON_PRETTY_PRINT) . "\n\n" .
+                          "Return ONLY a valid JSON object:\n{\n  \"assignments\": [\n    {\"id\": \"<id>\", \"aisle_number\": \"<department>\"}\n  ]\n}\n\n" .
+                          "Rules:\n- One entry per item id.\n- Do NOT reorder or omit items.\n";
             }
-            
-            // Create AI instance and set up prompt for aisle assignment
+
+            // Call Location Agent
             $ai = new AI();
             $ai->setJsonResponse(true);
-            $ai->setSystemMessage($systemMessage . " You MUST return a valid JSON object with an 'assignments' array.");
-            $ai->setPrompt($prompt);
-            
-            // Try AI models with fallback
-            global $aiModelFallbacks;
-            $response = try_ai_models($ai, $aiModelFallbacks);
-            
-            // Check if we got an error instead of a response
-            if (is_array($response) && isset($response['error'])) {
-                error_log('AI sort: All models failed. Last error: ' . $response['error']);
-                json_response(['tasks' => $tasks, 'error' => 'AI service unavailable. Please check API key and model availability.']);
-            }
-            
-            // Parse AI response
-            $aiResult = parse_ai_json_response($response);
-            if ($aiResult === null) {
-                error_log('AI sort: Response is empty or invalid after parsing');
-                json_response(['tasks' => $tasks, 'error' => 'AI service returned invalid response']);
-            }
-            
-            // Extract assignments
-            $assignments = extract_aisle_assignments($aiResult);
-            if ($assignments === null || !is_array($assignments)) {
-                error_log('AI aisle assign invalid response format. Response: ' . substr($response, 0, 1000));
-                error_log('Parsed result: ' . json_encode($aiResult));
-                json_response(['tasks' => $tasks, 'error' => 'Invalid AI response format']);
+            $ai->setSystemMessage($locationSystemMessage);
+            $ai->setPrompt($locationPrompt);
+
+            $locationResponse = try_ai_models($ai, $aiModelFallbacks);
+
+            if (is_array($locationResponse) && isset($locationResponse['error'])) {
+                error_log('AI location agent failed: ' . $locationResponse['error']);
+                json_response(['tasks' => $tasks, 'error' => 'Location agent failed']);
             }
 
-            // Apply location assignment to tasks (frontend will sort)
-            $updatedTasks = apply_location_assignments_to_tasks($tasks, $assignments, $locationIndexByName, $unknownIndex);
+            $locationResult = parse_ai_json_response($locationResponse);
+            $locationAssignments = extract_aisle_assignments($locationResult);
 
-            json_response(['tasks' => $updatedTasks]);
+            if ($locationAssignments === null || !is_array($locationAssignments)) {
+                error_log('AI location agent invalid response: ' . substr($locationResponse, 0, 1000));
+                json_response(['tasks' => $tasks, 'error' => 'Location agent returned invalid format']);
+            }
+
+            // Apply location assignments to tasks
+            $tasksWithLocations = apply_location_assignments_to_tasks($tasks, $locationAssignments, $locationIndexByName, $unknownIndex);
+
+            // Sort by location for Pass 2
+            usort($tasksWithLocations, function($a, $b) {
+                $aIdx = $a['location_index'] ?? 9999;
+                $bIdx = $b['location_index'] ?? 9999;
+                if ($aIdx !== $bIdx) return $aIdx - $bIdx;
+                $aLoc = $a['location'] ?? '';
+                $bLoc = $b['location'] ?? '';
+                return strcmp($aLoc, $bLoc);
+            });
+
+            // ============================================================
+            // PASS 2: TIME AGENT - Assign scheduled times to location-sorted list
+            // ============================================================
+            $timeTaskItems = [];
+            foreach ($tasksWithLocations as $t) {
+                $timeTaskItems[] = [
+                    'id' => (string)$t['id'],
+                    'task' => (string)$t['task'],
+                    'location' => $t['location'] ?? 'Unknown',
+                ];
+            }
+
+            $timeSystemMessage = "You are a scheduling assistant. Your job is to assign logical scheduled times to a list of tasks that have already been grouped by location. " .
+                "The tasks are in location order (grouped together). Assign times that make sense for when each task would be done.";
+
+            $timePrompt = "Assign a scheduled time (HH:MM in 24-hour format) to each task below. " .
+                "The tasks are already sorted by location/department. Assign times that:\n" .
+                "- Follow a logical daily schedule\n" .
+                "- Meal-related tasks: breakfast ~07:00-09:00, lunch ~12:00-13:00, dinner ~18:00-19:00\n" .
+                "- Morning errands/shopping: 09:00-12:00\n" .
+                "- Afternoon tasks: 13:00-17:00\n" .
+                "- Evening tasks: 18:00-21:00\n" .
+                "- Tasks at the same location should have sequential times close together\n" .
+                "- Consider task nature (e.g., 'eat breakfast' should be morning, 'eat dinner' should be evening)\n\n" .
+                "Tasks (in location order):\n" . json_encode($timeTaskItems, JSON_PRETTY_PRINT) . "\n\n" .
+                "Return ONLY a valid JSON object:\n{\n  \"assignments\": [\n    {\"id\": \"<id>\", \"scheduledTime\": \"HH:MM\"}\n  ]\n}\n\n" .
+                "Rules:\n- One entry per task id.\n- Do NOT reorder or omit items.\n- Times must be in 24-hour format (e.g., 09:00, 14:30, 18:00).\n";
+
+            // Call Time Agent
+            $ai2 = new AI();
+            $ai2->setJsonResponse(true);
+            $ai2->setSystemMessage($timeSystemMessage);
+            $ai2->setPrompt($timePrompt);
+
+            $timeResponse = try_ai_models($ai2, $aiModelFallbacks);
+
+            if (is_array($timeResponse) && isset($timeResponse['error'])) {
+                error_log('AI time agent failed: ' . $timeResponse['error']);
+                // Return location-sorted tasks without times
+                json_response(['tasks' => $tasksWithLocations, 'error' => 'Time agent failed, returning location-sorted tasks']);
+            }
+
+            $timeResult = parse_ai_json_response($timeResponse);
+            $timeAssignments = extract_aisle_assignments($timeResult);
+
+            if ($timeAssignments === null || !is_array($timeAssignments)) {
+                error_log('AI time agent invalid response: ' . substr($timeResponse, 0, 1000));
+                // Return location-sorted tasks without times
+                json_response(['tasks' => $tasksWithLocations, 'error' => 'Time agent returned invalid format']);
+            }
+
+            // Apply time assignments to tasks
+            $byId = [];
+            foreach ($tasksWithLocations as $i => $t) {
+                if (isset($t['id'])) {
+                    $byId[(string)$t['id']] = $i;
+                }
+            }
+
+            foreach ($timeAssignments as $row) {
+                $norm = normalize_assignment_row($row);
+                if (!$norm || empty($norm['id'])) continue;
+                $id = (string)$norm['id'];
+                if (isset($byId[$id]) && !empty($norm['scheduledTime'])) {
+                    $tasksWithLocations[$byId[$id]]['scheduledTime'] = $norm['scheduledTime'];
+                }
+            }
+
+            // Final sort by time (frontend will also sort, but we return in time order)
+            usort($tasksWithLocations, function($a, $b) {
+                $aTime = $a['scheduledTime'] ?? null;
+                $bTime = $b['scheduledTime'] ?? null;
+                if ($aTime && $bTime) {
+                    return strcmp($aTime, $bTime);
+                }
+                if ($aTime && !$bTime) return -1;
+                if (!$aTime && $bTime) return 1;
+                return 0;
+            });
+
+            json_response(['tasks' => $tasksWithLocations]);
         } catch (Exception $e) {
             error_log('AI sort error: ' . $e->getMessage());
             json_response(['tasks' => $tasks, 'error' => 'Sorting failed, returning original order']);
