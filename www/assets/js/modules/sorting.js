@@ -22,7 +22,18 @@ export const parseLocationNumber = (location) => {
     return null;
 };
 
-// Sort tasks by location assignment
+// Parse time string to minutes since midnight for comparison
+export const parseTimeToMinutes = (timeStr) => {
+    if (!timeStr || typeof timeStr !== 'string') return null;
+    const match = timeStr.match(/^(\d{1,2}):(\d{2})$/);
+    if (!match) return null;
+    const hours = parseInt(match[1], 10);
+    const minutes = parseInt(match[2], 10);
+    if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+    return hours * 60 + minutes;
+};
+
+// Sort tasks by scheduled time first, then by location
 export const sortTasksByLocation = (tasks) => {
     if (!Array.isArray(tasks) || tasks.length === 0) return tasks || [];
 
@@ -30,6 +41,7 @@ export const sortTasksByLocation = (tasks) => {
     const decorated = tasks.map((t, idx) => ({
         t,
         idx,
+        timeMinutes: parseTimeToMinutes(t?.scheduledTime),
         location: (t?.location ?? '').toString(),
         locationNum: parseLocationNumber(t?.location),
         locationIndex: Number.isFinite(Number(t?.location_index)) ? Number(t.location_index) : 9999,
@@ -37,6 +49,13 @@ export const sortTasksByLocation = (tasks) => {
     }));
 
     decorated.sort((a, b) => {
+        // Primary sort: by scheduled time (tasks with time come first)
+        const aHasTime = a.timeMinutes !== null;
+        const bHasTime = b.timeMinutes !== null;
+        if (aHasTime && bHasTime && a.timeMinutes !== b.timeMinutes) return a.timeMinutes - b.timeMinutes;
+        if (aHasTime !== bHasTime) return aHasTime ? -1 : 1; // timed tasks first
+
+        // Secondary sort: by location
         const aHasNum = Number.isFinite(a.locationNum);
         const bHasNum = Number.isFinite(b.locationNum);
         if (aHasNum && bHasNum && a.locationNum !== b.locationNum) return a.locationNum - b.locationNum;

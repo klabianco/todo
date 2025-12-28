@@ -3,22 +3,22 @@
  */
 
 // Set button loading state
-export const setButtonLoading = (button, loadingText = 'Loading...') => {
+export const setButtonLoading = (button, loadingHTML = 'Loading...') => {
     if (!button || button.disabled) return null;
-    
-    const originalText = button.textContent || button.innerHTML;
+
+    const originalHTML = button.innerHTML;
     button.disabled = true;
-    button.textContent = loadingText;
-    
-    return originalText;
+    button.innerHTML = loadingHTML;
+
+    return originalHTML;
 };
 
 // Restore button state
-export const restoreButtonState = (button, originalText) => {
+export const restoreButtonState = (button, originalHTML) => {
     if (!button) return;
     button.disabled = false;
-    if (originalText) {
-        button.textContent = originalText;
+    if (originalHTML) {
+        button.innerHTML = originalHTML;
     }
 };
 

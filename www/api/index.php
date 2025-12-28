@@ -527,7 +527,7 @@ switch ($resource) {
             }
             
             // Build prompt based on whether we have store layout data
-            $systemMessage = "You are a task/shopping assistant. Your job is to assign each item to the correct location/section (or department) AND assign a scheduled time for when to do each task, so the app can sort and schedule tasks programmatically.";
+            $systemMessage = "You are a task/shopping assistant. Your job is to assign each item to the correct location/section (or department) AND assign a logical scheduled time for when to do each task. Times must be in chronological order that makes sense (e.g., breakfast before lunch before dinner, morning errands before afternoon tasks). The resulting list will be sorted by time.";
             $prompt = "Assign a location/section and a scheduled time to each item below.";
             $locationIndexByName = [];
             $unknownIndex = 9999;
@@ -564,7 +564,13 @@ switch ($resource) {
                               "- The assignments array MUST contain one entry per input item id.\n" .
                               "- Do NOT reorder or omit items.\n" .
                               "- Only use aisle_number values that exactly match a layout aisle/section name, or 'Unknown'.\n" .
-                              "- Assign sequential scheduledTime values in 24-hour format (HH:MM), starting from 09:00 and incrementing by 15-30 minutes per task based on logical grouping by location.\n";
+                              "- Assign scheduledTime in 24-hour format (HH:MM) based on LOGICAL timing for each task:\n" .
+                              "  * Meal-related: breakfast ~07:00-09:00, lunch ~12:00-13:00, dinner ~18:00-19:00\n" .
+                              "  * Morning tasks/errands: 09:00-12:00\n" .
+                              "  * Afternoon tasks: 13:00-17:00\n" .
+                              "  * Evening tasks: 18:00-21:00\n" .
+                              "  * Group related tasks together with similar times\n" .
+                              "- Times should reflect when tasks would LOGICALLY be done, not arbitrary sequential times.\n";
                 } else {
                     // Store selected but no valid layout - fall back to generic sorting
                     $departments = [
@@ -596,7 +602,13 @@ switch ($resource) {
                               "Rules:\n" .
                               "- The assignments array MUST contain one entry per input item id.\n" .
                               "- Do NOT reorder or omit items.\n" .
-                              "- Assign sequential scheduledTime values in 24-hour format (HH:MM), starting from 09:00 and incrementing by 15-30 minutes per task based on logical grouping by department.\n";
+                              "- Assign scheduledTime in 24-hour format (HH:MM) based on LOGICAL timing for each task:\n" .
+                              "  * Meal-related: breakfast ~07:00-09:00, lunch ~12:00-13:00, dinner ~18:00-19:00\n" .
+                              "  * Morning tasks/errands: 09:00-12:00\n" .
+                              "  * Afternoon tasks: 13:00-17:00\n" .
+                              "  * Evening tasks: 18:00-21:00\n" .
+                              "  * Group related tasks together with similar times\n" .
+                              "- Times should reflect when tasks would LOGICALLY be done, not arbitrary sequential times.\n";
                 }
             } else {
                 // No store selected - use generic department assignment
@@ -629,7 +641,13 @@ switch ($resource) {
                           "Rules:\n" .
                           "- The assignments array MUST contain one entry per input item id.\n" .
                           "- Do NOT reorder or omit items.\n" .
-                          "- Assign sequential scheduledTime values in 24-hour format (HH:MM), starting from 09:00 and incrementing by 15-30 minutes per task based on logical grouping by department.\n";
+                          "- Assign scheduledTime in 24-hour format (HH:MM) based on LOGICAL timing for each task:\n" .
+                          "  * Meal-related: breakfast ~07:00-09:00, lunch ~12:00-13:00, dinner ~18:00-19:00\n" .
+                          "  * Morning tasks/errands: 09:00-12:00\n" .
+                          "  * Afternoon tasks: 13:00-17:00\n" .
+                          "  * Evening tasks: 18:00-21:00\n" .
+                          "  * Group related tasks together with similar times\n" .
+                          "- Times should reflect when tasks would LOGICALLY be done, not arbitrary sequential times.\n";
             }
             
             // Create AI instance and set up prompt for aisle assignment
