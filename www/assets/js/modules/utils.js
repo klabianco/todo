@@ -100,30 +100,6 @@ export const separateTasks = (tasks) => {
     return { active, completed };
 };
 
-// Helper to restore button state
-export const restoreButtonState = (button, originalText) => {
-    if (!button) return;
-    button.disabled = false;
-    button.style.opacity = '';
-    button.style.cursor = '';
-    button.style.pointerEvents = '';
-    button.innerHTML = originalText;
-};
-
-// Helper to set button loading state
-export const setButtonLoading = (button, loadingText = 'Loading...') => {
-    if (!button || button.disabled) return null;
-    
-    const originalText = button.innerHTML;
-    button.disabled = true;
-    button.style.opacity = '0.6';
-    button.style.cursor = 'not-allowed';
-    button.style.pointerEvents = 'none';
-    button.innerHTML = loadingText;
-    
-    return originalText;
-};
-
 // Helper for API fetch with cache-busting
 export const apiFetch = async (url, options = {}) => {
     const separator = url.includes('?') ? '&' : '?';

@@ -2,11 +2,12 @@
  * Sorting utilities for the Todo app
  * Handles AI-based location assignment and programmatic sorting
  */
-import * as utils from './utils.js';
 import * as storage from './storage.js';
 import * as groceryStores from './grocery-stores.js';
 import * as ui from './ui.js';
 import { showLoadingOverlay, hideLoadingOverlay } from './overlay-utils.js';
+import { setButtonLoading, restoreButtonState } from './button-utils.js';
+import { apiFetch, findTaskById, getCurrentViewContext, filterTasks, separateTasks } from './utils.js';
 
 // Parse numeric location from location string (e.g., "Aisle 18 (Snacks)" -> 18)
 export const parseLocationNumber = (location) => {
@@ -53,11 +54,11 @@ export const sortTasksByLocation = (tasks) => {
 
 // Helper to determine which tasks to sort and get parent info
 export const getTasksToSort = (allTasks, currentFocusedTaskId) => {
-    const context = utils.getCurrentViewContext(allTasks, currentFocusedTaskId, utils.findTaskById);
+    const context = getCurrentViewContext(allTasks, currentFocusedTaskId, findTaskById);
     if (!context) return null;
-    
+
     return {
-        tasks: utils.filterTasks(context.tasks, { completed: false }),
+        tasks: filterTasks(context.tasks, { completed: false }),
         parentTask: context.parentTask,
         parentId: context.parentId
     };
@@ -152,7 +153,7 @@ export const handleAISortClick = async (currentFocusedTaskId, renderTasks) => {
         Sorting...
     `;
     
-    const originalText = utils.setButtonLoading(aiSortButton, loadingHTML);
+    const originalText = setButtonLoading(aiSortButton, loadingHTML);
     if (!originalText) return;
     
     disableAllInteractions();
@@ -163,15 +164,15 @@ export const handleAISortClick = async (currentFocusedTaskId, renderTasks) => {
         
         if (!sortInfo) {
             enableAllInteractions();
-            utils.restoreButtonState(aiSortButton, originalText);
+            restoreButtonState(aiSortButton, originalText);
             return;
         }
         
-        const { active: tasksToSort, completed: completedTasksToPreserve } = utils.separateTasks(sortInfo.tasks);
+        const { active: tasksToSort, completed: completedTasksToPreserve } = separateTasks(sortInfo.tasks);
         
         if (tasksToSort.length === 0) {
             enableAllInteractions();
-            utils.restoreButtonState(aiSortButton, originalText);
+            restoreButtonState(aiSortButton, originalText);
             return;
         }
         
@@ -217,7 +218,7 @@ export const handleAISortClick = async (currentFocusedTaskId, renderTasks) => {
         const updatedTasks = await storage.loadTasks();
         
         if (sortInfo.parentId) {
-            const parentResult = utils.findTaskById(updatedTasks, sortInfo.parentId);
+            const parentResult = findTaskById(updatedTasks, sortInfo.parentId);
             if (parentResult?.task) {
                 parentResult.task.subtasks = [...sortedActiveTasks, ...completedTasksToPreserve];
                 await storage.saveTasks(updatedTasks);
@@ -235,6 +236,6 @@ export const handleAISortClick = async (currentFocusedTaskId, renderTasks) => {
         alert('Failed to sort tasks. Please try again.');
     } finally {
         enableAllInteractions();
-        utils.restoreButtonState(aiSortButton, originalText);
+        restoreButtonState(aiSortButton, originalText);
     }
 };

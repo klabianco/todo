@@ -48,18 +48,3 @@ export const setupModalCloseHandlers = (modalId, closeButtonId, cancelButtonId =
     
     return { modal, closeModal };
 };
-
-// Setup file input button
-export const setupFileInputButton = (buttonId, inputId) => {
-    const button = $(buttonId);
-    const input = $(inputId);
-    
-    if (button && input) {
-        button.addEventListener('click', () => {
-            input.click();
-        });
-    }
-    
-    return { button, input };
-};
-

@@ -4,6 +4,7 @@
 import * as utils from './utils.js';
 import * as storage from './storage.js';
 import { showLoadingOverlay, hideLoadingOverlay } from './overlay-utils.js';
+import { setButtonLoading, restoreButtonState } from './button-utils.js';
 
 // Flatten tasks for display (recursive)
 export const flattenTasksForDisplay = (tasks, level = 0, parentPath = '', includeSubtasks = true) => {
@@ -341,7 +342,7 @@ export const handleImportFromUrl = async (currentFocusedTaskId, renderTasks) => 
     const shareId = extractShareIdFromUrl(url);
     if (shareId) {
         const originalText = confirmImportUrlButton.innerHTML;
-        utils.setButtonLoading(confirmImportUrlButton, 'Importing...');
+        setButtonLoading(confirmImportUrlButton, 'Importing...');
         confirmImportUrlButton.disabled = true;
         if (cancelImportButton) cancelImportButton.disabled = true;
         if (importUrlInput) importUrlInput.disabled = true;
@@ -352,7 +353,7 @@ export const handleImportFromUrl = async (currentFocusedTaskId, renderTasks) => 
             console.error('Error importing from share link:', error);
             alert('Failed to import shared list: ' + error.message);
         } finally {
-            utils.restoreButtonState(confirmImportUrlButton, originalText);
+            restoreButtonState(confirmImportUrlButton, originalText);
             if (confirmImportUrlButton) confirmImportUrlButton.disabled = false;
             if (cancelImportButton) cancelImportButton.disabled = false;
             if (importUrlInput) importUrlInput.disabled = false;
@@ -364,7 +365,7 @@ export const handleImportFromUrl = async (currentFocusedTaskId, renderTasks) => 
     showLoadingOverlay('Fetching URL and extracting items with AI...', 'Please wait');
     
     const originalText = confirmImportUrlButton.innerHTML;
-    utils.setButtonLoading(confirmImportUrlButton, 'Importing...');
+    setButtonLoading(confirmImportUrlButton, 'Importing...');
     confirmImportUrlButton.disabled = true;
     if (cancelImportButton) cancelImportButton.disabled = true;
     if (importUrlInput) importUrlInput.disabled = true;
@@ -443,7 +444,7 @@ export const handleImportFromUrl = async (currentFocusedTaskId, renderTasks) => 
         alert('Failed to import from URL: ' + error.message);
     } finally {
         hideLoadingOverlay();
-        utils.restoreButtonState(confirmImportUrlButton, originalText);
+        restoreButtonState(confirmImportUrlButton, originalText);
         if (confirmImportUrlButton) confirmImportUrlButton.disabled = false;
         if (cancelImportButton) cancelImportButton.disabled = false;
         if (importUrlInput) importUrlInput.disabled = false;

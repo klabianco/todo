@@ -38,7 +38,7 @@ const initializeGroceryStoreDropdown = async () => {
     const stores = await groceryStores.loadGroceryStores();
     const selectedStore = groceryStores.getSelectedGroceryStore();
     
-    select.innerHTML = '<option value="">No Store</option>';
+    select.innerHTML = '<option value="">Auto</option>';
     
     stores.forEach(store => {
         const option = document.createElement('option');
@@ -657,76 +657,46 @@ const renderTasks = async () => {
     }
 };
 
-// Handle sorting of active tasks
-const handleActiveSortEnd = async function(evt) {
-    const orderedIds = Array.from(ui.domElements.activeTaskList.children).map(el => el.dataset.id);
+// Handle sorting of tasks (consolidated handler for both active and completed)
+const handleSortEnd = async (isCompleted) => {
+    const listElement = isCompleted ? ui.domElements.completedTaskList : ui.domElements.activeTaskList;
+    const orderedIds = Array.from(listElement.children).map(el => el.dataset.id);
     const allTasks = await storage.loadTasks();
     const currentFocusedTaskId = focusMode.getCurrentFocusedTaskId();
-    
+
     if (currentFocusedTaskId) {
         const result = utils.findTaskById(allTasks, currentFocusedTaskId);
         if (result && result.task) {
             const { task } = result;
             const activeSubtasks = task.subtasks.filter(st => !st.completed);
             const completedSubtasks = task.subtasks.filter(st => st.completed);
-            
-            const reorderedSubtasks = [];
-            orderedIds.forEach(id => {
-                const subtask = activeSubtasks.find(st => st.id === id);
-                if (subtask) reorderedSubtasks.push(subtask);
-            });
-            
-            task.subtasks = [...reorderedSubtasks, ...completedSubtasks];
+            const sourceList = isCompleted ? completedSubtasks : activeSubtasks;
+
+            const reorderedSubtasks = orderedIds
+                .map(id => sourceList.find(st => st.id === id))
+                .filter(Boolean);
+
+            task.subtasks = isCompleted
+                ? [...activeSubtasks, ...reorderedSubtasks]
+                : [...reorderedSubtasks, ...completedSubtasks];
             await storage.saveTasks(allTasks);
         }
     } else {
         const activeTopLevelTasks = utils.filterTasks(allTasks, { completed: false, parentId: false });
         const completedTopLevelTasks = utils.filterTasks(allTasks, { completed: true, parentId: false });
         const otherTasks = utils.filterTasks(allTasks, { parentId: true });
-        
-        const reorderedTasks = [];
-        orderedIds.forEach(id => {
-            const task = activeTopLevelTasks.find(t => t.id === id);
-            if (task) reorderedTasks.push(task);
-        });
-        
-        await storage.saveTasks([...reorderedTasks, ...completedTopLevelTasks, ...otherTasks]);
+        const sourceList = isCompleted ? completedTopLevelTasks : activeTopLevelTasks;
+
+        const reorderedTasks = orderedIds
+            .map(id => sourceList.find(t => t.id === id))
+            .filter(Boolean);
+
+        const finalTasks = isCompleted
+            ? [...activeTopLevelTasks, ...reorderedTasks, ...otherTasks]
+            : [...reorderedTasks, ...completedTopLevelTasks, ...otherTasks];
+        await storage.saveTasks(finalTasks);
     }
 };
 
-// Handle sorting of completed tasks
-const handleCompletedSortEnd = async function(evt) {
-    const orderedIds = Array.from(ui.domElements.completedTaskList.children).map(el => el.dataset.id);
-    const allTasks = await storage.loadTasks();
-    const currentFocusedTaskId = focusMode.getCurrentFocusedTaskId();
-    
-    if (currentFocusedTaskId) {
-        const result = utils.findTaskById(allTasks, currentFocusedTaskId);
-        if (result && result.task) {
-            const { task } = result;
-            const activeSubtasks = task.subtasks.filter(st => !st.completed);
-            const completedSubtasks = task.subtasks.filter(st => st.completed);
-            
-            const reorderedSubtasks = [];
-            orderedIds.forEach(id => {
-                const subtask = completedSubtasks.find(st => st.id === id);
-                if (subtask) reorderedSubtasks.push(subtask);
-            });
-            
-            task.subtasks = [...activeSubtasks, ...reorderedSubtasks];
-            await storage.saveTasks(allTasks);
-        }
-    } else {
-        const activeTopLevelTasks = utils.filterTasks(allTasks, { completed: false, parentId: false });
-        const completedTopLevelTasks = utils.filterTasks(allTasks, { completed: true, parentId: false });
-        const otherTasks = utils.filterTasks(allTasks, { parentId: true });
-        
-        const reorderedTasks = [];
-        orderedIds.forEach(id => {
-            const task = completedTopLevelTasks.find(t => t.id === id);
-            if (task) reorderedTasks.push(task);
-        });
-        
-        await storage.saveTasks([...activeTopLevelTasks, ...reorderedTasks, ...otherTasks]);
-    }
-};
+const handleActiveSortEnd = () => handleSortEnd(false);
+const handleCompletedSortEnd = () => handleSortEnd(true);
