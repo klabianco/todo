@@ -621,21 +621,27 @@ switch ($resource) {
                 ];
             }
 
-            $timeSystemMessage = "You are a scheduling assistant. Your job is to assign logical scheduled times to a list of tasks that have already been grouped by location. " .
-                "The tasks are in location order (grouped together). Assign times that make sense for when each task would be done.";
+            $timeSystemMessage = "You are a scheduling assistant. Your job is to assign logical scheduled times to a list of tasks. " .
+                "Prioritize easier/quicker tasks earlier in the day to build momentum, then tackle harder tasks. " .
+                "Also consider the natural time for certain activities (meals, errands, etc.).";
 
-            $timePrompt = "Assign a scheduled time (HH:MM in 24-hour format) to each task below. " .
-                "The tasks are already sorted by location/department. Assign times that:\n" .
-                "- Follow a logical daily schedule\n" .
-                "- Meal-related tasks: breakfast ~07:00-09:00, lunch ~12:00-13:00, dinner ~18:00-19:00\n" .
-                "- Morning errands/shopping: 09:00-12:00\n" .
-                "- Afternoon tasks: 13:00-17:00\n" .
-                "- Evening tasks: 18:00-21:00\n" .
-                "- Tasks at the same location should have sequential times close together\n" .
-                "- Consider task nature (e.g., 'eat breakfast' should be morning, 'eat dinner' should be evening)\n\n" .
-                "Tasks (in location order):\n" . json_encode($timeTaskItems, JSON_PRETTY_PRINT) . "\n\n" .
+            $timePrompt = "Assign a scheduled time (HH:MM in 24-hour format) to each task below.\n\n" .
+                "PRIORITIZATION RULES (in order of importance):\n" .
+                "1. EASIEST TASKS FIRST - Schedule quick, simple tasks early to build momentum\n" .
+                "2. Time-specific tasks at their natural time:\n" .
+                "   - Breakfast: 07:00-09:00\n" .
+                "   - Lunch: 12:00-13:00\n" .
+                "   - Dinner: 18:00-19:00\n" .
+                "3. Harder/longer tasks in mid-morning or afternoon when energy is higher\n" .
+                "4. Group tasks at the same location with sequential times\n\n" .
+                "SCHEDULE WINDOWS:\n" .
+                "- Early morning (quick wins): 07:00-09:00\n" .
+                "- Morning (errands/medium tasks): 09:00-12:00\n" .
+                "- Afternoon (harder tasks): 13:00-17:00\n" .
+                "- Evening (wind down): 18:00-21:00\n\n" .
+                "Tasks:\n" . json_encode($timeTaskItems, JSON_PRETTY_PRINT) . "\n\n" .
                 "Return ONLY a valid JSON object:\n{\n  \"assignments\": [\n    {\"id\": \"<id>\", \"scheduledTime\": \"HH:MM\"}\n  ]\n}\n\n" .
-                "Rules:\n- One entry per task id.\n- Do NOT reorder or omit items.\n- Times must be in 24-hour format (e.g., 09:00, 14:30, 18:00).\n";
+                "Rules:\n- One entry per task id.\n- Do NOT omit items.\n- Times must be in 24-hour format with leading zeros (e.g., 07:00, 09:30, 14:00).\n- Order by: easiest first, then time-specific tasks at their natural times.\n";
 
             // Call Time Agent
             $ai2 = new AI();
