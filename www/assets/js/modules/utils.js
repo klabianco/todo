@@ -248,17 +248,26 @@ export const countTasks = (taskList) => {
 
 // Reassign IDs to tasks recursively (for imports to avoid conflicts)
 export const reassignTaskIds = (taskList, newParentId = null) => {
+    const now = new Date().toISOString();
     return taskList.map(task => {
         const newId = generateUUID();
         const newTask = {
             ...task,
             id: newId,
             parentId: newParentId,
-            created: new Date().toISOString()
+            created: now,
+            // Create fresh timestamps for imported tasks
+            timestamps: {
+                created: now,
+                completedHistory: [],
+                uncompletedHistory: [],
+                editedHistory: [],
+                stickyHistory: []
+            }
         };
-        // Remove aisle data since it may not apply to user's store
-        delete newTask.aisle;
-        delete newTask.aisle_index;
+        // Remove location data since it may not apply to user's store
+        delete newTask.location;
+        delete newTask.location_index;
         // Recursively reassign subtask IDs
         if (task.subtasks && task.subtasks.length > 0) {
             newTask.subtasks = reassignTaskIds(task.subtasks, newId);

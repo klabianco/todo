@@ -34,11 +34,11 @@ let activeSortable = null;
 let completedSortable = null;
 
 // UI preferences
-let showAisles = false; // default OFF
-export const setShowAisles = (value) => {
-    showAisles = !!value;
+let showLocations = false; // default OFF
+export const setShowLocations = (value) => {
+    showLocations = !!value;
 };
-export const getShowAisles = () => showAisles;
+export const getShowLocations = () => showLocations;
 
 // Toggle empty state visibility
 export const toggleEmptyState = isEmpty => {
@@ -138,42 +138,42 @@ export const createTaskElement = (
         if (onCheckboxChange) onCheckboxChange(task.id);
     });
     
-    // Task text + optional aisle badge
+    // Task text + optional location badge
     const textContainer = document.createElement('div');
-    // Two-row layout: aisle badge on first row, task text on second row
+    // Two-row layout: location badge on first row, task text on second row
     textContainer.className = 'flex flex-col gap-1 flex-1 min-w-0';
-    
+
     const span = document.createElement('span');
     span.className = `${task.completed ? 'line-through text-gray-500 dark:text-gray-400' : 'dark:text-gray-100'} min-w-0`;
     span.textContent = task.task;
     span.draggable = true;
-    
+
     // Make task text clickable to focus on this task
     span.style.cursor = 'pointer';
     span.addEventListener('click', (e) => {
         e.stopPropagation();
         if (onTaskClick) onTaskClick(task.id, task.task);
     });
-    
+
     span.addEventListener('dragstart', (e) => {
         e.dataTransfer.setData('text/plain', task.id);
     });
-    
-    // Optional aisle badge (toggleable; when ON show N/A if not assigned)
-    if (showAisles) {
-        const aisleLabelRaw = (task && task.aisle != null) ? String(task.aisle) : '';
-        const aisleLabel = aisleLabelRaw.trim() || 'N/A';
-        const isUnassigned = aisleLabel === 'N/A';
 
-        const aisleBadge = document.createElement('span');
-        aisleBadge.className = `self-start flex-shrink-0 text-xs px-2 py-0.5 rounded border ${
+    // Optional location badge (toggleable; when ON show N/A if not assigned)
+    if (showLocations) {
+        const locationLabelRaw = (task && task.location != null) ? String(task.location) : '';
+        const locationLabel = locationLabelRaw.trim() || 'N/A';
+        const isUnassigned = locationLabel === 'N/A';
+
+        const locationBadge = document.createElement('span');
+        locationBadge.className = `self-start flex-shrink-0 text-xs px-2 py-0.5 rounded border ${
             isUnassigned
                 ? 'border-gray-200 bg-white text-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-500'
                 : 'border-gray-200 bg-gray-50 text-gray-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300'
         }`;
-        aisleBadge.textContent = aisleLabel;
-        aisleBadge.title = 'Aisle/department';
-        textContainer.appendChild(aisleBadge);
+        locationBadge.textContent = locationLabel;
+        locationBadge.title = 'Location/department';
+        textContainer.appendChild(locationBadge);
     }
 
     textContainer.appendChild(span);

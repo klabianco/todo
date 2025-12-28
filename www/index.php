@@ -100,8 +100,8 @@ renderContainerStart();
                             <option value="">No Store</option>
                         </select>
                         <label class="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300 select-none">
-                            <input id="show-aisles-toggle" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-500 dark:focus:ring-gray-500">
-                            <span>Aisles</span>
+                            <input id="show-locations-toggle" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-500 dark:focus:ring-gray-500">
+                            <span>Locations</span>
                         </label>
                     </div>
                     <span id="task-count" class="text-sm text-gray-500 dark:text-gray-400">0 tasks</span>

@@ -423,17 +423,17 @@ const setupEventListeners = async () => {
         aiSortButton.addEventListener('click', () => sorting.handleAISortClick(focusMode.getCurrentFocusedTaskId(), renderTasks));
     }
 
-    // Aisle badge toggle (default off)
-    const SHOW_AISLES_KEY = 'todo_show_aisles';
-    const showAislesToggle = document.getElementById('show-aisles-toggle');
-    const initialShowAisles = localStorage.getItem(SHOW_AISLES_KEY) === '1';
-    ui.setShowAisles(initialShowAisles);
-    if (showAislesToggle) {
-        showAislesToggle.checked = initialShowAisles;
-        showAislesToggle.addEventListener('change', async (e) => {
+    // Location badge toggle (default off)
+    const SHOW_LOCATIONS_KEY = 'todo_show_locations';
+    const showLocationsToggle = document.getElementById('show-locations-toggle');
+    const initialShowLocations = localStorage.getItem(SHOW_LOCATIONS_KEY) === '1';
+    ui.setShowLocations(initialShowLocations);
+    if (showLocationsToggle) {
+        showLocationsToggle.checked = initialShowLocations;
+        showLocationsToggle.addEventListener('change', async (e) => {
             const enabled = !!e.target.checked;
-            localStorage.setItem(SHOW_AISLES_KEY, enabled ? '1' : '0');
-            ui.setShowAisles(enabled);
+            localStorage.setItem(SHOW_LOCATIONS_KEY, enabled ? '1' : '0');
+            ui.setShowLocations(enabled);
             await renderTasks();
         });
     }

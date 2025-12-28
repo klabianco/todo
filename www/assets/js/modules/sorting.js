@@ -1,6 +1,6 @@
 /**
  * Sorting utilities for the Todo app
- * Handles AI-based aisle assignment and programmatic sorting
+ * Handles AI-based location assignment and programmatic sorting
  */
 import * as utils from './utils.js';
 import * as storage from './storage.js';
@@ -8,10 +8,10 @@ import * as groceryStores from './grocery-stores.js';
 import * as ui from './ui.js';
 import { showLoadingOverlay, hideLoadingOverlay } from './overlay-utils.js';
 
-// Parse numeric aisle from aisle string (e.g., "Aisle 18 (Snacks)" -> 18)
-export const parseAisleNumber = (aisle) => {
-    if (aisle == null) return null;
-    const s = String(aisle);
+// Parse numeric location from location string (e.g., "Aisle 18 (Snacks)" -> 18)
+export const parseLocationNumber = (location) => {
+    if (location == null) return null;
+    const s = String(location);
     // Prefer explicit "Aisle 18" pattern
     let m = s.match(/\baisle\s*(\d+)\b/i);
     if (m && m[1]) return Number(m[1]);
@@ -21,28 +21,28 @@ export const parseAisleNumber = (aisle) => {
     return null;
 };
 
-// Sort tasks by aisle assignment
-export const sortTasksByAisle = (tasks) => {
+// Sort tasks by location assignment
+export const sortTasksByLocation = (tasks) => {
     if (!Array.isArray(tasks) || tasks.length === 0) return tasks || [];
 
     // Stable sort: decorate with original index
     const decorated = tasks.map((t, idx) => ({
         t,
         idx,
-        aisle: (t?.aisle ?? '').toString(),
-        aisleNum: parseAisleNumber(t?.aisle),
-        aisleIndex: Number.isFinite(Number(t?.aisle_index)) ? Number(t.aisle_index) : 9999,
+        location: (t?.location ?? '').toString(),
+        locationNum: parseLocationNumber(t?.location),
+        locationIndex: Number.isFinite(Number(t?.location_index)) ? Number(t.location_index) : 9999,
         text: (t?.task ?? '').toString()
     }));
 
     decorated.sort((a, b) => {
-        const aHasNum = Number.isFinite(a.aisleNum);
-        const bHasNum = Number.isFinite(b.aisleNum);
-        if (aHasNum && bHasNum && a.aisleNum !== b.aisleNum) return a.aisleNum - b.aisleNum;
-        if (aHasNum !== bHasNum) return aHasNum ? -1 : 1; // numbered aisles first
-        if (a.aisleIndex !== b.aisleIndex) return a.aisleIndex - b.aisleIndex;
-        const aisleCmp = a.aisle.localeCompare(b.aisle);
-        if (aisleCmp !== 0) return aisleCmp;
+        const aHasNum = Number.isFinite(a.locationNum);
+        const bHasNum = Number.isFinite(b.locationNum);
+        if (aHasNum && bHasNum && a.locationNum !== b.locationNum) return a.locationNum - b.locationNum;
+        if (aHasNum !== bHasNum) return aHasNum ? -1 : 1; // numbered locations first
+        if (a.locationIndex !== b.locationIndex) return a.locationIndex - b.locationIndex;
+        const locationCmp = a.location.localeCompare(b.location);
+        if (locationCmp !== 0) return locationCmp;
         const textCmp = a.text.localeCompare(b.text);
         if (textCmp !== 0) return textCmp;
         return a.idx - b.idx;
@@ -211,7 +211,7 @@ export const handleAISortClick = async (currentFocusedTaskId, renderTasks) => {
         }
         
         const { tasks: annotatedActiveTasks = tasksToSort } = await response.json();
-        const sortedActiveTasks = sortTasksByAisle(annotatedActiveTasks);
+        const sortedActiveTasks = sortTasksByLocation(annotatedActiveTasks);
         
         // Reload and update tasks
         const updatedTasks = await storage.loadTasks();

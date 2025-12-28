@@ -218,7 +218,7 @@ function extract_aisle_assignments($aiResult) {
 function normalize_assignment_row($row) {
     if (!is_array($row)) return null;
     $id = $row['id'] ?? $row['task_id'] ?? $row['taskId'] ?? null;
-    $aisle = $row['aisle_number'] ?? $row['aisle'] ?? $row['section'] ?? $row['department'] ?? null;
+    $location = $row['aisle_number'] ?? $row['aisle'] ?? $row['section'] ?? $row['department'] ?? $row['location'] ?? null;
     $text = $row['task'] ?? $row['text'] ?? null;
 
     if (!$id && !$text) return null;
@@ -226,11 +226,11 @@ function normalize_assignment_row($row) {
     return [
         'id' => $id,
         'task' => $text,
-        'aisle' => is_string($aisle) ? trim($aisle) : $aisle,
+        'location' => is_string($location) ? trim($location) : $location,
     ];
 }
 
-function build_aisle_index_map_from_layout($aisle_layout) {
+function build_location_index_map_from_layout($aisle_layout) {
     $map = [];
     if (!is_array($aisle_layout)) return $map;
     $idx = 0;
@@ -258,7 +258,7 @@ function build_aisle_index_map_from_layout($aisle_layout) {
     return $map;
 }
 
-function apply_aisle_assignments_to_tasks($tasks, $assignments, $aisleIndexByName, $unknownIndex = 9999) {
+function apply_location_assignments_to_tasks($tasks, $assignments, $locationIndexByName, $unknownIndex = 9999) {
     // Index tasks by id (preferred) and also by text (fallback)
     $byId = [];
     $byText = [];
@@ -274,8 +274,8 @@ function apply_aisle_assignments_to_tasks($tasks, $assignments, $aisleIndexByNam
     // Start with unknown for all
     $updated = $tasks;
     foreach ($updated as &$t) {
-        $t['aisle'] = $t['aisle'] ?? null;
-        $t['aisle_index'] = $t['aisle_index'] ?? $unknownIndex;
+        $t['location'] = $t['location'] ?? null;
+        $t['location_index'] = $t['location_index'] ?? $unknownIndex;
     }
     unset($t);
 
@@ -283,12 +283,12 @@ function apply_aisle_assignments_to_tasks($tasks, $assignments, $aisleIndexByNam
         $norm = normalize_assignment_row($row);
         if (!$norm) continue;
 
-        $aisle = $norm['aisle'];
-        if (!is_string($aisle) || $aisle === '') {
-            $aisle = 'Unknown';
+        $location = $norm['location'];
+        if (!is_string($location) || $location === '') {
+            $location = 'Unknown';
         }
 
-        $idx = $aisleIndexByName[$aisle] ?? $unknownIndex;
+        $idx = $locationIndexByName[$location] ?? $unknownIndex;
 
         $taskIndex = null;
         if (!empty($norm['id'])) {
@@ -304,8 +304,8 @@ function apply_aisle_assignments_to_tasks($tasks, $assignments, $aisleIndexByNam
         }
 
         if ($taskIndex === null) continue;
-        $updated[$taskIndex]['aisle'] = $aisle;
-        $updated[$taskIndex]['aisle_index'] = $idx;
+        $updated[$taskIndex]['location'] = $location;
+        $updated[$taskIndex]['location_index'] = $idx;
     }
 
     return $updated;
@@ -520,17 +520,17 @@ switch ($resource) {
             }
             
             // Build prompt based on whether we have store layout data
-            $systemMessage = "You are a grocery shopping assistant. Your job is to assign each item to the correct aisle/section (or department) so the app can sort programmatically.";
-            $prompt = "Assign an aisle/section to each grocery item below.";
-            $aisleIndexByName = [];
+            $systemMessage = "You are a grocery shopping assistant. Your job is to assign each item to the correct location/section (or department) so the app can sort programmatically.";
+            $prompt = "Assign a location/section to each grocery item below.";
+            $locationIndexByName = [];
             $unknownIndex = 9999;
-            
+
             if ($store && isset($store['aisle_layout']) && !empty($store['aisle_layout'])) {
                 // Use store-specific layout
                 $aisle_layout = clean_aisle_layout($store['aisle_layout']);
-                
+
                 if (!empty($aisle_layout) && is_array($aisle_layout)) {
-                    $aisleIndexByName = build_aisle_index_map_from_layout($aisle_layout);
+                    $locationIndexByName = build_location_index_map_from_layout($aisle_layout);
                     // Format aisle layout for the prompt
                     $layout_text = "Store: " . ($store['name'] ?? 'Unknown') . "\n\n";
                     $layout_text .= "Aisle/Section Layout:\n";
@@ -574,7 +574,7 @@ switch ($resource) {
                         'Pharmacy',
                         'Other',
                     ];
-                    $aisleIndexByName = array_flip($departments);
+                    $locationIndexByName = array_flip($departments);
                     $systemMessage .= " Choose a department for each item from the provided list.";
                     $prompt .= "\n\nNo store layout is available. Assign each item to ONE of these departments (use exact spelling):\n" .
                               json_encode($departments, JSON_PRETTY_PRINT) . "\n\n" .
@@ -606,7 +606,7 @@ switch ($resource) {
                     'Pharmacy',
                     'Other',
                 ];
-                $aisleIndexByName = array_flip($departments);
+                $locationIndexByName = array_flip($departments);
                 $systemMessage .= " Choose a department for each item from the provided list.";
                 $prompt .= "\n\nNo store selected. Assign each item to ONE of these departments (use exact spelling):\n" .
                           json_encode($departments, JSON_PRETTY_PRINT) . "\n\n" .
@@ -653,8 +653,8 @@ switch ($resource) {
                 json_response(['tasks' => $tasks, 'error' => 'Invalid AI response format']);
             }
 
-            // Apply aisle assignment to tasks (frontend will sort)
-            $updatedTasks = apply_aisle_assignments_to_tasks($tasks, $assignments, $aisleIndexByName, $unknownIndex);
+            // Apply location assignment to tasks (frontend will sort)
+            $updatedTasks = apply_location_assignments_to_tasks($tasks, $assignments, $locationIndexByName, $unknownIndex);
 
             json_response(['tasks' => $updatedTasks]);
         } catch (Exception $e) {
