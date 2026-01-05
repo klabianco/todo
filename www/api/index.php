@@ -109,7 +109,7 @@ function get_user_id() {
         'path' => '/',
         'domain' => '', // Current domain
         'secure' => true, // HTTPS only
-        'httponly' => true, // Prevent JS access
+        'httponly' => false, // Allow JS access for localStorage backup (Android WebView fix)
         'samesite' => 'None' // Required for WebView cross-origin
     ]);
     return $id;
