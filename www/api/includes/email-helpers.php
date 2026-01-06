@@ -238,8 +238,6 @@ function get_email_template($title, $content, $actionUrl = null, $actionText = n
  */
 function notify_task_completed($userId, $taskText, $listUrl = null) {
     $email = get_user_email($userId);
-    if (!$email) return false;
-
     $prefs = get_notification_preferences($userId);
     if (!$prefs['task_completed']) return false;
 
@@ -247,18 +245,29 @@ function notify_task_completed($userId, $taskText, $listUrl = null) {
         return false; // Rate limited
     }
 
-    $content = '<p>Great job! You completed:</p><p style="font-weight: 600; font-size: 18px; margin: 15px 0;">' .
-               htmlspecialchars($taskText) . '</p>';
+    $results = [];
 
-    $subject = '✅ Task Completed: ' . $taskText;
-    $body = get_email_template(
-        'Task Completed!',
-        $content,
-        $listUrl,
-        'View Your List'
-    );
+    // Send email if email is set
+    if ($email) {
+        $content = '<p>Great job! You completed:</p><p style="font-weight: 600; font-size: 18px; margin: 15px 0;">' .
+                   htmlspecialchars($taskText) . '</p>';
 
-    return send_email($email, $subject, $body);
+        $subject = '✅ Task Completed: ' . $taskText;
+        $body = get_email_template(
+            'Task Completed!',
+            $content,
+            $listUrl,
+            'View Your List'
+        );
+
+        $results['email'] = send_email($email, $subject, $body);
+    }
+
+    // Send push notification
+    require_once __DIR__ . '/push-helpers.php';
+    $results['push'] = push_notify_task_completed($userId, $taskText, $listUrl);
+
+    return $results['email'] ?? $results['push'] ?? false;
 }
 
 /**
@@ -266,8 +275,6 @@ function notify_task_completed($userId, $taskText, $listUrl = null) {
  */
 function notify_shared_list_updated($userId, $listTitle, $listUrl, $changes) {
     $email = get_user_email($userId);
-    if (!$email) return false;
-
     $prefs = get_notification_preferences($userId);
     if (!$prefs['shared_list_updated']) return false;
 
@@ -275,24 +282,35 @@ function notify_shared_list_updated($userId, $listTitle, $listUrl, $changes) {
         return false; // Rate limited
     }
 
-    $content = '<p>The shared list <strong>' . htmlspecialchars($listTitle) . '</strong> has been updated.</p>';
-    if ($changes) {
-        $content .= '<p>Changes:</p><ul style="margin: 10px 0;">';
-        foreach ($changes as $change) {
-            $content .= '<li>' . htmlspecialchars($change) . '</li>';
+    $results = [];
+
+    // Send email if email is set
+    if ($email) {
+        $content = '<p>The shared list <strong>' . htmlspecialchars($listTitle) . '</strong> has been updated.</p>';
+        if ($changes) {
+            $content .= '<p>Changes:</p><ul style="margin: 10px 0;">';
+            foreach ($changes as $change) {
+                $content .= '<li>' . htmlspecialchars($change) . '</li>';
+            }
+            $content .= '</ul>';
         }
-        $content .= '</ul>';
+
+        $subject = '📋 Shared List Updated: ' . $listTitle;
+        $body = get_email_template(
+            'Shared List Updated',
+            $content,
+            $listUrl,
+            'View Shared List'
+        );
+
+        $results['email'] = send_email($email, $subject, $body);
     }
 
-    $subject = '📋 Shared List Updated: ' . $listTitle;
-    $body = get_email_template(
-        'Shared List Updated',
-        $content,
-        $listUrl,
-        'View Shared List'
-    );
+    // Send push notification
+    require_once __DIR__ . '/push-helpers.php';
+    $results['push'] = push_notify_shared_list_updated($userId, $listTitle, $listUrl, $changes);
 
-    return send_email($email, $subject, $body);
+    return $results['email'] ?? $results['push'] ?? false;
 }
 
 /**
@@ -300,8 +318,6 @@ function notify_shared_list_updated($userId, $listTitle, $listUrl, $changes) {
  */
 function notify_new_shared_task($userId, $taskText, $listTitle, $listUrl) {
     $email = get_user_email($userId);
-    if (!$email) return false;
-
     $prefs = get_notification_preferences($userId);
     if (!$prefs['new_shared_task']) return false;
 
@@ -309,19 +325,30 @@ function notify_new_shared_task($userId, $taskText, $listTitle, $listUrl) {
         return false; // Rate limited
     }
 
-    $content = '<p>A new task was added to <strong>' . htmlspecialchars($listTitle) . '</strong>:</p>' .
-               '<p style="font-weight: 600; font-size: 16px; margin: 15px 0;">' .
-               htmlspecialchars($taskText) . '</p>';
+    $results = [];
 
-    $subject = '➕ New Task: ' . $taskText;
-    $body = get_email_template(
-        'New Task Added',
-        $content,
-        $listUrl,
-        'View Shared List'
-    );
+    // Send email if email is set
+    if ($email) {
+        $content = '<p>A new task was added to <strong>' . htmlspecialchars($listTitle) . '</strong>:</p>' .
+                   '<p style="font-weight: 600; font-size: 16px; margin: 15px 0;">' .
+                   htmlspecialchars($taskText) . '</p>';
 
-    return send_email($email, $subject, $body);
+        $subject = '➕ New Task: ' . $taskText;
+        $body = get_email_template(
+            'New Task Added',
+            $content,
+            $listUrl,
+            'View Shared List'
+        );
+
+        $results['email'] = send_email($email, $subject, $body);
+    }
+
+    // Send push notification
+    require_once __DIR__ . '/push-helpers.php';
+    $results['push'] = push_notify_new_shared_task($userId, $taskText, $listTitle, $listUrl);
+
+    return $results['email'] ?? $results['push'] ?? false;
 }
 
 /**

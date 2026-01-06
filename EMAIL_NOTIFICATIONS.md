@@ -1,14 +1,22 @@
-# Email Notifications System
+# Email & Push Notifications System
 
-This todo app now supports email notifications for various events.
+This todo app supports both email and push notifications for various events.
 
 ## Features
 
-- Email notifications for:
+- **Email notifications** (web/all platforms) for:
   - Task completions
   - Shared list updates
   - New tasks added to shared lists
   - Daily task summaries
+
+- **Push notifications** (mobile app) for:
+  - Task completions
+  - Shared list updates
+  - New tasks added to shared lists
+  - Task reminders
+
+> **Note**: Email and push notifications work together. When a notification event occurs, both will be sent (if configured). See [PUSH_NOTIFICATIONS.md](./PUSH_NOTIFICATIONS.md) for mobile push setup.
 
 ## Configuration
 

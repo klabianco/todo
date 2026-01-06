@@ -515,6 +515,43 @@ switch ($resource) {
                 }
                 break;
 
+            case 'push-token':
+                // Manage push notification tokens
+                require_once __DIR__ . '/includes/push-helpers.php';
+                switch ($_SERVER['REQUEST_METHOD']) {
+                    case 'GET':
+                        $tokens = get_user_push_tokens($userId);
+                        json_response(['tokens' => $tokens]);
+                        break;
+                    case 'PUT':
+                        $data = get_request_body();
+                        $token = $data['token'] ?? '';
+                        $platform = $data['platform'] ?? 'unknown';
+                        $deviceName = $data['deviceName'] ?? null;
+
+                        if (empty($token)) {
+                            json_response(['error' => 'Token is required'], 400);
+                        }
+
+                        $success = add_user_push_token($userId, $token, $platform, $deviceName);
+                        json_response(['success' => $success, 'token' => $token]);
+                        break;
+                    case 'DELETE':
+                        $data = get_request_body();
+                        $token = $data['token'] ?? '';
+
+                        if (empty($token)) {
+                            json_response(['error' => 'Token is required'], 400);
+                        }
+
+                        $success = remove_user_push_token($userId, $token);
+                        json_response(['success' => $success]);
+                        break;
+                    default:
+                        json_response(['error' => 'Method not allowed'], 405);
+                }
+                break;
+
             case 'tasks':
                 if (!$subid) {
                     http_response_code(400);
