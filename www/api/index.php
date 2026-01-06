@@ -386,9 +386,10 @@ switch ($resource) {
                 if (!file_exists($file_path)) {
                     json_response(['error' => 'Task list not found'], 404);
                 }
-                
+
                 $data = get_request_body();
-                $list_data = read_json_file($file_path);
+                $old_list_data = read_json_file($file_path);
+                $list_data = $old_list_data;
                 $list_data['tasks'] = $data['tasks'] ?? [];
                 if (isset($data['focusId'])) {
                     $list_data['focusId'] = $data['focusId'];
@@ -396,8 +397,36 @@ switch ($resource) {
                         // Always update the lastModified timestamp with current server time
                         // This ensures changes are detected by viewers polling for updates
                         $list_data['lastModified'] = date('c');
-                        
+
                 write_json_file($file_path, $list_data);
+
+                // Send email notifications for shared list updates
+                require_once __DIR__ . '/includes/email-helpers.php';
+
+                // Detect changes and notify subscribers
+                $old_tasks = $old_list_data['tasks'] ?? [];
+                $new_tasks = $list_data['tasks'] ?? [];
+
+                // Find new tasks (simple check by count for now)
+                if (count($new_tasks) > count($old_tasks)) {
+                    $new_task_texts = [];
+                    foreach ($new_tasks as $task) {
+                        $found = false;
+                        foreach ($old_tasks as $old_task) {
+                            if (($task['id'] ?? '') === ($old_task['id'] ?? '')) {
+                                $found = true;
+                                break;
+                            }
+                        }
+                        if (!$found && isset($task['task'])) {
+                            $new_task_texts[] = $task['task'];
+                        }
+                    }
+
+                    // Notify about new tasks (you would need to track subscribers)
+                    // For now, this is a placeholder - implement subscriber tracking as needed
+                }
+
                 json_response(['success' => true]);
                 break;
                 
@@ -439,6 +468,53 @@ switch ($resource) {
         $subid = isset($api_parts[2]) ? $api_parts[2] : null;
         $userId = get_user_id();
         switch ($sub) {
+            case 'email':
+                // Manage user email for notifications
+                require_once __DIR__ . '/includes/email-helpers.php';
+                switch ($_SERVER['REQUEST_METHOD']) {
+                    case 'GET':
+                        $email = get_user_email($userId);
+                        json_response(['email' => $email]);
+                        break;
+                    case 'PUT':
+                        $data = get_request_body();
+                        $email = filter_var($data['email'] ?? '', FILTER_VALIDATE_EMAIL);
+                        if (!$email) {
+                            json_response(['error' => 'Invalid email address'], 400);
+                        }
+                        $success = set_user_email($userId, $email);
+                        json_response(['success' => $success, 'email' => $email]);
+                        break;
+                    case 'DELETE':
+                        $success = set_user_email($userId, '');
+                        json_response(['success' => $success]);
+                        break;
+                    default:
+                        json_response(['error' => 'Method not allowed'], 405);
+                }
+                break;
+
+            case 'notification-prefs':
+                // Manage notification preferences
+                require_once __DIR__ . '/includes/email-helpers.php';
+                switch ($_SERVER['REQUEST_METHOD']) {
+                    case 'GET':
+                        $prefs = get_notification_preferences($userId);
+                        json_response(['preferences' => $prefs]);
+                        break;
+                    case 'PUT':
+                        $data = get_request_body();
+                        $prefs = $data['preferences'] ?? [];
+                        $user_dir = get_user_dir($userId);
+                        $prefs_file = $user_dir . '/notification-prefs.json';
+                        file_put_contents($prefs_file, json_encode($prefs));
+                        json_response(['success' => true, 'preferences' => $prefs]);
+                        break;
+                    default:
+                        json_response(['error' => 'Method not allowed'], 405);
+                }
+                break;
+
             case 'tasks':
                 if (!$subid) {
                     http_response_code(400);
@@ -1505,6 +1581,41 @@ switch ($resource) {
             default:
                 json_response(['error' => 'Method not allowed'], 405);
         }
+        break;
+
+    case 'test-notification':
+        // Test endpoint to send a test notification email
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            json_response(['error' => 'Method not allowed'], 405);
+        }
+
+        require_once __DIR__ . '/includes/email-helpers.php';
+
+        $userId = get_user_id();
+        $data = get_request_body();
+        $type = $data['type'] ?? 'task_completed';
+
+        $email = get_user_email($userId);
+        if (!$email) {
+            json_response(['error' => 'No email address set. Please set your email first.'], 400);
+        }
+
+        $success = false;
+        switch ($type) {
+            case 'task_completed':
+                $success = notify_task_completed($userId, 'Test Task', 'https://' . $_SERVER['HTTP_HOST']);
+                break;
+            case 'shared_list_updated':
+                $success = notify_shared_list_updated($userId, 'Test List', 'https://' . $_SERVER['HTTP_HOST'], ['Task added', 'Task completed']);
+                break;
+            case 'new_shared_task':
+                $success = notify_new_shared_task($userId, 'Test Task', 'Test List', 'https://' . $_SERVER['HTTP_HOST']);
+                break;
+            default:
+                json_response(['error' => 'Invalid notification type'], 400);
+        }
+
+        json_response(['success' => $success, 'type' => $type, 'email' => $email]);
         break;
 
     default:

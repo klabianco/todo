@@ -30,32 +30,36 @@ const setCookie = (name, value, days = 365) => {
 export const restoreUserIdIfNeeded = () => {
     const cookieUserId = getCookie('todoUserId');
     const backupUserId = localStorage.getItem(USER_ID_BACKUP_KEY);
-    
+
     if (!cookieUserId && backupUserId) {
         // Cookie missing but we have a backup - restore it
         console.log('Restoring user ID from localStorage backup');
         setCookie('todoUserId', backupUserId);
         return backupUserId;
     }
-    
+
     if (cookieUserId && !backupUserId) {
         // Cookie exists but no backup - create backup
         localStorage.setItem(USER_ID_BACKUP_KEY, cookieUserId);
     }
-    
+
+    if (cookieUserId && backupUserId && cookieUserId !== backupUserId) {
+        // Both exist but don't match - cookie takes precedence, update backup
+        console.log('Syncing localStorage backup with current cookie');
+        localStorage.setItem(USER_ID_BACKUP_KEY, cookieUserId);
+    }
+
     return cookieUserId;
 };
 
-// Backup user ID to localStorage after successful API response
-const backupUserIdFromResponse = (response) => {
-    // Check if the response set a new cookie (via Set-Cookie header parsing isn't possible,
-    // but we can read the current cookie after the response)
-    setTimeout(() => {
-        const userId = getCookie('todoUserId');
-        if (userId) {
-            localStorage.setItem(USER_ID_BACKUP_KEY, userId);
-        }
-    }, 100);
+// Backup user ID to localStorage immediately
+const backupUserIdImmediately = () => {
+    const userId = getCookie('todoUserId');
+    if (userId) {
+        localStorage.setItem(USER_ID_BACKUP_KEY, userId);
+        return true;
+    }
+    return false;
 };
 
 // Cached user data
@@ -387,11 +391,31 @@ export const updateOwnedListForDate = async (date, tasks) => {
     }
 };
 
+// Periodic cookie monitor to restore if cleared during session (Android WebView fix)
+let cookieMonitorInterval = null;
+const startCookieMonitoring = () => {
+    // Check every 30 seconds
+    cookieMonitorInterval = setInterval(() => {
+        restoreUserIdIfNeeded();
+    }, 30000);
+};
+
+// Stop cookie monitoring
+export const stopCookieMonitoring = () => {
+    if (cookieMonitorInterval) {
+        clearInterval(cookieMonitorInterval);
+        cookieMonitorInterval = null;
+    }
+};
+
 // Initialize storage
 export const initializeStorage = async () => {
     // Restore user ID from localStorage backup if cookie is missing (WebView fix)
     restoreUserIdIfNeeded();
-    
+
+    // Start periodic cookie monitoring for Android WebView
+    startCookieMonitoring();
+
     if (isSharedList) {
         // For shared lists, try to load from server
         try {
@@ -407,7 +431,7 @@ export const initializeStorage = async () => {
         // If this date corresponds to an owned shared list, sync it from server
         await syncOwnedListForDate(activeDate);
     }
-    
+
     // Backup user ID after successful initialization
     const userId = getCookie('todoUserId');
     if (userId) {
@@ -579,17 +603,23 @@ export const loadTasks = async () => {
 export const saveTasks = async (tasks) => {
     if (isSharedList) {
         // For shared lists, save to server
-        return await saveTasksToServer(tasks);
+        const result = await saveTasksToServer(tasks);
+        // Backup userId immediately after successful save (Android WebView fix)
+        backupUserIdImmediately();
+        return result;
     } else {
         // Personal list stored on server
         await savePersonalTasksToServer(activeDate, tasks);
-        
+
         // CRITICAL FIX: Also update any owned shared list for this date
         // This ensures changes made in personal view update the shared list
         const ownedList = getOwnedListByDate(activeDate);
         if (ownedList && ownedList.id) {
             await updateOwnedListForDate(activeDate, tasks);
         }
+
+        // Backup userId immediately after successful save (Android WebView fix)
+        backupUserIdImmediately();
     }
 };
 
