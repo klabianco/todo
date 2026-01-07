@@ -48,3 +48,18 @@ export const setupModalCloseHandlers = (modalId, closeButtonId, cancelButtonId =
     
     return { modal, closeModal };
 };
+
+export const setupFileInputButton = (buttonId, fileInputId) => {
+    const button = $(buttonId);
+    const fileInput = $(fileInputId);
+
+    if (!button || !fileInput) {
+        return { button, fileInput };
+    }
+
+    button.addEventListener('click', () => {
+        fileInput.click();
+    });
+
+    return { button, fileInput };
+};
