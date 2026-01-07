@@ -4,7 +4,29 @@
  */
 
 // Load email configuration
-require_once __DIR__ . '/../../config/email-config.php';
+$email_config_path = __DIR__ . '/../../../config/email-config.php';
+$email_config_fallback_path = __DIR__ . '/../../config/email-config.php';
+
+if (file_exists($email_config_path)) {
+    require_once $email_config_path;
+} elseif (file_exists($email_config_fallback_path)) {
+    require_once $email_config_fallback_path;
+} else {
+    if (!defined('EMAIL_NOTIFICATIONS_ENABLED')) define('EMAIL_NOTIFICATIONS_ENABLED', false);
+    if (!defined('EMAIL_USE_SMTP')) define('EMAIL_USE_SMTP', false);
+    if (!defined('EMAIL_SMTP_HOST')) define('EMAIL_SMTP_HOST', '');
+    if (!defined('EMAIL_SMTP_PORT')) define('EMAIL_SMTP_PORT', 587);
+    if (!defined('EMAIL_SMTP_USERNAME')) define('EMAIL_SMTP_USERNAME', '');
+    if (!defined('EMAIL_SMTP_PASSWORD')) define('EMAIL_SMTP_PASSWORD', '');
+    if (!defined('EMAIL_SMTP_ENCRYPTION')) define('EMAIL_SMTP_ENCRYPTION', 'tls');
+    if (!defined('EMAIL_FROM_ADDRESS')) define('EMAIL_FROM_ADDRESS', '');
+    if (!defined('EMAIL_FROM_NAME')) define('EMAIL_FROM_NAME', '');
+    if (!defined('NOTIFY_TASK_COMPLETED')) define('NOTIFY_TASK_COMPLETED', false);
+    if (!defined('NOTIFY_SHARED_LIST_UPDATED')) define('NOTIFY_SHARED_LIST_UPDATED', false);
+    if (!defined('NOTIFY_NEW_SHARED_TASK')) define('NOTIFY_NEW_SHARED_TASK', false);
+    if (!defined('NOTIFY_TASK_ASSIGNED')) define('NOTIFY_TASK_ASSIGNED', false);
+    if (!defined('EMAIL_RATE_LIMIT_SECONDS')) define('EMAIL_RATE_LIMIT_SECONDS', 300);
+}
 
 /**
  * Get user's email address from their preferences
