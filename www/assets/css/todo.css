@@ -46,16 +46,16 @@ body {
 }
 /* Styling for dragged item's placeholder */
 .sortable-ghost {
-    opacity: 0.4;
-    background-color: #f0f9ff !important;
-    border: 2px dashed #3b82f6 !important;
+    opacity: 0.3;
+    background-color: #f8fafc !important;
+    border: 2px dashed #cbd5e1 !important;
 }
 
 /* Styling for the dragged item */
 .sortable-fallback {
-    opacity: 0.9;
-    transform: rotate(2deg);
-    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    opacity: 0.95;
+    transform: rotate(1deg);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.08);
 }
 /* Drag handle specific styling */
 .drag-handle {
@@ -65,23 +65,28 @@ body {
     z-index: 10; /* Ensure handle is above other elements */
 }
 .drag-handle:hover {
-    color: #3b82f6 !important; /* Highlight on hover to indicate interactive element */
+    color: #6b7280 !important; /* Subtle highlight on hover */
 }
 .drag-handle:active {
     cursor: grabbing;
-    color: #2563eb !important;
+    color: #4b5563 !important;
 }
 .sortable-chosen {
-    background-color: #f0f9ff;
+    background-color: #fafafa;
 }
 /* Highlight drop targets */
 .drag-over {
-    background-color: #e0f2fe;
+    background-color: #f8fafc;
 }
 /* Dark mode overrides */
 html.dark body {
-    background-color: #000000;
+    background-color: #111827;
     color: #e5e7eb;
+}
+
+/* Force title to be white in dark mode */
+html.dark #list-title {
+    color: #ffffff !important;
 }
 
 /* Task item dark mode styles */
@@ -110,7 +115,7 @@ html.dark .task-item .drag-handle {
 }
 
 html.dark .task-item .drag-handle:hover {
-    color: #60a5fa !important;
+    color: #9ca3af !important;
 }
 html.dark .dark\:bg-gray-700 { background-color: #374151 !important; }
 html.dark .dark\:bg-gray-800 { background-color: #1f2937 !important; }

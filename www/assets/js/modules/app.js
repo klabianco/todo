@@ -849,11 +849,11 @@ const applyListTypeBehaviors = (listType) => {
 
         if (listType === 'schedule') {
             listTypeBadge.textContent = 'Schedule';
-            listTypeBadge.classList.add('bg-blue-100', 'text-blue-800', 'dark:bg-blue-900', 'dark:text-blue-200');
+            listTypeBadge.classList.add('bg-gray-200', 'text-gray-700', 'dark:bg-gray-700', 'dark:text-gray-200');
             listTypeBadge.classList.remove('hidden');
         } else if (listType === 'grocery') {
             listTypeBadge.textContent = 'Grocery';
-            listTypeBadge.classList.add('bg-green-100', 'text-green-800', 'dark:bg-green-900', 'dark:text-green-200');
+            listTypeBadge.classList.add('bg-gray-200', 'text-gray-700', 'dark:bg-gray-700', 'dark:text-gray-200');
             listTypeBadge.classList.remove('hidden');
         } else {
             // Hide badge for default todo type
@@ -872,6 +872,7 @@ const applyListTypeBehaviors = (listType) => {
             // Remove left rounding from task input since time input is now first
             if (taskInput) {
                 taskInput.classList.remove('rounded-l-lg');
+                taskInput.placeholder = 'Add activity...';
             }
         }
         // Show import button for schedules, hide other controls
@@ -886,7 +887,10 @@ const applyListTypeBehaviors = (listType) => {
         if (showLocationsToggle) showLocationsToggle.checked = true;
         if (taskTimeInput) taskTimeInput.classList.add('hidden');
         // Restore left rounding to task input since time input is hidden
-        if (taskInput) taskInput.classList.add('rounded-l-lg');
+        if (taskInput) {
+            taskInput.classList.add('rounded-l-lg');
+            taskInput.placeholder = 'Add item...';
+        }
         // Show grocery-specific controls, hide import button
         if (importTextButton) importTextButton.classList.add('hidden');
         if (aiSortButton) aiSortButton.classList.remove('hidden');
@@ -897,7 +901,10 @@ const applyListTypeBehaviors = (listType) => {
         // Todo (default): hide time input and import button, show standard controls
         if (taskTimeInput) taskTimeInput.classList.add('hidden');
         // Restore left rounding to task input since time input is hidden
-        if (taskInput) taskInput.classList.add('rounded-l-lg');
+        if (taskInput) {
+            taskInput.classList.add('rounded-l-lg');
+            taskInput.placeholder = 'Add task...';
+        }
         if (importTextButton) importTextButton.classList.add('hidden');
         if (aiSortButton) aiSortButton.classList.remove('hidden');
         if (groceryStoreSelect) groceryStoreSelect.classList.remove('hidden');

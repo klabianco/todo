@@ -34,7 +34,7 @@ function renderHead($title = 'Todo', $extraScripts = [], $includeThemeScript = f
     <script type="module" src="/assets/js/includes/theme-init.js"></script>
     <?php endif; ?>
 </head>
-<body class="bg-gray-50 text-gray-800 min-h-screen dark:bg-gray-900 dark:text-gray-200">
+<body class="bg-gray-100 text-gray-700 min-h-screen dark:bg-gray-900 dark:text-gray-300">
 <?php
 }
 ?>

@@ -108,15 +108,15 @@ export const createTaskElement = (
     const li = document.createElement('li');
     li.dataset.id = task.id;
     li.dataset.level = level;
-    li.className = `task-item ${level > 0 ? 'ml-' + (level * 4) : ''} mb-2 border rounded-lg ${task.completed ? 'completed bg-gray-50 dark:bg-gray-800' : 'bg-white dark:bg-gray-700'} ${task.sticky ? 'border-amber-400' : 'dark:border-gray-600'}`;
+    li.className = `task-item ${level > 0 ? 'ml-' + (level * 4) : ''} rounded-xl ${task.completed ? 'completed bg-gray-100 dark:bg-gray-700/80' : 'bg-gray-50 dark:bg-gray-700/80'} ${task.sticky ? 'ring-2 ring-amber-300 dark:ring-amber-400' : 'dark:ring-1 dark:ring-gray-600'}`;
     
     // Main task row with controls
     const taskRow = document.createElement('div');
-    taskRow.className = 'flex items-center justify-between p-3';
+    taskRow.className = 'flex items-center justify-between p-4';
     
     // Drag handle
     const dragHandle = document.createElement('div');
-    dragHandle.className = 'drag-handle mr-2 text-gray-400 cursor-grab p-1 flex-shrink-0';
+    dragHandle.className = 'drag-handle mr-2 text-gray-300 dark:text-gray-500 cursor-grab p-1 flex-shrink-0';
     dragHandle.innerHTML = `
         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"></path>
@@ -138,7 +138,7 @@ export const createTaskElement = (
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.checked = task.completed;
-    checkbox.className = 'mr-3 h-5 w-5 min-w-5 flex-shrink-0 rounded border-gray-300 text-blue-500 dark:text-gray-500 focus:ring-blue-500 dark:focus:ring-gray-500';
+    checkbox.className = 'mr-3 h-5 w-5 min-w-5 flex-shrink-0 rounded border-gray-300 text-gray-800 dark:text-white focus:ring-gray-400 dark:focus:ring-gray-500 dark:border-gray-500 dark:bg-gray-600';
     
     // Add event listener to checkbox
     checkbox.addEventListener('change', () => {
@@ -151,7 +151,7 @@ export const createTaskElement = (
     textContainer.className = 'flex flex-col gap-1 flex-1 min-w-0';
 
     const span = document.createElement('span');
-    span.className = `${task.completed ? 'line-through text-gray-500 dark:text-gray-400' : 'dark:text-gray-100'} min-w-0`;
+    span.className = `${task.completed ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-white'} min-w-0`;
     span.textContent = task.task;
     span.draggable = true;
 
@@ -228,7 +228,7 @@ export const createTaskElement = (
 
     // Edit button
     const editButton = document.createElement('button');
-    editButton.className = 'mr-2 text-gray-400 hover:text-blue-500';
+    editButton.className = 'mr-2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300';
     editButton.innerHTML = `
         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
@@ -269,7 +269,7 @@ export const createTaskElement = (
     
     // Delete button
     const deleteButton = document.createElement('button');
-    deleteButton.className = 'text-gray-400 hover:text-red-500';
+    deleteButton.className = 'text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400';
     deleteButton.innerHTML = `
         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
@@ -372,7 +372,7 @@ export const updateBreadcrumbTrail = (taskNavigationStack, onJumpToBreadcrumb) =
         
         // Add breadcrumb item
         const breadcrumbItem = document.createElement('button');
-        breadcrumbItem.className = 'text-blue-500 hover:text-blue-700 dark:text-gray-300 dark:hover:text-white';
+        breadcrumbItem.className = 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white';
         breadcrumbItem.textContent = item.title;
         breadcrumbItem.dataset.index = index;
         breadcrumbItem.addEventListener('click', () => onJumpToBreadcrumb(index));

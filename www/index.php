@@ -8,15 +8,15 @@ require __DIR__ . '/includes/container.php';
 renderHead('Todo', ['sortablejs', 'jspdf', 'xlsx'], true);
 renderContainerStart();
 ?>
-        <header class="text-center mb-6">
+        <header class="text-center mb-8">
             <div class="flex items-center justify-center gap-2">
-                <h1 id="list-title" class="text-3xl font-bold text-gray-700 dark:text-gray-200">My List</h1>
-                <button id="edit-title-button" class="hidden text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1" title="Edit list name">
+                <h1 id="list-title" class="text-2xl font-semibold text-gray-900 dark:text-white">My List</h1>
+                <button id="edit-title-button" class="hidden text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-white p-1" title="Edit list name">
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
                     </svg>
                 </button>
-                <button id="ai-title-button" class="hidden text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 p-1" title="Generate name with AI">
+                <button id="ai-title-button" class="hidden text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-white p-1" title="Generate name with AI">
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path>
                     </svg>
@@ -26,42 +26,42 @@ renderContainerStart();
             <!-- Edit title input (hidden by default) -->
             <div id="edit-title-container" class="hidden mt-2">
                 <div class="flex items-center justify-center gap-2 max-w-md mx-auto">
-                    <input type="text" id="edit-title-input" class="flex-1 px-3 py-2 text-lg border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100">
-                    <button id="save-title-button" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-md">Save</button>
-                    <button id="cancel-title-button" class="bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 px-3 py-2 rounded-md">Cancel</button>
+                    <input type="text" id="edit-title-input" class="flex-1 px-3 py-2 text-lg border-0 bg-gray-100 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-300 dark:focus:ring-gray-500 dark:text-gray-100">
+                    <button id="save-title-button" class="bg-gray-900 hover:bg-black dark:bg-white dark:hover:bg-gray-100 dark:text-gray-900 text-white font-medium px-3 py-2 rounded-md">Save</button>
+                    <button id="cancel-title-button" class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 px-3 py-2 rounded-md">Cancel</button>
                 </div>
             </div>
-            <div class="mt-3 flex flex-col gap-2">
+            <div class="mt-4 flex flex-col gap-3">
                 <!-- Back to My List button (only shown for shared lists) -->
-                <button id="back-to-personal-button" class="hidden text-sm bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-1 rounded-md flex items-center mx-auto">
-                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <button id="back-to-personal-button" class="hidden text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-800 px-4 py-2 rounded-lg flex items-center mx-auto transition-colors">
+                    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
                     </svg>
                     Back to My List
                 </button>
 
-                <div class="flex gap-2 justify-center">
-                    <button id="create-list-button" class="text-sm bg-orange-500 hover:bg-orange-600 text-white px-4 py-1 rounded-md flex items-center">
-                        <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <div class="flex gap-3 justify-center flex-wrap">
+                    <button id="create-list-button" class="text-sm bg-gray-900 hover:bg-black dark:bg-white dark:hover:bg-gray-100 dark:text-gray-900 text-white px-4 py-2 rounded-lg flex items-center shadow-sm transition-colors font-medium">
+                        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                         </svg>
                         New List
                     </button>
-                    <button id="share-button" class="text-sm bg-blue-500 hover:bg-blue-600 text-white px-4 py-1 rounded-md flex items-center">
-                        <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <button id="share-button" class="text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-800 px-3 py-2 rounded-lg flex items-center transition-colors">
+                        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path>
                         </svg>
-                        Share List
+                        Share
                     </button>
-                    <button id="export-button" class="text-sm bg-green-500 hover:bg-green-600 text-white px-4 py-1 rounded-md flex items-center">
-                        <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <button id="export-button" class="text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-800 px-3 py-2 rounded-lg flex items-center transition-colors">
+                        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                         </svg>
                         Export
                     </button>
-                    <button id="import-button" class="text-sm bg-purple-500 hover:bg-purple-600 text-white px-4 py-1 rounded-md flex items-center">
-                        <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14v-2m0 0V8m0 2h2m-2 0H10m8 6H6a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    <button id="import-button" class="text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-800 px-3 py-2 rounded-lg flex items-center transition-colors">
+                        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
                         </svg>
                         Import
                     </button>
@@ -88,30 +88,30 @@ renderContainerStart();
         <!-- Breadcrumb navigation for focus mode -->
         <div id="task-breadcrumb" class="mb-4 hidden">
             <div class="flex items-center flex-wrap text-sm mb-2 breadcrumb-trail">
-                <button class="text-blue-500 hover:text-blue-700 dark:text-gray-300 dark:hover:text-white" data-level="root">All Tasks</button>
+                <button class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white" data-level="root">All Tasks</button>
                 <div id="breadcrumb-items" class="flex items-center flex-wrap"></div>
             </div>
-            <div id="focus-title" class="text-lg font-semibold"></div>
+            <div id="focus-title" class="text-lg font-semibold dark:text-white"></div>
         </div>
         
-        <div class="bg-white rounded-lg shadow-md p-6 dark:bg-gray-800">
+        <div class="bg-white rounded-2xl shadow-sm p-8 dark:bg-gray-800">
             <!-- Add task form -->
-            <form id="task-form" class="flex items-center mb-6">
+            <form id="task-form" class="flex items-center mb-8">
                 <input
                     type="time"
                     id="task-time-input"
-                    class="hidden py-2 px-3 rounded-l-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    class="hidden py-3 px-4 rounded-l-xl border-0 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-300 dark:bg-gray-700 dark:text-gray-100 dark:focus:ring-gray-500"
                 >
                 <input
                     type="text"
                     id="task-input"
-                    placeholder="Add a new task..."
-                    class="flex-1 py-2 px-4 rounded-l-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
+                    placeholder="Add task..."
+                    class="flex-1 py-3 px-4 rounded-l-xl border-0 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-300 dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-500 dark:focus:ring-gray-500"
                     required
                 >
                 <button
                     type="submit"
-                    class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-r-lg border border-l-0 border-gray-300 dark:border-gray-600 transition duration-200"
+                    class="bg-gray-900 hover:bg-black dark:bg-white dark:hover:bg-gray-100 dark:text-gray-900 text-white py-3 px-6 rounded-r-xl transition-colors font-medium"
                 >
                     Add
                 </button>
@@ -120,48 +120,48 @@ renderContainerStart();
             <!-- Task list -->
             <div id="tasks-container">
                 <!-- Active tasks -->
-                <div class="flex justify-between items-center mb-4">
-                    <div class="flex gap-2 items-center flex-wrap">
-                        <button id="import-text-button" class="hidden text-xs bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded-md flex items-center" title="Import tasks from pasted text (AI)">
-                            <svg class="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <div class="flex justify-between items-center mb-6">
+                    <div class="flex gap-3 items-center flex-wrap">
+                        <button id="import-text-button" class="hidden text-xs text-gray-600 hover:text-gray-800 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 px-3 py-1.5 rounded-lg flex items-center transition-colors" title="Import tasks from pasted text (AI)">
+                            <svg class="h-3.5 w-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                             </svg>
                             Import
                         </button>
-                        <button id="ai-sort-button" class="text-xs bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-md flex items-center" title="Assign aisle/department to each item (AI) and sort">
-                            <svg class="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <button id="ai-sort-button" class="text-xs text-gray-600 hover:text-gray-800 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 px-3 py-1.5 rounded-lg flex items-center transition-colors" title="Assign aisle/department to each item (AI) and sort">
+                            <svg class="h-3.5 w-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4"></path>
                             </svg>
                             Sort
                         </button>
-                        <select id="grocery-store-select" class="text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-200 px-3 py-1 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <select id="grocery-store-select" class="text-xs bg-transparent text-gray-600 dark:text-gray-400 px-2 py-1.5 rounded-lg border-0 focus:outline-none focus:ring-2 focus:ring-gray-300 dark:focus:ring-gray-500 cursor-pointer">
                             <option value="">Auto</option>
                         </select>
-                        <label class="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300 select-none">
-                            <input id="show-locations-toggle" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-500 dark:focus:ring-gray-500">
+                        <label class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 select-none cursor-pointer hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
+                            <input id="show-locations-toggle" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-gray-600 focus:ring-gray-400 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-400">
                             <span>Locations</span>
                         </label>
-                        <label class="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300 select-none">
-                            <input id="show-times-toggle" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-500 dark:focus:ring-gray-500">
+                        <label class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 select-none cursor-pointer hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
+                            <input id="show-times-toggle" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-gray-600 focus:ring-gray-400 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-400">
                             <span>Times</span>
                         </label>
                     </div>
-                    <span id="task-count" class="text-sm text-gray-500 dark:text-gray-400">0 tasks</span>
+                    <span id="task-count" class="text-sm text-gray-400 dark:text-gray-500">0 tasks</span>
                 </div>
                 
-                <ul id="active-task-list" class="space-y-2 mb-6">
+                <ul id="active-task-list" class="space-y-3 mb-6">
                     <!-- Active tasks will be inserted here by JavaScript -->
                 </ul>
-                
+
                 <!-- Empty state for active tasks -->
-                <div id="empty-state" class="text-center py-6">
-                    <p class="text-gray-500 dark:text-gray-400">Your list is empty</p>
-                    <p class="text-sm text-gray-400 dark:text-gray-500 mt-1">Add a task to get started</p>
+                <div id="empty-state" class="text-center py-12">
+                    <p class="text-gray-400 dark:text-gray-500 text-lg">No tasks yet</p>
+                    <p class="text-sm text-gray-300 dark:text-gray-600 mt-2">Add something above to get started</p>
                 </div>
                 
                 <!-- Share Modal -->
                 <div id="share-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full">
+                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg max-w-md w-full">
                         <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                             <h2 class="text-xl font-bold text-gray-800 dark:text-gray-200">Share List</h2>
                         </div>
@@ -195,7 +195,7 @@ renderContainerStart();
                             <button id="cancel-share" class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
                                 Cancel
                             </button>
-                            <button id="confirm-share" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md">
+                            <button id="confirm-share" class="px-4 py-2 bg-gray-900 hover:bg-black dark:bg-white dark:hover:bg-gray-100 dark:text-gray-900 text-white font-medium rounded-md">
                                 Share
                             </button>
                         </div>
@@ -204,7 +204,7 @@ renderContainerStart();
 
                 <!-- Export Modal -->
                 <div id="export-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full">
+                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg max-w-md w-full">
                         <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                             <h2 class="text-xl font-bold text-gray-800 dark:text-gray-200">Export List</h2>
                         </div>
@@ -272,7 +272,7 @@ renderContainerStart();
                             <button id="cancel-export" class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
                                 Cancel
                             </button>
-                            <button id="confirm-export" class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-md">
+                            <button id="confirm-export" class="px-4 py-2 bg-gray-900 hover:bg-black dark:bg-white dark:hover:bg-gray-100 dark:text-gray-900 text-white font-medium rounded-md">
                                 Export
                             </button>
                         </div>
@@ -281,18 +281,18 @@ renderContainerStart();
                 
                 <!-- Import Modal -->
                 <div id="import-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full">
+                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg max-w-md w-full">
                         <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                             <h2 class="text-xl font-bold text-gray-800 dark:text-gray-200">Import List</h2>
                         </div>
                         <div class="p-6">
                             <div class="mb-6">
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Import from URL</label>
-                                <input 
-                                    type="url" 
-                                    id="import-url-input" 
-                                    placeholder="https://todo.o9p.net?share=... or recipe URL" 
-                                    class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
+                                <input
+                                    type="url"
+                                    id="import-url-input"
+                                    placeholder="https://todo.o9p.net?share=... or recipe URL"
+                                    class="w-full px-4 py-2 border-0 bg-gray-50 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-300 dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-400 dark:focus:ring-gray-500"
                                 >
                                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Paste a share link to import a list, or a recipe/article URL to extract items</p>
                             </div>
@@ -303,7 +303,7 @@ renderContainerStart();
                                     id="import-text-input"
                                     rows="5"
                                     placeholder="Paste your schedule, todo list, or any text with tasks..."
-                                    class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400 resize-none"
+                                    class="w-full px-4 py-2 border-0 bg-gray-50 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-300 dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-400 dark:focus:ring-gray-500 resize-none"
                                 ></textarea>
                                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">AI will parse times and tasks from plain text</p>
                             </div>
@@ -312,7 +312,7 @@ renderContainerStart();
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Import from File</label>
                                 <button
                                     id="import-file-button"
-                                    class="w-full px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-md border border-gray-300 dark:border-gray-600"
+                                    class="w-full px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-md"
                                 >
                                     Choose JSON File
                                 </button>
@@ -322,10 +322,10 @@ renderContainerStart();
                             <button id="cancel-import" class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
                                 Cancel
                             </button>
-                            <button id="confirm-import-text" class="hidden px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-md">
+                            <button id="confirm-import-text" class="hidden px-4 py-2 bg-gray-900 hover:bg-black dark:bg-white dark:hover:bg-gray-100 dark:text-gray-900 text-white font-medium rounded-md">
                                 Import Text
                             </button>
-                            <button id="confirm-import-url" class="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-md">
+                            <button id="confirm-import-url" class="px-4 py-2 bg-gray-900 hover:bg-black dark:bg-white dark:hover:bg-gray-100 dark:text-gray-900 text-white font-medium rounded-md">
                                 Import from URL
                             </button>
                         </div>
@@ -334,7 +334,7 @@ renderContainerStart();
 
                 <!-- Edit Task Modal -->
                 <div id="edit-task-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full">
+                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg max-w-md w-full">
                         <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                             <h2 class="text-xl font-bold text-gray-800 dark:text-gray-200">Edit Task</h2>
                         </div>
@@ -345,7 +345,7 @@ renderContainerStart();
                                 <input
                                     type="text"
                                     id="edit-task-text"
-                                    class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                                    class="w-full px-4 py-2 border-0 bg-gray-50 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-300 dark:bg-gray-700 dark:text-gray-100 dark:focus:ring-gray-500"
                                 >
                             </div>
                             <div>
@@ -354,7 +354,7 @@ renderContainerStart();
                                     type="text"
                                     id="edit-task-location"
                                     placeholder="e.g., Aisle 5, Produce, etc."
-                                    class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
+                                    class="w-full px-4 py-2 border-0 bg-gray-50 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-300 dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-400 dark:focus:ring-gray-500"
                                 >
                             </div>
                             <div>
@@ -362,7 +362,7 @@ renderContainerStart();
                                 <input
                                     type="time"
                                     id="edit-task-time"
-                                    class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                                    class="w-full px-4 py-2 border-0 bg-gray-50 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-300 dark:bg-gray-700 dark:text-gray-100 dark:focus:ring-gray-500"
                                 >
                             </div>
                         </div>
@@ -370,7 +370,7 @@ renderContainerStart();
                             <button id="cancel-edit-task" class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
                                 Cancel
                             </button>
-                            <button id="save-edit-task" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md">
+                            <button id="save-edit-task" class="px-4 py-2 bg-gray-900 hover:bg-black dark:bg-white dark:hover:bg-gray-100 dark:text-gray-900 text-white font-medium rounded-md">
                                 Save
                             </button>
                         </div>
@@ -378,23 +378,23 @@ renderContainerStart();
                 </div>
 
                 <!-- Completed tasks section -->
-                <div id="completed-section" class="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700" style="display: none;">
-                    <button id="completed-toggle" class="flex justify-between items-center w-full mb-2 text-left hover:opacity-80 transition-opacity">
-                        <h2 class="text-lg font-medium text-gray-600 dark:text-gray-300">Completed</h2>
+                <div id="completed-section" class="mt-10 pt-8 border-t border-gray-100 dark:border-gray-700/50" style="display: none;">
+                    <button id="completed-toggle" class="flex justify-between items-center w-full mb-4 text-left hover:opacity-80 transition-opacity">
+                        <h2 class="text-base font-medium text-gray-400 dark:text-gray-500">Completed</h2>
                         <div class="flex items-center gap-2">
-                            <span id="completed-count" class="text-sm text-gray-500 dark:text-gray-400">0 completed</span>
-                            <svg id="completed-chevron" class="h-5 w-5 text-gray-500 dark:text-gray-400 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <span id="completed-count" class="text-sm text-gray-400 dark:text-gray-500">0 completed</span>
+                            <svg id="completed-chevron" class="h-5 w-5 text-gray-400 dark:text-gray-500 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                             </svg>
                         </div>
                     </button>
                     <div class="mb-4">
-                        <button id="clear-completed-button" class="hidden text-xs text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 px-2 py-1 rounded transition-colors" title="Clear all completed tasks">
+                        <button id="clear-completed-button" class="hidden text-xs text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 px-2 py-1 rounded transition-colors" title="Clear all completed tasks">
                             Clear All
                         </button>
                     </div>
-                    
-                    <ul id="completed-task-list" class="space-y-2 hidden">
+
+                    <ul id="completed-task-list" class="space-y-3 hidden">
                         <!-- Completed tasks will be inserted here by JavaScript -->
                     </ul>
                 </div>
