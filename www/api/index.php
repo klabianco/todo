@@ -1048,6 +1048,105 @@ switch ($resource) {
         }
         break;
 
+    case 'import-text':
+        // AI-powered text import - parses plain text into structured tasks
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            json_response(['error' => 'Method not allowed'], 405);
+        }
+
+        require __DIR__ . '/../../config/config.php';
+        require __DIR__ . '/includes/ai-helpers.php';
+        set_ai_execution_time(300);
+
+        $data = get_request_body();
+        $text = $data['text'] ?? '';
+        $listType = $data['listType'] ?? 'todo';
+
+        if (empty(trim($text))) {
+            json_response(['error' => 'Text is required'], 400);
+        }
+
+        try {
+            global $aiModelFallbacks;
+
+            $systemMessage = "You are a task parser. Your job is to parse plain text into structured tasks.";
+
+            if ($listType === 'schedule') {
+                $prompt = "Parse the following text into a list of scheduled tasks. Extract the task description and time for each item.\n\n" .
+                          "Input text:\n" . $text . "\n\n" .
+                          "Return a JSON object with a 'tasks' array. Each task should have:\n" .
+                          "- task: The task description (string)\n" .
+                          "- scheduledTime: The time in 24-hour HH:MM format (string, e.g., '09:00', '14:30'). If no specific time, use null.\n\n" .
+                          "Rules:\n" .
+                          "- Parse times like '9am', '2:30pm', '14:00', 'noon', 'midnight' into HH:MM format\n" .
+                          "- If a time range is given (e.g., '9-10am'), use the start time\n" .
+                          "- Preserve the original task text but clean it up (remove bullets, numbers, etc.)\n" .
+                          "- Keep tasks in the order they appear\n" .
+                          "- If no time is specified for a task, set scheduledTime to null\n\n" .
+                          "Example output:\n" .
+                          "{\"tasks\": [{\"task\": \"Morning standup meeting\", \"scheduledTime\": \"09:00\"}, {\"task\": \"Lunch with team\", \"scheduledTime\": \"12:00\"}]}";
+            } else {
+                $prompt = "Parse the following text into a list of tasks.\n\n" .
+                          "Input text:\n" . $text . "\n\n" .
+                          "Return a JSON object with a 'tasks' array. Each task should have:\n" .
+                          "- task: The task description (string)\n\n" .
+                          "Rules:\n" .
+                          "- One task per line/item in the input\n" .
+                          "- Clean up task text (remove bullets, numbers, checkboxes, etc.)\n" .
+                          "- Keep tasks in the order they appear\n" .
+                          "- Ignore empty lines\n\n" .
+                          "Example output:\n" .
+                          "{\"tasks\": [{\"task\": \"Buy groceries\"}, {\"task\": \"Call mom\"}]}";
+            }
+
+            $ai = new AI();
+            $ai->setJsonResponse(true);
+            $ai->setSystemMessage($systemMessage);
+            $ai->setPrompt($prompt);
+
+            $response = try_ai_models($ai, $aiModelFallbacks);
+
+            if (is_array($response) && isset($response['error'])) {
+                error_log('AI import-text failed: ' . $response['error']);
+                json_response(['error' => 'Failed to parse text: ' . $response['error']], 500);
+            }
+
+            $result = parse_ai_json_response($response);
+
+            if ($result === null || !isset($result['tasks']) || !is_array($result['tasks'])) {
+                error_log('AI import-text invalid response: ' . substr($response, 0, 1000));
+                json_response(['error' => 'Failed to parse AI response'], 500);
+            }
+
+            // Generate IDs for each task
+            $tasks = [];
+            foreach ($result['tasks'] as $task) {
+                if (empty($task['task'])) continue;
+
+                $newTask = [
+                    'id' => bin2hex(random_bytes(16)),
+                    'task' => trim($task['task']),
+                    'completed' => false,
+                    'subtasks' => []
+                ];
+
+                if ($listType === 'schedule' && !empty($task['scheduledTime'])) {
+                    $newTask['scheduledTime'] = $task['scheduledTime'];
+                }
+
+                $tasks[] = $newTask;
+            }
+
+            json_response([
+                'tasks' => $tasks,
+                'count' => count($tasks)
+            ]);
+        } catch (Exception $e) {
+            error_log('AI import-text error: ' . $e->getMessage());
+            json_response(['error' => 'Import failed: ' . $e->getMessage()], 500);
+        }
+        break;
+
     case 'grocery-stores':
     case 'store-photos':
         // Grocery stores endpoint - shared across all users

@@ -98,16 +98,16 @@ renderContainerStart();
             <!-- Add task form -->
             <form id="task-form" class="flex items-center mb-6">
                 <input
+                    type="time"
+                    id="task-time-input"
+                    class="hidden py-2 px-3 rounded-l-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                >
+                <input
                     type="text"
                     id="task-input"
                     placeholder="Add a new task..."
                     class="flex-1 py-2 px-4 rounded-l-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
                     required
-                >
-                <input
-                    type="time"
-                    id="task-time-input"
-                    class="hidden py-2 px-3 border-t border-b border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                 >
                 <button
                     type="submit"
@@ -122,6 +122,12 @@ renderContainerStart();
                 <!-- Active tasks -->
                 <div class="flex justify-between items-center mb-4">
                     <div class="flex gap-2 items-center flex-wrap">
+                        <button id="import-text-button" class="hidden text-xs bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded-md flex items-center" title="Import tasks from pasted text (AI)">
+                            <svg class="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                            Import
+                        </button>
                         <button id="ai-sort-button" class="text-xs bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-md flex items-center" title="Assign aisle/department to each item (AI) and sort">
                             <svg class="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4"></path>
@@ -292,9 +298,20 @@ renderContainerStart();
                             </div>
                             <div class="mb-6">
                                 <div class="text-center text-gray-500 dark:text-gray-400 mb-2">OR</div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Import from Text (AI)</label>
+                                <textarea
+                                    id="import-text-input"
+                                    rows="5"
+                                    placeholder="Paste your schedule, todo list, or any text with tasks..."
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400 resize-none"
+                                ></textarea>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">AI will parse times and tasks from plain text</p>
+                            </div>
+                            <div class="mb-6">
+                                <div class="text-center text-gray-500 dark:text-gray-400 mb-2">OR</div>
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Import from File</label>
-                                <button 
-                                    id="import-file-button" 
+                                <button
+                                    id="import-file-button"
                                     class="w-full px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-md border border-gray-300 dark:border-gray-600"
                                 >
                                     Choose JSON File
@@ -304,6 +321,9 @@ renderContainerStart();
                         <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
                             <button id="cancel-import" class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
                                 Cancel
+                            </button>
+                            <button id="confirm-import-text" class="hidden px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-md">
+                                Import Text
                             </button>
                             <button id="confirm-import-url" class="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-md">
                                 Import from URL

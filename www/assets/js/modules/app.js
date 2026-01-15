@@ -241,21 +241,25 @@ const handleSubscribedListClick = async (list) => {
 // Automatically subscribe to a shared list when visiting via share link
 const autoSubscribeSharedList = async (shareId) => {
     if (!shareId) return;
-    
+
     try {
         const allTasks = await storage.loadTasks();
-        let listTitle = 'Shared List';
-        const firstActiveTask = allTasks.find(task => !task.completed);
-        if (firstActiveTask) {
-            listTitle = firstActiveTask.task;
-        } else if (allTasks.length > 0) {
-            listTitle = allTasks[0].task;
+
+        // Use the actual list title from storage (set when loading the shared list)
+        let listTitle = storage.getListTitle();
+
+        // Fallback to first task only if no title is set
+        if (!listTitle) {
+            const firstActiveTask = allTasks.find(task => !task.completed);
+            if (firstActiveTask) {
+                listTitle = firstActiveTask.task;
+            } else if (allTasks.length > 0) {
+                listTitle = allTasks[0].task;
+            } else {
+                listTitle = 'Shared List';
+            }
         }
-        
-        if (listTitle === 'Shared List' && window.location.href.includes('groceries')) {
-            listTitle = 'Groceries';
-        }
-        
+
         const shareUrl = window.location.href;
         const updatedLists = await storage.subscribeToSharedList(shareId, listTitle, shareUrl);
         return updatedLists;
@@ -417,6 +421,7 @@ const setupEventListeners = async () => {
             // Set modal for creation mode
             isCreatingNewList = true;
             if (shareModalTitle) shareModalTitle.textContent = 'Create New List';
+            if (confirmShareButton) confirmShareButton.textContent = 'Create';
             // Reset to default selection
             const todoRadio = shareModal.querySelector('input[value="todo"]');
             if (todoRadio) todoRadio.checked = true;
@@ -587,41 +592,90 @@ const setupEventListeners = async () => {
     
     // Import button and modal
     const importButton = document.getElementById('import-button');
+    const importTextButton = document.getElementById('import-text-button');
     const importModal = document.getElementById('import-modal');
     const importFileInput = document.getElementById('import-file-input');
     const importFileButton = document.getElementById('import-file-button');
     const importUrlInput = document.getElementById('import-url-input');
+    const importTextInput = document.getElementById('import-text-input');
     const confirmImportUrlButton = document.getElementById('confirm-import-url');
+    const confirmImportTextButton = document.getElementById('confirm-import-text');
     const cancelImportButton = document.getElementById('cancel-import');
-    
+
+    // Toggle between URL and Text import buttons based on which field has content
+    const updateImportButtons = () => {
+        const hasUrl = importUrlInput?.value.trim().length > 0;
+        const hasText = importTextInput?.value.trim().length > 0;
+
+        if (confirmImportUrlButton) {
+            confirmImportUrlButton.classList.toggle('hidden', hasText && !hasUrl);
+        }
+        if (confirmImportTextButton) {
+            confirmImportTextButton.classList.toggle('hidden', !hasText || hasUrl);
+        }
+    };
+
+    if (importUrlInput) {
+        importUrlInput.addEventListener('input', updateImportButtons);
+    }
+    if (importTextInput) {
+        importTextInput.addEventListener('input', updateImportButtons);
+    }
+
+    // Open import modal from header import button
     if (importButton && importModal) {
         importButton.addEventListener('click', () => {
             importModal.classList.remove('hidden');
-            importUrlInput.value = '';
+            if (importUrlInput) importUrlInput.value = '';
+            if (importTextInput) importTextInput.value = '';
+            updateImportButtons();
         });
     }
-    
+
+    // Open import modal from import text button (in task controls)
+    if (importTextButton && importModal) {
+        importTextButton.addEventListener('click', () => {
+            importModal.classList.remove('hidden');
+            if (importUrlInput) importUrlInput.value = '';
+            if (importTextInput) importTextInput.value = '';
+            updateImportButtons();
+            // Focus the text input for convenience
+            if (importTextInput) importTextInput.focus();
+        });
+    }
+
     if (cancelImportButton && importModal) {
         cancelImportButton.addEventListener('click', () => {
-            const confirmBtn = utils.$('confirm-import-url');
-            if (!confirmBtn || !confirmBtn.disabled) {
+            const confirmUrlBtn = utils.$('confirm-import-url');
+            const confirmTextBtn = utils.$('confirm-import-text');
+            if ((!confirmUrlBtn || !confirmUrlBtn.disabled) && (!confirmTextBtn || !confirmTextBtn.disabled)) {
                 importModal.classList.add('hidden');
-                importUrlInput.value = '';
+                if (importUrlInput) importUrlInput.value = '';
+                if (importTextInput) importTextInput.value = '';
             }
         });
     }
-    
+
     if (importFileButton && importFileInput) {
         importFileButton.addEventListener('click', () => importFileInput.click());
         importFileInput.addEventListener('change', (e) => importExport.handleImportFile(e, renderTasks));
     }
-    
+
     if (confirmImportUrlButton && importUrlInput) {
-        const handleImport = () => importExport.handleImportFromUrl(focusMode.getCurrentFocusedTaskId(), renderTasks);
-        confirmImportUrlButton.addEventListener('click', handleImport);
+        const handleImportUrl = () => importExport.handleImportFromUrl(focusMode.getCurrentFocusedTaskId(), renderTasks);
+        confirmImportUrlButton.addEventListener('click', handleImportUrl);
         importUrlInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') handleImport();
+            if (e.key === 'Enter') handleImportUrl();
         });
+    }
+
+    if (confirmImportTextButton && importTextInput) {
+        const handleImportText = () => importExport.handleImportFromText(
+            focusMode.getCurrentFocusedTaskId(),
+            renderTasks,
+            storage.getListType()
+        );
+        confirmImportTextButton.addEventListener('click', handleImportText);
     }
     
     // Export modal
@@ -784,6 +838,7 @@ const applyListTypeBehaviors = (listType) => {
     const taskInput = document.getElementById('task-input');
     const listTypeBadge = document.getElementById('list-type-badge');
     const aiSortButton = document.getElementById('ai-sort-button');
+    const importTextButton = document.getElementById('import-text-button');
     const groceryStoreSelect = document.getElementById('grocery-store-select');
     const locationsLabel = showLocationsToggle?.parentElement;
 
@@ -809,18 +864,18 @@ const applyListTypeBehaviors = (listType) => {
     const timesLabel = showTimesToggle?.parentElement;
 
     if (listType === 'schedule') {
-        // Schedule: auto-enable times, show time input, hide all extra controls
+        // Schedule: auto-enable times, show time input and import button, hide other controls
         ui.setShowTimes(true);
         if (showTimesToggle) showTimesToggle.checked = true;
         if (taskTimeInput) {
             taskTimeInput.classList.remove('hidden');
-            // Adjust task input border radius since time input is now visible
+            // Remove left rounding from task input since time input is now first
             if (taskInput) {
                 taskInput.classList.remove('rounded-l-lg');
-                taskInput.classList.add('rounded-l-lg');
             }
         }
-        // Hide all extra controls for schedules - just show time input, task input, add button
+        // Show import button for schedules, hide other controls
+        if (importTextButton) importTextButton.classList.remove('hidden');
         if (aiSortButton) aiSortButton.classList.add('hidden');
         if (groceryStoreSelect) groceryStoreSelect.classList.add('hidden');
         if (locationsLabel) locationsLabel.classList.add('hidden');
@@ -830,14 +885,20 @@ const applyListTypeBehaviors = (listType) => {
         ui.setShowLocations(true);
         if (showLocationsToggle) showLocationsToggle.checked = true;
         if (taskTimeInput) taskTimeInput.classList.add('hidden');
-        // Show grocery-specific controls
+        // Restore left rounding to task input since time input is hidden
+        if (taskInput) taskInput.classList.add('rounded-l-lg');
+        // Show grocery-specific controls, hide import button
+        if (importTextButton) importTextButton.classList.add('hidden');
         if (aiSortButton) aiSortButton.classList.remove('hidden');
         if (groceryStoreSelect) groceryStoreSelect.classList.remove('hidden');
         if (locationsLabel) locationsLabel.classList.remove('hidden');
         if (timesLabel) timesLabel.classList.remove('hidden');
     } else {
-        // Todo (default): hide time input, show all controls
+        // Todo (default): hide time input and import button, show standard controls
         if (taskTimeInput) taskTimeInput.classList.add('hidden');
+        // Restore left rounding to task input since time input is hidden
+        if (taskInput) taskInput.classList.add('rounded-l-lg');
+        if (importTextButton) importTextButton.classList.add('hidden');
         if (aiSortButton) aiSortButton.classList.remove('hidden');
         if (groceryStoreSelect) groceryStoreSelect.classList.remove('hidden');
         if (locationsLabel) locationsLabel.classList.remove('hidden');
@@ -864,6 +925,8 @@ const handleShareButtonClick = async (focusHandler) => {
             isCreatingNewList = false;
             const modalTitle = shareModal.querySelector('h2');
             if (modalTitle) modalTitle.textContent = 'Share List';
+            const confirmBtn = document.getElementById('confirm-share');
+            if (confirmBtn) confirmBtn.textContent = 'Share';
             // Reset to default selection
             const todoRadio = shareModal.querySelector('input[value="todo"]');
             if (todoRadio) todoRadio.checked = true;

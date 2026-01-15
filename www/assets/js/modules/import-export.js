@@ -451,6 +451,93 @@ export const handleImportFromUrl = async (currentFocusedTaskId, renderTasks) => 
     }
 };
 
+// Handle Import from Text (AI parsing)
+export const handleImportFromText = async (currentFocusedTaskId, renderTasks, listType = 'todo') => {
+    const importTextInput = utils.$('import-text-input');
+    const confirmImportTextButton = utils.$('confirm-import-text');
+    const cancelImportButton = utils.$('cancel-import');
+    const importModal = utils.$('import-modal');
+
+    const text = importTextInput?.value.trim();
+    if (!text) {
+        alert('Please enter some text to import');
+        return;
+    }
+
+    showLoadingOverlay('Parsing text with AI...', 'Please wait');
+
+    const originalText = confirmImportTextButton?.innerHTML || 'Import Text';
+    if (confirmImportTextButton) {
+        setButtonLoading(confirmImportTextButton, 'Importing...');
+        confirmImportTextButton.disabled = true;
+    }
+    if (cancelImportButton) cancelImportButton.disabled = true;
+    if (importTextInput) importTextInput.disabled = true;
+
+    try {
+        const response = await utils.apiFetch('/api/import-text', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text, listType })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to parse text');
+        }
+
+        const data = await response.json();
+
+        if (!data.tasks || !Array.isArray(data.tasks) || data.tasks.length === 0) {
+            throw new Error('No tasks could be extracted from the text');
+        }
+
+        if (importModal) {
+            importModal.classList.add('hidden');
+            document.body.style.overflow = '';
+        }
+
+        const currentTasks = await storage.loadTasks();
+
+        // Add imported tasks
+        if (currentFocusedTaskId) {
+            const focusedResult = utils.findTaskById(currentTasks, currentFocusedTaskId);
+            if (focusedResult && focusedResult.task) {
+                const focusedTask = focusedResult.task;
+                if (!focusedTask.subtasks) {
+                    focusedTask.subtasks = [];
+                }
+                data.tasks.forEach(t => t.parentId = currentFocusedTaskId);
+                utils.insertAtActiveTop(focusedTask.subtasks, ...data.tasks);
+            } else {
+                utils.insertAtActiveTop(currentTasks, ...data.tasks);
+            }
+        } else {
+            utils.insertAtActiveTop(currentTasks, ...data.tasks);
+        }
+
+        await storage.saveTasks(currentTasks);
+        await renderTasks();
+
+        alert(`Successfully imported ${data.tasks.length} task(s)!`);
+
+        if (importTextInput) {
+            importTextInput.value = '';
+        }
+    } catch (error) {
+        console.error('Error importing from text:', error);
+        alert('Failed to import from text: ' + error.message);
+    } finally {
+        hideLoadingOverlay();
+        if (confirmImportTextButton) {
+            restoreButtonState(confirmImportTextButton, originalText);
+            confirmImportTextButton.disabled = false;
+        }
+        if (cancelImportButton) cancelImportButton.disabled = false;
+        if (importTextInput) importTextInput.disabled = false;
+    }
+};
+
 // Show export modal
 export const handleExportClick = () => {
     const exportModal = document.getElementById('export-modal');
