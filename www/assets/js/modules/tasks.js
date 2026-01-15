@@ -46,32 +46,36 @@ const addToHistory = (historyArray, timestamp = new Date().toISOString()) => {
 };
 
 // Add a new task
-export const addTask = async (taskText, currentFocusedTaskId = null) => {
+export const addTask = async (taskText, currentFocusedTaskId = null, scheduledTime = null) => {
     // Handle focused mode - add as a subtask if we're focused
     if (currentFocusedTaskId) {
-        return await addSubtask(currentFocusedTaskId, taskText);
+        return await addSubtask(currentFocusedTaskId, taskText, scheduledTime);
     }
-    
+
     // Otherwise create a top-level task
     const tasks = await loadTasks();
-    
+
     // Check if a task with the same text already exists (regardless of completion status)
-    const existingTaskIndex = tasks.findIndex(task => 
+    const existingTaskIndex = tasks.findIndex(task =>
         task.task.trim().toLowerCase() === taskText.trim().toLowerCase()
     );
-    
+
     if (existingTaskIndex !== -1) {
         const existingTask = tasks[existingTaskIndex];
         // If the existing task is completed, uncheck it and move to top
         if (existingTask.completed) {
             existingTask.completed = false;
+            // Update scheduledTime if provided
+            if (scheduledTime) {
+                existingTask.scheduledTime = scheduledTime;
+            }
             tasks.splice(existingTaskIndex, 1);
             insertAtActiveTop(tasks, existingTask);
             await saveTasks(tasks);
         }
         return existingTask;
     }
-    
+
     // Create new task object if no existing task found
     const now = new Date().toISOString();
     const newTask = {
@@ -81,7 +85,7 @@ export const addTask = async (taskText, currentFocusedTaskId = null) => {
         sticky: false,
         subtasks: [],
         created: now,
-        scheduledTime: null,
+        scheduledTime: scheduledTime || null,
         timestamps: {
             created: now,
             completedHistory: [],
@@ -90,42 +94,46 @@ export const addTask = async (taskText, currentFocusedTaskId = null) => {
             stickyHistory: []
         }
     };
-    
+
     // Add to beginning of active tasks (top of list)
     insertAtActiveTop(tasks, newTask);
-    
+
     // Save updated tasks
     await saveTasks(tasks);
-    
+
     return newTask;
 };
 
 // Add a subtask to a parent task
-export const addSubtask = async (parentId, subtaskText) => {
+export const addSubtask = async (parentId, subtaskText, scheduledTime = null) => {
     const tasks = await loadTasks();
     const result = findTaskById(tasks, parentId);
-    
+
     if (result) {
         const { task } = result;
-        
+
         // Check if a subtask with the same text already exists (regardless of completion status)
         if (!task.subtasks) task.subtasks = [];
-        const existingSubtaskIndex = task.subtasks.findIndex(subtask => 
+        const existingSubtaskIndex = task.subtasks.findIndex(subtask =>
             subtask.task.trim().toLowerCase() === subtaskText.trim().toLowerCase()
         );
-        
+
         if (existingSubtaskIndex !== -1) {
             const existingSubtask = task.subtasks[existingSubtaskIndex];
             // If the existing subtask is completed, uncheck it and move to top
             if (existingSubtask.completed) {
                 existingSubtask.completed = false;
+                // Update scheduledTime if provided
+                if (scheduledTime) {
+                    existingSubtask.scheduledTime = scheduledTime;
+                }
                 task.subtasks.splice(existingSubtaskIndex, 1);
                 insertAtActiveTop(task.subtasks, existingSubtask);
                 await saveTasks(tasks);
             }
             return existingSubtask;
         }
-        
+
         // Create new subtask
         const now = new Date().toISOString();
         const newSubtask = {
@@ -136,7 +144,7 @@ export const addSubtask = async (parentId, subtaskText) => {
             subtasks: [],
             created: now,
             parentId: task.id,
-            scheduledTime: null,
+            scheduledTime: scheduledTime || null,
             timestamps: {
                 created: now,
                 completedHistory: [],
@@ -145,13 +153,13 @@ export const addSubtask = async (parentId, subtaskText) => {
                 stickyHistory: []
             }
         };
-        
+
         // Add to beginning of active subtasks (top of list)
         insertAtActiveTop(task.subtasks, newSubtask);
-        
+
         // Save tasks
         await saveTasks(tasks);
-        
+
         return newSubtask;
     }
     return null;

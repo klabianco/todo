@@ -9,6 +9,8 @@ let isSharedList = false;
 let shareId = null;
 let sharedListFocusId = null;
 let activeDate = getCurrentDate();
+let currentListType = 'todo'; // 'todo' | 'grocery' | 'schedule'
+let currentListTitle = null; // The name of the current list
 
 // User ID backup key for localStorage (helps with WebView cookie issues)
 const USER_ID_BACKUP_KEY = 'todo_user_id_backup';
@@ -96,11 +98,30 @@ export const getShareId = () => shareId;
 // Get the focus ID for a shared list
 export const getSharedListFocusId = () => sharedListFocusId;
 
+// Get the current list type
+export const getListType = () => currentListType;
+
+// Set the list type
+export const setListType = (listType) => {
+    currentListType = listType || 'todo';
+};
+
+// Get the current list title
+export const getListTitle = () => currentListTitle;
+
+// Set the list title
+export const setListTitle = (title) => {
+    currentListTitle = title || null;
+};
+
 // Set up for sharing (update state variables)
-export const setupSharing = (newShareId) => {
+export const setupSharing = (newShareId, listType = null) => {
     shareId = newShareId;
     isSharedList = true;
     sharedListFocusId = null;
+    if (listType) {
+        currentListType = listType;
+    }
 };
 
 // Load user lists from server
@@ -511,14 +532,16 @@ async function savePersonalTasksToServer(date, tasks) {
  * Creates a new shared list on the server with the provided tasks and optional focus ID
  * @param {Array} tasks - The tasks to share
  * @param {string|null} focusId - Optional ID of the focused task
+ * @param {string} listType - The type of list ('todo', 'grocery', 'schedule')
+ * @param {string|null} title - The name of the list
  * @returns {Promise<string>} The new unique share ID
  */
-export const createSharedList = async (tasks, focusId = null) => {
+export const createSharedList = async (tasks, focusId = null, listType = 'todo', title = null) => {
     try {
-        
+
         // Generate a timestamp to guarantee uniqueness
         const timestamp = Date.now();
-        
+
         const response = await fetch('/api/lists', {
             method: 'POST',
             headers: {
@@ -527,23 +550,72 @@ export const createSharedList = async (tasks, focusId = null) => {
             body: JSON.stringify({
                 tasks,
                 focusId: focusId || null,
+                listType: listType || 'todo',
+                title: title || null,
                 timestamp
             })
         });
-        
+
         if (!response.ok) {
             const errorText = await response.text();
             console.error('Error creating shared list:', errorText);
             throw new Error(`Server error: ${response.status}`);
         }
-        
+
         const data = await response.json();
         sharedListFocusId = focusId;
+        currentListType = listType || 'todo';
+        currentListTitle = title || null;
         return data.shareId;
     } catch (error) {
         console.error('Error creating shared list:', error);
         alert('Failed to create a shared list. Please try again. Error: ' + error.message);
         throw error;
+    }
+};
+
+// Load user settings from server
+export const loadUserSettings = async () => {
+    try {
+        const response = await fetch('/api/user/settings');
+        if (response.ok) {
+            return await response.json();
+        }
+    } catch (error) {
+        console.error('Error loading user settings:', error);
+    }
+    return { personalListTitle: 'My List' };
+};
+
+// Update the title of a list (works for both shared and personal lists)
+export const updateListTitleOnServer = async (newTitle) => {
+    try {
+        if (isSharedList && shareId) {
+            // Update shared list title
+            const response = await fetch(`/api/lists/${shareId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: newTitle, tasks: tasks })
+            });
+            if (!response.ok) {
+                throw new Error(`Server error: ${response.status}`);
+            }
+        } else {
+            // Update personal list title in user settings
+            const response = await fetch('/api/user/settings', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ personalListTitle: newTitle })
+            });
+            if (!response.ok) {
+                throw new Error(`Server error: ${response.status}`);
+            }
+        }
+        currentListTitle = newTitle;
+        return true;
+    } catch (error) {
+        console.error('Error updating list title:', error);
+        return false;
     }
 };
 
@@ -586,6 +658,8 @@ export const loadTasks = async () => {
             }
             const data = await response.json();
             sharedListFocusId = data.focusId || null;
+            currentListType = data.listType || 'todo';
+            currentListTitle = data.title || null;
             tasks = data.tasks || [];
             return tasks;
         } catch (error) {

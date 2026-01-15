@@ -9,7 +9,28 @@ renderHead('Todo', ['sortablejs', 'jspdf', 'xlsx'], true);
 renderContainerStart();
 ?>
         <header class="text-center mb-6">
-            <h1 class="text-3xl font-bold text-gray-700 dark:text-gray-200">Todo</h1>
+            <div class="flex items-center justify-center gap-2">
+                <h1 id="list-title" class="text-3xl font-bold text-gray-700 dark:text-gray-200">My List</h1>
+                <button id="edit-title-button" class="hidden text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1" title="Edit list name">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
+                    </svg>
+                </button>
+                <button id="ai-title-button" class="hidden text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 p-1" title="Generate name with AI">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path>
+                    </svg>
+                </button>
+                <span id="list-type-badge" class="hidden text-xs px-2 py-1 rounded-md font-medium"></span>
+            </div>
+            <!-- Edit title input (hidden by default) -->
+            <div id="edit-title-container" class="hidden mt-2">
+                <div class="flex items-center justify-center gap-2 max-w-md mx-auto">
+                    <input type="text" id="edit-title-input" class="flex-1 px-3 py-2 text-lg border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100">
+                    <button id="save-title-button" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-md">Save</button>
+                    <button id="cancel-title-button" class="bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 px-3 py-2 rounded-md">Cancel</button>
+                </div>
+            </div>
             <div class="mt-3 flex flex-col gap-2">
                 <!-- Back to My List button (only shown for shared lists) -->
                 <button id="back-to-personal-button" class="hidden text-sm bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-1 rounded-md flex items-center mx-auto">
@@ -20,6 +41,12 @@ renderContainerStart();
                 </button>
 
                 <div class="flex gap-2 justify-center">
+                    <button id="create-list-button" class="text-sm bg-orange-500 hover:bg-orange-600 text-white px-4 py-1 rounded-md flex items-center">
+                        <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                        New List
+                    </button>
                     <button id="share-button" class="text-sm bg-blue-500 hover:bg-blue-600 text-white px-4 py-1 rounded-md flex items-center">
                         <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path>
@@ -70,15 +97,20 @@ renderContainerStart();
         <div class="bg-white rounded-lg shadow-md p-6 dark:bg-gray-800">
             <!-- Add task form -->
             <form id="task-form" class="flex items-center mb-6">
-                <input 
-                    type="text" 
-                    id="task-input" 
-                    placeholder="Add a new task..." 
+                <input
+                    type="text"
+                    id="task-input"
+                    placeholder="Add a new task..."
                     class="flex-1 py-2 px-4 rounded-l-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
                     required
                 >
-                <button 
-                    type="submit" 
+                <input
+                    type="time"
+                    id="task-time-input"
+                    class="hidden py-2 px-3 border-t border-b border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                >
+                <button
+                    type="submit"
                     class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-r-lg border border-l-0 border-gray-300 dark:border-gray-600 transition duration-200"
                 >
                     Add
@@ -121,6 +153,49 @@ renderContainerStart();
                     <p class="text-sm text-gray-400 dark:text-gray-500 mt-1">Add a task to get started</p>
                 </div>
                 
+                <!-- Share Modal -->
+                <div id="share-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full">
+                        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                            <h2 class="text-xl font-bold text-gray-800 dark:text-gray-200">Share List</h2>
+                        </div>
+                        <div class="p-6">
+                            <p class="text-gray-600 dark:text-gray-400 mb-4">Choose list type:</p>
+                            <div class="space-y-3">
+                                <label class="flex items-start cursor-pointer">
+                                    <input type="radio" name="share-list-type" value="todo" class="mt-1 mr-3" checked>
+                                    <div>
+                                        <div class="font-medium text-gray-800 dark:text-gray-200">To-Do List</div>
+                                        <div class="text-sm text-gray-500 dark:text-gray-400">General purpose task list</div>
+                                    </div>
+                                </label>
+                                <label class="flex items-start cursor-pointer">
+                                    <input type="radio" name="share-list-type" value="grocery" class="mt-1 mr-3">
+                                    <div>
+                                        <div class="font-medium text-gray-800 dark:text-gray-200">Grocery List</div>
+                                        <div class="text-sm text-gray-500 dark:text-gray-400">Shopping list with store locations</div>
+                                    </div>
+                                </label>
+                                <label class="flex items-start cursor-pointer">
+                                    <input type="radio" name="share-list-type" value="schedule" class="mt-1 mr-3">
+                                    <div>
+                                        <div class="font-medium text-gray-800 dark:text-gray-200">Daily Schedule</div>
+                                        <div class="text-sm text-gray-500 dark:text-gray-400">Time-based schedule with sorted activities</div>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+                            <button id="cancel-share" class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
+                                Cancel
+                            </button>
+                            <button id="confirm-share" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md">
+                                Share
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Export Modal -->
                 <div id="export-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
                     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full">

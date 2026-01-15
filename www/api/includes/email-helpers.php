@@ -34,7 +34,13 @@ if (file_exists($email_config_path)) {
  * @return string|null Email address or null if not set
  */
 function get_user_email($userId) {
-    global $data_dir;
+    global $data_dir, $use_sqlite;
+
+    if ($use_sqlite) {
+        $settings = db_get_user_settings($userId);
+        return $settings['email'] ?? null;
+    }
+
     $user_dir = $data_dir . '/users/' . $userId;
     $email_file = $user_dir . '/email.json';
 
@@ -53,7 +59,12 @@ function get_user_email($userId) {
  * @return bool Success
  */
 function set_user_email($userId, $email) {
-    global $data_dir;
+    global $data_dir, $use_sqlite;
+
+    if ($use_sqlite) {
+        return db_update_user_settings($userId, ['email' => $email]);
+    }
+
     $user_dir = $data_dir . '/users/' . $userId;
     if (!file_exists($user_dir)) {
         mkdir($user_dir, 0755, true);
@@ -71,9 +82,7 @@ function set_user_email($userId, $email) {
  * @return array Notification preferences
  */
 function get_notification_preferences($userId) {
-    global $data_dir;
-    $user_dir = $data_dir . '/users/' . $userId;
-    $prefs_file = $user_dir . '/notification-prefs.json';
+    global $data_dir, $use_sqlite;
 
     $defaults = [
         'task_completed' => NOTIFY_TASK_COMPLETED,
@@ -81,6 +90,14 @@ function get_notification_preferences($userId) {
         'new_shared_task' => NOTIFY_NEW_SHARED_TASK,
         'task_assigned' => NOTIFY_TASK_ASSIGNED
     ];
+
+    if ($use_sqlite) {
+        $prefs = db_get_notification_prefs($userId);
+        return array_merge($defaults, $prefs);
+    }
+
+    $user_dir = $data_dir . '/users/' . $userId;
+    $prefs_file = $user_dir . '/notification-prefs.json';
 
     if (file_exists($prefs_file)) {
         $data = json_decode(file_get_contents($prefs_file), true);

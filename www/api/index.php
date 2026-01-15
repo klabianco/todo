@@ -48,6 +48,12 @@ if (!file_exists($data_dir)) {
     mkdir($data_dir, 0755, true);
 }
 
+// Use SQLite database
+$use_sqlite = true;
+if ($use_sqlite) {
+    require_once __DIR__ . '/includes/db-helpers.php';
+}
+
 // Generate a unique 8-character share ID
 function generate_share_id() {
     return bin2hex(random_bytes(4));
@@ -348,113 +354,150 @@ function reorder_tasks($tasks, $sortedItems) {
 // Determine and handle the request
 switch ($resource) {
     case 'lists':
+        global $use_sqlite;
         switch ($_SERVER['REQUEST_METHOD']) {
             case 'POST':
                 // Create a new shared task list
                 $data = get_request_body();
                 $share_id = generate_share_id();
-                
-                $list_data = [
-                    'id' => $share_id,
-                    'tasks' => $data['tasks'] ?? [],
-                    'focusId' => $data['focusId'] ?? null,
-                    'created' => date('c'),
-                    'lastModified' => date('c')
-                ];
-                
-                write_json_file(get_task_file_path($share_id), $list_data);
+
+                if ($use_sqlite) {
+                    $userId = get_user_id();
+                    $success = db_create_list(
+                        $share_id,
+                        $userId,
+                        $data['title'] ?? null,
+                        $data['listType'] ?? 'todo',
+                        $data['tasks'] ?? []
+                    );
+                    if (!$success) {
+                        json_response(['error' => 'Failed to create list'], 500);
+                    }
+                } else {
+                    $list_data = [
+                        'id' => $share_id,
+                        'title' => $data['title'] ?? null,
+                        'listType' => $data['listType'] ?? 'todo',
+                        'tasks' => $data['tasks'] ?? [],
+                        'focusId' => $data['focusId'] ?? null,
+                        'created' => date('c'),
+                        'lastModified' => date('c')
+                    ];
+                    write_json_file(get_task_file_path($share_id), $list_data);
+                }
                 json_response(['shareId' => $share_id]);
                 break;
-                
+
             case 'GET':
                 if (!$id) {
                     json_response(['error' => 'Share ID is required'], 400);
                 }
+                if ($use_sqlite) {
+                    $list = db_get_list($id);
+                    if ($list) {
+                        json_response($list);
+                    } else {
+                        json_response(['error' => 'Task list not found'], 404);
+                    }
+                } else {
                     $file_path = get_task_file_path($id);
                     if (file_exists($file_path)) {
                         echo file_get_contents($file_path);
-                } else {
-                    json_response(['error' => 'Task list not found'], 404);
+                    } else {
+                        json_response(['error' => 'Task list not found'], 404);
+                    }
                 }
                 break;
-                
+
             case 'PUT':
                 if (!$id) {
                     json_response(['error' => 'Share ID is required'], 400);
                 }
-                    $file_path = get_task_file_path($id);
-                if (!file_exists($file_path)) {
-                    json_response(['error' => 'Task list not found'], 404);
-                }
 
                 $data = get_request_body();
-                $old_list_data = read_json_file($file_path);
-                $list_data = $old_list_data;
-                $list_data['tasks'] = $data['tasks'] ?? [];
-                if (isset($data['focusId'])) {
-                    $list_data['focusId'] = $data['focusId'];
-                        }
-                        // Always update the lastModified timestamp with current server time
-                        // This ensures changes are detected by viewers polling for updates
-                        $list_data['lastModified'] = date('c');
 
-                write_json_file($file_path, $list_data);
-
-                // Send email notifications for shared list updates
-                require_once __DIR__ . '/includes/email-helpers.php';
-
-                // Detect changes and notify subscribers
-                $old_tasks = $old_list_data['tasks'] ?? [];
-                $new_tasks = $list_data['tasks'] ?? [];
-
-                // Find new tasks (simple check by count for now)
-                if (count($new_tasks) > count($old_tasks)) {
-                    $new_task_texts = [];
-                    foreach ($new_tasks as $task) {
-                        $found = false;
-                        foreach ($old_tasks as $old_task) {
-                            if (($task['id'] ?? '') === ($old_task['id'] ?? '')) {
-                                $found = true;
-                                break;
-                            }
-                        }
-                        if (!$found && isset($task['task'])) {
-                            $new_task_texts[] = $task['task'];
-                        }
+                if ($use_sqlite) {
+                    $list = db_get_list($id);
+                    if (!$list) {
+                        json_response(['error' => 'Task list not found'], 404);
                     }
 
-                    // Notify about new tasks (you would need to track subscribers)
-                    // For now, this is a placeholder - implement subscriber tracking as needed
+                    $updates = [];
+                    if (isset($data['tasks'])) {
+                        $updates['tasks'] = $data['tasks'];
+                    }
+                    if (isset($data['focusId'])) {
+                        $updates['focusId'] = $data['focusId'];
+                    }
+                    if (isset($data['listType'])) {
+                        $updates['listType'] = $data['listType'];
+                    }
+                    if (isset($data['title'])) {
+                        $updates['title'] = $data['title'];
+                    }
+
+                    db_update_list($id, $updates);
+                } else {
+                    $file_path = get_task_file_path($id);
+                    if (!file_exists($file_path)) {
+                        json_response(['error' => 'Task list not found'], 404);
+                    }
+
+                    $old_list_data = read_json_file($file_path);
+                    $list_data = $old_list_data;
+                    $list_data['tasks'] = $data['tasks'] ?? [];
+                    if (isset($data['focusId'])) {
+                        $list_data['focusId'] = $data['focusId'];
+                    }
+                    if (isset($data['listType'])) {
+                        $list_data['listType'] = $data['listType'];
+                    }
+                    if (isset($data['title'])) {
+                        $list_data['title'] = $data['title'];
+                    }
+                    $list_data['lastModified'] = date('c');
+                    write_json_file($file_path, $list_data);
                 }
 
                 json_response(['success' => true]);
                 break;
-                
+
             case 'DELETE':
                 if (!$id) {
                     json_response(['error' => 'Share ID is required'], 400);
                 }
+
+                if ($use_sqlite) {
+                    $list = db_get_list($id);
+                    if (!$list) {
+                        json_response(['error' => 'Task list not found'], 404);
+                    }
+                    db_remove_list_from_all_subscriptions($id);
+                    db_delete_list($id);
+                } else {
                     $file_path = get_task_file_path($id);
-                if (!file_exists($file_path)) {
-                    json_response(['error' => 'Task list not found'], 404);
-                }
-                
-                // Remove from all user subscriptions
-                        $users_dir = $data_dir . '/users';
-                        if (file_exists($users_dir)) {
-                    foreach (glob($users_dir . '/*', GLOB_ONLYDIR) as $user_dir) {
-                                $subscribed_path = $user_dir . '/subscribed.json';
-                        $subscribed_data = read_json_file($subscribed_path, []);
-                        if (is_array($subscribed_data) && !empty($subscribed_data)) {
-                            $updated_lists = array_values(array_filter($subscribed_data, function($item) use ($id) {
-                                            return !isset($item['id']) || $item['id'] !== $id;
-                            }));
-                            write_json_file($subscribed_path, $updated_lists);
-                                    }
+                    if (!file_exists($file_path)) {
+                        json_response(['error' => 'Task list not found'], 404);
+                    }
+
+                    // Remove from all users' subscribed lists
+                    $users_dir = $data_dir . '/users';
+                    if (is_dir($users_dir)) {
+                        foreach (scandir($users_dir) as $user_id) {
+                            if ($user_id === '.' || $user_id === '..') continue;
+                            $subscribed_path = $users_dir . '/' . $user_id . '/subscribed.json';
+                            if (file_exists($subscribed_path)) {
+                                $subscribed = read_json_file($subscribed_path);
+                                $updated_lists = array_filter($subscribed, fn($list) => $list['id'] !== $id);
+                                if (count($updated_lists) !== count($subscribed)) {
+                                    write_json_file($subscribed_path, array_values($updated_lists));
                                 }
                             }
-                
-                        unlink($file_path);
+                        }
+                    }
+
+                    unlink($file_path);
+                }
                 json_response(['success' => true]);
                 break;
                 
@@ -496,6 +539,7 @@ switch ($resource) {
 
             case 'notification-prefs':
                 // Manage notification preferences
+                global $use_sqlite;
                 require_once __DIR__ . '/includes/email-helpers.php';
                 switch ($_SERVER['REQUEST_METHOD']) {
                     case 'GET':
@@ -505,9 +549,13 @@ switch ($resource) {
                     case 'PUT':
                         $data = get_request_body();
                         $prefs = $data['preferences'] ?? [];
-                        $user_dir = get_user_dir($userId);
-                        $prefs_file = $user_dir . '/notification-prefs.json';
-                        file_put_contents($prefs_file, json_encode($prefs));
+                        if ($use_sqlite) {
+                            db_save_notification_prefs($userId, $prefs);
+                        } else {
+                            $user_dir = get_user_dir($userId);
+                            $prefs_file = $user_dir . '/notification-prefs.json';
+                            file_put_contents($prefs_file, json_encode($prefs));
+                        }
                         json_response(['success' => true, 'preferences' => $prefs]);
                         break;
                     default:
@@ -553,33 +601,45 @@ switch ($resource) {
                 break;
 
             case 'tasks':
+                global $use_sqlite;
                 if (!$subid) {
                     http_response_code(400);
                     echo json_encode(['error' => 'Date is required']);
                     break;
                 }
-                $tasksPath = get_user_tasks_path($userId, $subid);
-                $stickyPath = get_user_sticky_path($userId);
                 switch ($_SERVER['REQUEST_METHOD']) {
                     case 'GET':
-                        $tasks = read_json_file($tasksPath, []);
-                        $sticky = read_json_file($stickyPath, []);
-                        json_response(['tasks' => array_merge($tasks, $sticky)]);
+                        if ($use_sqlite) {
+                            $tasks = db_load_user_tasks($userId, $subid);
+                            json_response(['tasks' => $tasks]);
+                        } else {
+                            $tasksPath = get_user_tasks_path($userId, $subid);
+                            $stickyPath = get_user_sticky_path($userId);
+                            $tasks = read_json_file($tasksPath, []);
+                            $sticky = read_json_file($stickyPath, []);
+                            json_response(['tasks' => array_merge($tasks, $sticky)]);
+                        }
                         break;
                     case 'PUT':
                         $data = get_request_body();
                         $incoming = $data['tasks'] ?? [];
-                        $stickyTasks = [];
-                        $nonSticky = [];
-                        foreach ($incoming as $t) {
-                            if (!empty($t['sticky'])) {
-                                $stickyTasks[] = $t;
-                            } else {
-                                $nonSticky[] = $t;
+                        if ($use_sqlite) {
+                            db_save_user_tasks($userId, $subid, $incoming);
+                        } else {
+                            $tasksPath = get_user_tasks_path($userId, $subid);
+                            $stickyPath = get_user_sticky_path($userId);
+                            $stickyTasks = [];
+                            $nonSticky = [];
+                            foreach ($incoming as $t) {
+                                if (!empty($t['sticky'])) {
+                                    $stickyTasks[] = $t;
+                                } else {
+                                    $nonSticky[] = $t;
+                                }
                             }
+                            write_json_file($tasksPath, $nonSticky);
+                            write_json_file($stickyPath, $stickyTasks);
                         }
-                        write_json_file($tasksPath, $nonSticky);
-                        write_json_file($stickyPath, $stickyTasks);
                         json_response(['success' => true]);
                         break;
                     default:
@@ -589,15 +649,66 @@ switch ($resource) {
 
             case 'subscriptions':
             case 'owned':
-                $path = get_user_data_path($userId, $sub);
+                global $use_sqlite;
                 switch ($_SERVER['REQUEST_METHOD']) {
                     case 'GET':
-                        json_response(['lists' => read_json_file($path, [])]);
+                        if ($use_sqlite) {
+                            if ($sub === 'subscriptions') {
+                                $lists = db_get_subscriptions($userId);
+                            } else {
+                                $lists = db_get_owned_lists($userId);
+                            }
+                            json_response(['lists' => $lists]);
+                        } else {
+                            $path = get_user_data_path($userId, $sub);
+                            json_response(['lists' => read_json_file($path, [])]);
+                        }
                         break;
                     case 'PUT':
                         $data = get_request_body();
-                        write_json_file($path, $data['lists'] ?? []);
+                        $lists = $data['lists'] ?? [];
+                        if ($use_sqlite) {
+                            if ($sub === 'subscriptions') {
+                                db_save_subscriptions($userId, $lists);
+                            } else {
+                                db_save_owned_lists($userId, $lists);
+                            }
+                        } else {
+                            $path = get_user_data_path($userId, $sub);
+                            write_json_file($path, $lists);
+                        }
                         json_response(['success' => true]);
+                        break;
+                    default:
+                        json_response(['error' => 'Method not allowed'], 405);
+                }
+                break;
+
+            case 'settings':
+                // User settings (includes personal list title)
+                global $use_sqlite;
+                switch ($_SERVER['REQUEST_METHOD']) {
+                    case 'GET':
+                        if ($use_sqlite) {
+                            $settings = db_get_user_settings($userId);
+                            json_response($settings);
+                        } else {
+                            $path = get_user_data_path($userId, 'settings');
+                            json_response(read_json_file($path, ['personalListTitle' => 'My List']));
+                        }
+                        break;
+                    case 'PUT':
+                        $data = get_request_body();
+                        if ($use_sqlite) {
+                            db_update_user_settings($userId, $data);
+                            $updated = db_get_user_settings($userId);
+                        } else {
+                            $path = get_user_data_path($userId, 'settings');
+                            $current = read_json_file($path, ['personalListTitle' => 'My List']);
+                            $updated = array_merge($current, $data);
+                            write_json_file($path, $updated);
+                        }
+                        json_response(['success' => true, 'settings' => $updated]);
                         break;
                     default:
                         json_response(['error' => 'Method not allowed'], 405);
@@ -1653,6 +1764,122 @@ switch ($resource) {
         }
 
         json_response(['success' => $success, 'type' => $type, 'email' => $email]);
+        break;
+
+    case 'generate-title':
+        // AI-powered list title generation based on list contents
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            json_response(['error' => 'Method not allowed'], 405);
+        }
+
+        require __DIR__ . '/../../config/config.php';
+        require __DIR__ . '/includes/ai-helpers.php';
+
+        $data = get_request_body();
+        $tasks = $data['tasks'] ?? [];
+        $listType = $data['listType'] ?? 'todo';
+
+        if (empty($tasks)) {
+            // Generate a default title if no tasks
+            $now = new DateTime();
+            $dateStr = $now->format('M j');
+            if ($listType === 'schedule') {
+                json_response(['title' => "Schedule - $dateStr"]);
+            } elseif ($listType === 'grocery') {
+                json_response(['title' => "Grocery List - $dateStr"]);
+            } else {
+                json_response(['title' => "To-Do List - $dateStr"]);
+            }
+        }
+
+        try {
+            global $aiModelFallbacks;
+
+            // Extract task names for the AI
+            $taskNames = [];
+            foreach ($tasks as $t) {
+                if (isset($t['task']) && !empty($t['task'])) {
+                    $taskNames[] = $t['task'];
+                }
+            }
+
+            if (empty($taskNames)) {
+                $now = new DateTime();
+                $dateStr = $now->format('M j');
+                if ($listType === 'schedule') {
+                    json_response(['title' => "Schedule - $dateStr"]);
+                } elseif ($listType === 'grocery') {
+                    json_response(['title' => "Grocery List - $dateStr"]);
+                } else {
+                    json_response(['title' => "To-Do List - $dateStr"]);
+                }
+            }
+
+            $listTypeLabel = $listType === 'schedule' ? 'daily schedule' : ($listType === 'grocery' ? 'grocery list' : 'to-do list');
+
+            $systemMessage = "You are a helpful assistant that generates short, descriptive titles for lists.";
+            $prompt = "Generate a short, creative title (3-6 words max) for this $listTypeLabel based on its contents.\n\n" .
+                      "Items in the list:\n" . implode("\n", array_map(function($t) { return "- $t"; }, $taskNames)) . "\n\n" .
+                      "Rules:\n" .
+                      "- Title should capture the theme or purpose of the list\n" .
+                      "- Keep it concise (3-6 words maximum)\n" .
+                      "- Don't use generic titles like 'To-Do List' or 'Grocery Shopping'\n" .
+                      "- Be creative but descriptive\n" .
+                      "- For schedules, consider the activities planned\n" .
+                      "- For grocery lists, consider the meal theme or occasion\n\n" .
+                      "Return ONLY a JSON object with a single field:\n" .
+                      "{\"title\": \"Your Generated Title\"}\n";
+
+            $ai = new AI();
+            $ai->setJsonResponse(true);
+            $ai->setSystemMessage($systemMessage);
+            $ai->setPrompt($prompt);
+
+            $response = try_ai_models($ai, $aiModelFallbacks);
+
+            if (is_array($response) && isset($response['error'])) {
+                error_log('AI title generation failed: ' . $response['error']);
+                // Fallback to default title
+                $now = new DateTime();
+                $dateStr = $now->format('M j');
+                if ($listType === 'schedule') {
+                    json_response(['title' => "Schedule - $dateStr"]);
+                } elseif ($listType === 'grocery') {
+                    json_response(['title' => "Grocery List - $dateStr"]);
+                } else {
+                    json_response(['title' => "To-Do List - $dateStr"]);
+                }
+            }
+
+            $result = parse_ai_json_response($response);
+
+            if ($result !== null && isset($result['title']) && !empty($result['title'])) {
+                json_response(['title' => $result['title']]);
+            } else {
+                // Fallback to default title
+                $now = new DateTime();
+                $dateStr = $now->format('M j');
+                if ($listType === 'schedule') {
+                    json_response(['title' => "Schedule - $dateStr"]);
+                } elseif ($listType === 'grocery') {
+                    json_response(['title' => "Grocery List - $dateStr"]);
+                } else {
+                    json_response(['title' => "To-Do List - $dateStr"]);
+                }
+            }
+        } catch (Throwable $e) {
+            error_log('AI title generation exception: ' . $e->getMessage());
+            // Fallback to default title
+            $now = new DateTime();
+            $dateStr = $now->format('M j');
+            if ($listType === 'schedule') {
+                json_response(['title' => "Schedule - $dateStr"]);
+            } elseif ($listType === 'grocery') {
+                json_response(['title' => "Grocery List - $dateStr"]);
+            } else {
+                json_response(['title' => "To-Do List - $dateStr"]);
+            }
+        }
         break;
 
     default:

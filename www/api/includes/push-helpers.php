@@ -9,7 +9,12 @@
  * @return array Array of push token objects
  */
 function get_user_push_tokens($userId) {
-    global $data_dir;
+    global $data_dir, $use_sqlite;
+
+    if ($use_sqlite) {
+        return db_get_push_tokens($userId);
+    }
+
     $user_dir = $data_dir . '/users/' . $userId;
     $tokens_file = $user_dir . '/push-tokens.json';
 
@@ -30,7 +35,12 @@ function get_user_push_tokens($userId) {
  * @return bool Success
  */
 function add_user_push_token($userId, $token, $platform, $deviceName = null) {
-    global $data_dir;
+    global $data_dir, $use_sqlite;
+
+    if ($use_sqlite) {
+        return db_add_push_token($userId, $token, $platform, $deviceName);
+    }
+
     $user_dir = $data_dir . '/users/' . $userId;
     if (!file_exists($user_dir)) {
         mkdir($user_dir, 0755, true);
@@ -73,7 +83,12 @@ function add_user_push_token($userId, $token, $platform, $deviceName = null) {
  * @return bool Success
  */
 function remove_user_push_token($userId, $token) {
-    global $data_dir;
+    global $data_dir, $use_sqlite;
+
+    if ($use_sqlite) {
+        return db_remove_push_token($userId, $token);
+    }
+
     $user_dir = $data_dir . '/users/' . $userId;
     $tokens_file = $user_dir . '/push-tokens.json';
 

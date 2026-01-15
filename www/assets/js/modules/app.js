@@ -14,6 +14,9 @@ import * as focusMode from './focus-mode.js';
 // Drag state
 let draggedTaskId = null;
 
+// Modal state: track whether we're creating a new list or sharing existing tasks
+let isCreatingNewList = false;
+
 // Wrappers to update UI after task modifications
 const handleToggleCompletion = async (id) => {
     await tasks.toggleTaskCompletion(id);
@@ -177,6 +180,21 @@ export const init = async () => {
     }
     
     await renderTasks();
+
+    // Apply list type behaviors for shared lists
+    if (isSharedList) {
+        const listType = storage.getListType();
+        applyListTypeBehaviors(listType);
+    } else {
+        // Load user settings for personal list (includes custom title)
+        const settings = await storage.loadUserSettings();
+        if (settings.personalListTitle) {
+            storage.setListTitle(settings.personalListTitle);
+        }
+    }
+
+    // Update the list title to show which list we're viewing
+    updateListTitle();
 
     // Set up real-time updates
     if (isSharedList) {
@@ -353,16 +371,20 @@ const setupEventListeners = async () => {
     }
 
     // Task form submission
+    const taskTimeInput = document.getElementById('task-time-input');
     if (ui.domElements.taskForm) {
         ui.domElements.taskForm.addEventListener('submit', async e => {
-        e.preventDefault();
-        const taskText = ui.domElements.taskInput.value.trim();
-        if (taskText) {
-                await tasks.addTask(taskText, focusMode.getCurrentFocusedTaskId());
-            await renderTasks();
-            ui.domElements.taskInput.value = '';
-            ui.domElements.taskInput.focus();
-        }
+            e.preventDefault();
+            const taskText = ui.domElements.taskInput.value.trim();
+            const scheduledTime = taskTimeInput ? taskTimeInput.value : null;
+
+            if (taskText) {
+                await tasks.addTask(taskText, focusMode.getCurrentFocusedTaskId(), scheduledTime || null);
+                await renderTasks();
+                ui.domElements.taskInput.value = '';
+                if (taskTimeInput) taskTimeInput.value = '';
+                ui.domElements.taskInput.focus();
+            }
         });
     }
     
@@ -380,7 +402,183 @@ const setupEventListeners = async () => {
     
     // Share button
     ui.setupShareButton(() => handleShareButtonClick(focusHandler));
-    
+
+    // Share/Create modal handlers
+    const shareModal = document.getElementById('share-modal');
+    const shareModalTitle = shareModal?.querySelector('h2');
+    const cancelShareButton = document.getElementById('cancel-share');
+    const confirmShareButton = document.getElementById('confirm-share');
+
+    // Create List button handler
+    const createListButton = document.getElementById('create-list-button');
+
+    if (createListButton && shareModal) {
+        createListButton.addEventListener('click', () => {
+            // Set modal for creation mode
+            isCreatingNewList = true;
+            if (shareModalTitle) shareModalTitle.textContent = 'Create New List';
+            // Reset to default selection
+            const todoRadio = shareModal.querySelector('input[value="todo"]');
+            if (todoRadio) todoRadio.checked = true;
+            shareModal.classList.remove('hidden');
+        });
+    }
+
+    if (cancelShareButton && shareModal) {
+        cancelShareButton.addEventListener('click', () => {
+            shareModal.classList.add('hidden');
+            isCreatingNewList = false;
+        });
+    }
+
+    if (confirmShareButton && shareModal) {
+        confirmShareButton.addEventListener('click', async () => {
+            const selectedType = shareModal.querySelector('input[name="share-list-type"]:checked')?.value || 'todo';
+            shareModal.classList.add('hidden');
+
+            if (isCreatingNewList) {
+                // Auto-generate a title based on type
+                const now = new Date();
+                const dateStr = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                let autoTitle;
+                if (selectedType === 'schedule') {
+                    autoTitle = `Schedule - ${dateStr}`;
+                } else if (selectedType === 'grocery') {
+                    autoTitle = `Grocery List - ${dateStr}`;
+                } else {
+                    autoTitle = `To-Do List - ${dateStr}`;
+                }
+
+                // Create empty list and navigate to it
+                try {
+                    const shareId = await storage.createSharedList([], null, selectedType, autoTitle);
+                    window.location.href = `${window.location.pathname}?share=${shareId}`;
+                } catch (error) {
+                    console.error('Error creating new list:', error);
+                    alert('Failed to create list. Please try again.');
+                }
+            } else {
+                // Share existing tasks
+                await createSharedListWithType(selectedType);
+            }
+
+            isCreatingNewList = false;
+        });
+    }
+
+    // Close share modal on outside click
+    if (shareModal) {
+        shareModal.addEventListener('click', (e) => {
+            if (e.target === shareModal) {
+                shareModal.classList.add('hidden');
+                isCreatingNewList = false;
+            }
+        });
+    }
+
+    // Edit title handlers
+    const editTitleButton = document.getElementById('edit-title-button');
+    const editTitleContainer = document.getElementById('edit-title-container');
+    const editTitleInput = document.getElementById('edit-title-input');
+    const saveTitleButton = document.getElementById('save-title-button');
+    const cancelTitleButton = document.getElementById('cancel-title-button');
+    const listTitleElement = document.getElementById('list-title');
+    const aiTitleBtn = document.getElementById('ai-title-button');
+
+    if (editTitleButton) {
+        editTitleButton.addEventListener('click', () => {
+            editTitleInput.value = storage.getListTitle() || '';
+            editTitleContainer.classList.remove('hidden');
+            listTitleElement.classList.add('hidden');
+            editTitleButton.classList.add('hidden');
+            if (aiTitleBtn) aiTitleBtn.classList.add('hidden');
+            editTitleInput.focus();
+            editTitleInput.select();
+        });
+    }
+
+    if (saveTitleButton) {
+        saveTitleButton.addEventListener('click', async () => {
+            const newTitle = editTitleInput.value.trim();
+            if (newTitle) {
+                const success = await storage.updateListTitleOnServer(newTitle);
+                if (success) {
+                    listTitleElement.textContent = newTitle;
+                }
+            }
+            editTitleContainer.classList.add('hidden');
+            listTitleElement.classList.remove('hidden');
+            editTitleButton.classList.remove('hidden');
+            if (aiTitleBtn) aiTitleBtn.classList.remove('hidden');
+        });
+    }
+
+    if (cancelTitleButton) {
+        cancelTitleButton.addEventListener('click', () => {
+            editTitleContainer.classList.add('hidden');
+            listTitleElement.classList.remove('hidden');
+            editTitleButton.classList.remove('hidden');
+            if (aiTitleBtn) aiTitleBtn.classList.remove('hidden');
+        });
+    }
+
+    // Save title on Enter key
+    if (editTitleInput) {
+        editTitleInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                saveTitleButton.click();
+            } else if (e.key === 'Escape') {
+                cancelTitleButton.click();
+            }
+        });
+    }
+
+    // AI title generation button
+    const aiTitleButton = document.getElementById('ai-title-button');
+    if (aiTitleButton) {
+        aiTitleButton.addEventListener('click', async () => {
+            // Show loading state
+            const originalHTML = aiTitleButton.innerHTML;
+            aiTitleButton.innerHTML = `
+                <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+            `;
+            aiTitleButton.disabled = true;
+
+            try {
+                const tasks = await storage.loadTasks();
+                const listType = storage.getListType();
+
+                const response = await fetch('/api/generate-title', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tasks, listType })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+
+                const result = await response.json();
+                if (result.title) {
+                    // Update the title on the server
+                    const success = await storage.updateListTitleOnServer(result.title);
+                    if (success && listTitleElement) {
+                        listTitleElement.textContent = result.title;
+                    }
+                }
+            } catch (error) {
+                console.error('Error generating title:', error);
+            } finally {
+                // Restore button state
+                aiTitleButton.innerHTML = originalHTML;
+                aiTitleButton.disabled = false;
+            }
+        });
+    }
+
     // Export button
     const exportButton = document.getElementById('export-button');
     if (exportButton) {
@@ -546,63 +744,184 @@ const setupEventListeners = async () => {
     }
 };
 
-// Handle share button click
+// Update the page title to show which list we're viewing
+const updateListTitle = () => {
+    const listTitleElement = document.getElementById('list-title');
+    const editTitleButton = document.getElementById('edit-title-button');
+    const aiTitleButton = document.getElementById('ai-title-button');
+    if (!listTitleElement) return;
+
+    // Get the stored title (works for both personal and shared lists)
+    const listTitle = storage.getListTitle();
+
+    if (listTitle) {
+        listTitleElement.textContent = listTitle;
+    } else if (storage.getIsSharedList()) {
+        // Fallback for older shared lists without a title
+        const listType = storage.getListType();
+        if (listType === 'schedule') {
+            listTitleElement.textContent = 'Schedule';
+        } else if (listType === 'grocery') {
+            listTitleElement.textContent = 'Grocery List';
+        } else {
+            listTitleElement.textContent = 'Shared List';
+        }
+    } else {
+        // Default for personal list
+        listTitleElement.textContent = 'My List';
+    }
+
+    // Always show edit and AI title buttons
+    if (editTitleButton) editTitleButton.classList.remove('hidden');
+    if (aiTitleButton) aiTitleButton.classList.remove('hidden');
+};
+
+// Apply list-type-specific behaviors (auto-enable toggles, show/hide time input, update badge, etc.)
+const applyListTypeBehaviors = (listType) => {
+    const showLocationsToggle = document.getElementById('show-locations-toggle');
+    const showTimesToggle = document.getElementById('show-times-toggle');
+    const taskTimeInput = document.getElementById('task-time-input');
+    const taskInput = document.getElementById('task-input');
+    const listTypeBadge = document.getElementById('list-type-badge');
+    const aiSortButton = document.getElementById('ai-sort-button');
+    const groceryStoreSelect = document.getElementById('grocery-store-select');
+    const locationsLabel = showLocationsToggle?.parentElement;
+
+    // Update the list type badge
+    if (listTypeBadge) {
+        // Reset badge classes
+        listTypeBadge.className = 'text-xs px-2 py-1 rounded-md font-medium';
+
+        if (listType === 'schedule') {
+            listTypeBadge.textContent = 'Schedule';
+            listTypeBadge.classList.add('bg-blue-100', 'text-blue-800', 'dark:bg-blue-900', 'dark:text-blue-200');
+            listTypeBadge.classList.remove('hidden');
+        } else if (listType === 'grocery') {
+            listTypeBadge.textContent = 'Grocery';
+            listTypeBadge.classList.add('bg-green-100', 'text-green-800', 'dark:bg-green-900', 'dark:text-green-200');
+            listTypeBadge.classList.remove('hidden');
+        } else {
+            // Hide badge for default todo type
+            listTypeBadge.classList.add('hidden');
+        }
+    }
+
+    const timesLabel = showTimesToggle?.parentElement;
+
+    if (listType === 'schedule') {
+        // Schedule: auto-enable times, show time input, hide all extra controls
+        ui.setShowTimes(true);
+        if (showTimesToggle) showTimesToggle.checked = true;
+        if (taskTimeInput) {
+            taskTimeInput.classList.remove('hidden');
+            // Adjust task input border radius since time input is now visible
+            if (taskInput) {
+                taskInput.classList.remove('rounded-l-lg');
+                taskInput.classList.add('rounded-l-lg');
+            }
+        }
+        // Hide all extra controls for schedules - just show time input, task input, add button
+        if (aiSortButton) aiSortButton.classList.add('hidden');
+        if (groceryStoreSelect) groceryStoreSelect.classList.add('hidden');
+        if (locationsLabel) locationsLabel.classList.add('hidden');
+        if (timesLabel) timesLabel.classList.add('hidden');
+    } else if (listType === 'grocery') {
+        // Grocery: auto-enable locations, show grocery controls, hide time input
+        ui.setShowLocations(true);
+        if (showLocationsToggle) showLocationsToggle.checked = true;
+        if (taskTimeInput) taskTimeInput.classList.add('hidden');
+        // Show grocery-specific controls
+        if (aiSortButton) aiSortButton.classList.remove('hidden');
+        if (groceryStoreSelect) groceryStoreSelect.classList.remove('hidden');
+        if (locationsLabel) locationsLabel.classList.remove('hidden');
+        if (timesLabel) timesLabel.classList.remove('hidden');
+    } else {
+        // Todo (default): hide time input, show all controls
+        if (taskTimeInput) taskTimeInput.classList.add('hidden');
+        if (aiSortButton) aiSortButton.classList.remove('hidden');
+        if (groceryStoreSelect) groceryStoreSelect.classList.remove('hidden');
+        if (locationsLabel) locationsLabel.classList.remove('hidden');
+        if (timesLabel) timesLabel.classList.remove('hidden');
+    }
+};
+
+// Handle share button click - show modal for new shares, copy URL for existing shares
 const handleShareButtonClick = async (focusHandler) => {
-    const currentFocusedTaskId = focusMode.getCurrentFocusedTaskId();
-    
     if (storage.getIsSharedList()) {
+        // Already a shared list, just copy the URL
         ui.domElements.shareUrlInput.value = window.location.href;
         ui.domElements.shareUrlContainer.classList.remove('hidden');
         ui.domElements.shareButton.classList.add('hidden');
-        
+
         ui.domElements.shareUrlInput.select();
         document.execCommand('copy');
         showCopiedNotification();
     } else {
-        try {
-            ui.domElements.shareButton.disabled = true;
-            ui.domElements.shareButton.textContent = 'Creating share link...';
-            
-            const currentDate = storage.getActiveDate();
-            const allTasks = await storage.loadTasks();
-            let shareId;
-            
-            const existingList = storage.getOwnedListByDate(currentDate);
-            
-            if (existingList && existingList.id) {
-                shareId = existingList.id;
-                await storage.updateSharedList(shareId, allTasks, currentFocusedTaskId);
-            } else {
-                shareId = await storage.createSharedList(allTasks, currentFocusedTaskId);
-            }
-            
-            storage.addOwnedList(shareId, currentDate);
-
-            let shareUrl = `${window.location.origin}${window.location.pathname}?share=${shareId}`;
-            
-            ui.domElements.shareUrlInput.value = shareUrl;
-            ui.domElements.shareUrlContainer.classList.remove('hidden');
-            ui.domElements.shareButton.classList.add('hidden');
-            ui.domElements.shareButton.textContent = 'Share List';
-            ui.domElements.shareButton.disabled = false;
-            
-            ui.domElements.shareUrlInput.select();
-            document.execCommand('copy');
-            showCopiedNotification();
-            
-            window.history.pushState({}, '', shareUrl);
-            storage.setupSharing(shareId);
-            ui.setupSharedUI(true);
-            
-            storage.connectToUpdates(shareId, (updatedData) => {
-                renderTasks();
-            });
-        } catch (error) {
-            console.error('Error sharing list:', error);
-            alert('Failed to create share link. Please try again.');
-            ui.domElements.shareButton.textContent = 'Share List';
-            ui.domElements.shareButton.disabled = false;
+        // Show share modal to select list type
+        const shareModal = document.getElementById('share-modal');
+        if (shareModal) {
+            // Set modal for share mode (not create mode)
+            isCreatingNewList = false;
+            const modalTitle = shareModal.querySelector('h2');
+            if (modalTitle) modalTitle.textContent = 'Share List';
+            // Reset to default selection
+            const todoRadio = shareModal.querySelector('input[value="todo"]');
+            if (todoRadio) todoRadio.checked = true;
+            shareModal.classList.remove('hidden');
         }
+    }
+};
+
+// Actually create the shared list after modal confirmation
+const createSharedListWithType = async (listType) => {
+    const currentFocusedTaskId = focusMode.getCurrentFocusedTaskId();
+
+    try {
+        ui.domElements.shareButton.disabled = true;
+        ui.domElements.shareButton.textContent = 'Creating share link...';
+
+        const currentDate = storage.getActiveDate();
+        const allTasks = await storage.loadTasks();
+        let shareId;
+
+        const existingList = storage.getOwnedListByDate(currentDate);
+
+        if (existingList && existingList.id) {
+            shareId = existingList.id;
+            await storage.updateSharedList(shareId, allTasks, currentFocusedTaskId);
+        } else {
+            shareId = await storage.createSharedList(allTasks, currentFocusedTaskId, listType);
+        }
+
+        storage.addOwnedList(shareId, currentDate);
+
+        let shareUrl = `${window.location.origin}${window.location.pathname}?share=${shareId}`;
+
+        ui.domElements.shareUrlInput.value = shareUrl;
+        ui.domElements.shareUrlContainer.classList.remove('hidden');
+        ui.domElements.shareButton.classList.add('hidden');
+        ui.domElements.shareButton.textContent = 'Share List';
+        ui.domElements.shareButton.disabled = false;
+
+        ui.domElements.shareUrlInput.select();
+        document.execCommand('copy');
+        showCopiedNotification();
+
+        window.history.pushState({}, '', shareUrl);
+        storage.setupSharing(shareId, listType);
+        ui.setupSharedUI(true);
+
+        // Apply list type behaviors
+        applyListTypeBehaviors(listType);
+
+        storage.connectToUpdates(shareId, (updatedData) => {
+            renderTasks();
+        });
+    } catch (error) {
+        console.error('Error sharing list:', error);
+        alert('Failed to create share link. Please try again.');
+        ui.domElements.shareButton.textContent = 'Share List';
+        ui.domElements.shareButton.disabled = false;
     }
 };
 
@@ -634,16 +953,34 @@ const handleClearCompleted = async () => {
     await renderTasks();
 };
 
+// Helper to convert time string (HH:MM) to minutes for sorting
+const timeToMinutes = (timeStr) => {
+    if (!timeStr || typeof timeStr !== 'string') return Infinity;
+    const match = timeStr.match(/^(\d{1,2}):(\d{2})$/);
+    if (!match) return Infinity;
+    return parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
+};
+
+// Sort tasks by scheduledTime (for schedule-type lists)
+const sortTasksByTime = (taskArray) => {
+    return [...taskArray].sort((a, b) => {
+        const aMinutes = timeToMinutes(a.scheduledTime);
+        const bMinutes = timeToMinutes(b.scheduledTime);
+        return aMinutes - bMinutes;
+    });
+};
+
 // Render all tasks
 const renderTasks = async () => {
     const allTasks = await storage.loadTasks();
     const currentFocusedTaskId = focusMode.getCurrentFocusedTaskId();
     const jumpHandler = focusMode.createJumpToBreadcrumbHandler(renderTasks);
     const focusHandler = focusMode.createFocusOnTaskHandler(renderTasks, jumpHandler);
-    
+    const listType = storage.getListType();
+
     ui.domElements.activeTaskList.innerHTML = '';
     ui.domElements.completedTaskList.innerHTML = '';
-    
+
     // Destroy previous Sortable instances
     if (window.activeSortable) {
         window.activeSortable.destroy();
@@ -653,19 +990,25 @@ const renderTasks = async () => {
         window.completedSortable.destroy();
         window.completedSortable = null;
     }
-    
+
     let activeTasks = 0;
     let completedTasks = 0;
-    
+
     if (currentFocusedTaskId) {
         const result = utils.findTaskById(allTasks, currentFocusedTaskId);
-        
+
         if (result) {
             const { task } = result;
             const subtasks = task.subtasks || [];
-            const activeSubtasks = subtasks.filter(st => !st.completed);
-            const completedSubtasks = subtasks.filter(st => st.completed);
-            
+            let activeSubtasks = subtasks.filter(st => !st.completed);
+            let completedSubtasks = subtasks.filter(st => st.completed);
+
+            // Auto-sort by time for schedule-type lists
+            if (listType === 'schedule') {
+                activeSubtasks = sortTasksByTime(activeSubtasks);
+                completedSubtasks = sortTasksByTime(completedSubtasks);
+            }
+
             activeSubtasks.forEach(subtask => {
                 const subtaskElement = ui.createTaskElement(
                     subtask, 0,
@@ -681,7 +1024,7 @@ const renderTasks = async () => {
                 );
                 ui.domElements.completedTaskList.appendChild(subtaskElement);
             });
-            
+
             activeTasks = activeSubtasks.length;
             completedTasks = completedSubtasks.length;
         } else {
@@ -690,9 +1033,15 @@ const renderTasks = async () => {
         }
     } else {
         const allTopLevelTasks = utils.filterTasks(allTasks, { parentId: false });
-        const activeTopLevelTasks = utils.filterTasks(allTopLevelTasks, { completed: false });
-        const completedTopLevelTasks = utils.filterTasks(allTopLevelTasks, { completed: true });
-        
+        let activeTopLevelTasks = utils.filterTasks(allTopLevelTasks, { completed: false });
+        let completedTopLevelTasks = utils.filterTasks(allTopLevelTasks, { completed: true });
+
+        // Auto-sort by time for schedule-type lists
+        if (listType === 'schedule') {
+            activeTopLevelTasks = sortTasksByTime(activeTopLevelTasks);
+            completedTopLevelTasks = sortTasksByTime(completedTopLevelTasks);
+        }
+
         activeTopLevelTasks.forEach(task => {
             const taskElement = ui.createTaskElement(
                 task, 0,
@@ -708,7 +1057,7 @@ const renderTasks = async () => {
             );
             ui.domElements.completedTaskList.appendChild(taskElement);
         });
-        
+
         activeTasks = activeTopLevelTasks.length;
         completedTasks = completedTopLevelTasks.length;
     }
