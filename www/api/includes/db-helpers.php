@@ -18,6 +18,24 @@ function db_now(): string {
     return Database::getDriver() === 'mysql' ? 'NOW()' : 'datetime("now")';
 }
 
+/**
+ * Convert ISO 8601 datetime to MySQL-compatible format
+ * Input: 2025-05-18T07:33:40.182Z
+ * Output: 2025-05-18 07:33:40
+ */
+function db_datetime(?string $isoDate): ?string {
+    if (empty($isoDate)) {
+        return null;
+    }
+    // If already in MySQL format, return as-is
+    if (strpos($isoDate, 'T') === false) {
+        return $isoDate;
+    }
+    // Convert ISO 8601 to MySQL format
+    $dt = new DateTime($isoDate);
+    return $dt->format('Y-m-d H:i:s');
+}
+
 // ============================================
 // TASK CONVERSION FUNCTIONS
 // ============================================
@@ -292,6 +310,8 @@ function db_save_list_tasks(string $listId, array $tasks): bool {
  * Insert a single task (with duplicate handling)
  */
 function db_insert_task(array $task, ?string $listId, ?string $userId, ?string $taskDate): void {
+    $createdAt = db_datetime($task['created_at'] ?? null) ?? date('Y-m-d H:i:s');
+
     try {
         Database::execute(
             'INSERT INTO tasks (id, list_id, user_id, task_date, parent_id, text, completed, sticky, scheduled_time, location, location_index, sort_order, created_at)
@@ -309,12 +329,13 @@ function db_insert_task(array $task, ?string $listId, ?string $userId, ?string $
                 $task['location'],
                 $task['location_index'],
                 $task['sort_order'],
-                $task['created_at'] ?? date('c')
+                $createdAt
             ]
         );
     } catch (PDOException $e) {
         // If duplicate ID, generate a new one and retry
-        if (strpos($e->getMessage(), 'UNIQUE constraint failed: tasks.id') !== false) {
+        if (strpos($e->getMessage(), 'UNIQUE constraint failed: tasks.id') !== false ||
+            strpos($e->getMessage(), 'Duplicate entry') !== false) {
             $newId = bin2hex(random_bytes(16));
             Database::execute(
                 'INSERT INTO tasks (id, list_id, user_id, task_date, parent_id, text, completed, sticky, scheduled_time, location, location_index, sort_order, created_at)
@@ -332,7 +353,7 @@ function db_insert_task(array $task, ?string $listId, ?string $userId, ?string $
                     $task['location'],
                     $task['location_index'],
                     $task['sort_order'],
-                    $task['created_at'] ?? date('c')
+                    $createdAt
                 ]
             );
         } else {
@@ -506,6 +527,8 @@ function db_save_subscriptions(string $userId, array $lists): bool {
                 continue;
             }
 
+            $lastAccessed = db_datetime($list['lastAccessed'] ?? null) ?? date('Y-m-d H:i:s');
+
             Database::execute(
                 'INSERT INTO list_subscriptions (user_id, list_id, title, url, last_accessed_at)
                  VALUES (?, ?, ?, ?, ?)',
@@ -514,7 +537,7 @@ function db_save_subscriptions(string $userId, array $lists): bool {
                     $list['id'],
                     $list['title'] ?? null,
                     $list['url'] ?? null,
-                    $list['lastAccessed'] ?? date('c')
+                    $lastAccessed
                 ]
             );
         }
@@ -621,22 +644,35 @@ function db_get_notification_prefs(string $userId): array {
 function db_save_notification_prefs(string $userId, array $prefs): bool {
     db_get_or_create_user($userId);
 
+    $taskCompleted = !empty($prefs['task_completed']) ? 1 : 0;
+    $sharedListUpdated = !empty($prefs['shared_list_updated']) ? 1 : 0;
+    $newSharedTask = !empty($prefs['new_shared_task']) ? 1 : 0;
+    $taskAssigned = !empty($prefs['task_assigned']) ? 1 : 0;
+
+    if (Database::getDriver() === 'mysql') {
+        return Database::execute(
+            'INSERT INTO user_notification_prefs (user_id, task_completed, shared_list_updated, new_shared_task, task_assigned, updated_at)
+             VALUES (?, ?, ?, ?, ?, NOW())
+             ON DUPLICATE KEY UPDATE
+             task_completed = VALUES(task_completed),
+             shared_list_updated = VALUES(shared_list_updated),
+             new_shared_task = VALUES(new_shared_task),
+             task_assigned = VALUES(task_assigned),
+             updated_at = NOW()',
+            [$userId, $taskCompleted, $sharedListUpdated, $newSharedTask, $taskAssigned]
+        ) >= 0;
+    }
+
     return Database::execute(
         'INSERT INTO user_notification_prefs (user_id, task_completed, shared_list_updated, new_shared_task, task_assigned, updated_at)
-         VALUES (?, ?, ?, ?, ?, ' . db_now() . ')
+         VALUES (?, ?, ?, ?, ?, datetime("now"))
          ON CONFLICT(user_id) DO UPDATE SET
          task_completed = excluded.task_completed,
          shared_list_updated = excluded.shared_list_updated,
          new_shared_task = excluded.new_shared_task,
          task_assigned = excluded.task_assigned,
-         updated_at = ' . db_now() . '',
-        [
-            $userId,
-            !empty($prefs['task_completed']) ? 1 : 0,
-            !empty($prefs['shared_list_updated']) ? 1 : 0,
-            !empty($prefs['new_shared_task']) ? 1 : 0,
-            !empty($prefs['task_assigned']) ? 1 : 0,
-        ]
+         updated_at = datetime("now")',
+        [$userId, $taskCompleted, $sharedListUpdated, $newSharedTask, $taskAssigned]
     ) >= 0;
 }
 
@@ -657,13 +693,25 @@ function db_get_push_tokens(string $userId): array {
 function db_add_push_token(string $userId, string $token, ?string $platform, ?string $deviceName): bool {
     db_get_or_create_user($userId);
 
+    if (Database::getDriver() === 'mysql') {
+        return Database::execute(
+            'INSERT INTO user_push_tokens (user_id, token, platform, device_name)
+             VALUES (?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE
+             platform = VALUES(platform),
+             device_name = VALUES(device_name),
+             updated_at = NOW()',
+            [$userId, $token, $platform, $deviceName]
+        ) >= 0;
+    }
+
     return Database::execute(
         'INSERT INTO user_push_tokens (user_id, token, platform, device_name)
          VALUES (?, ?, ?, ?)
          ON CONFLICT(user_id, token) DO UPDATE SET
          platform = excluded.platform,
          device_name = excluded.device_name,
-         updated_at = ' . db_now() . '',
+         updated_at = datetime("now")',
         [$userId, $token, $platform, $deviceName]
     ) >= 0;
 }
@@ -807,14 +855,17 @@ function db_save_store_aisles(string $storeId, array $aisles): bool {
 
             // Add photos
             foreach (($aisle['photos'] ?? []) as $photo) {
+                $dateTaken = db_datetime($photo['date_taken'] ?? null);
+                $dateAdded = db_datetime($photo['date_added'] ?? null) ?? date('Y-m-d H:i:s');
+
                 Database::execute(
                     'INSERT INTO store_aisle_photos (id, aisle_id, date_taken, date_added)
                      VALUES (?, ?, ?, ?)',
                     [
                         $photo['id'],
                         $aisleId,
-                        $photo['date_taken'] ?? null,
-                        $photo['date_added'] ?? date('c')
+                        $dateTaken,
+                        $dateAdded
                     ]
                 );
             }
