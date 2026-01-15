@@ -12,6 +12,22 @@
  *   DB_PASS= (MySQL only)
  */
 
+// Load .env file if it exists (one level above repo)
+$envPath = __DIR__ . '/../../../../.env';
+if (file_exists($envPath)) {
+    $lines = file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        if (strpos($line, '#') === 0) continue; // Skip comments
+        if (strpos($line, '=') === false) continue;
+        list($key, $value) = explode('=', $line, 2);
+        $key = trim($key);
+        $value = trim($value);
+        if (!getenv($key)) { // Don't override existing env vars
+            putenv("$key=$value");
+        }
+    }
+}
+
 class Database {
     private static ?PDO $instance = null;
     private static string $driver = 'sqlite';
@@ -21,6 +37,10 @@ class Database {
      * Get the database driver type
      */
     public static function getDriver(): string {
+        if (self::$instance === null) {
+            // Return configured driver before connection
+            return getenv('DB_DRIVER') ?: 'sqlite';
+        }
         return self::$driver;
     }
 
