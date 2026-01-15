@@ -7,6 +7,18 @@
 require_once __DIR__ . '/../db/database.php';
 
 // ============================================
+// DATABASE COMPATIBILITY HELPERS
+// ============================================
+
+/**
+ * Get the SQL function for current timestamp
+ * SQLite uses datetime('now'), MySQL uses NOW()
+ */
+function db_now(): string {
+    return Database::getDriver() === 'mysql' ? 'NOW()' : 'datetime("now")';
+}
+
+// ============================================
 // TASK CONVERSION FUNCTIONS
 // ============================================
 
@@ -126,7 +138,7 @@ function db_get_or_create_user(string $userId): array {
 
     if (!$user) {
         Database::execute(
-            'INSERT INTO users (id, created_at) VALUES (?, datetime("now"))',
+            'INSERT INTO users (id, created_at) VALUES (?, ' . db_now() . ')',
             [$userId]
         );
         $user = Database::queryOne('SELECT * FROM users WHERE id = ?', [$userId]);
@@ -155,7 +167,7 @@ function db_update_user_settings(string $userId, array $settings): bool {
 
     if (empty($fields)) return true;
 
-    $fields[] = 'updated_at = datetime("now")';
+    $fields[] = 'updated_at = ' . db_now() . '';
     $params[] = $userId;
 
     $sql = 'UPDATE users SET ' . implode(', ', $fields) . ' WHERE id = ?';
@@ -263,7 +275,7 @@ function db_save_list_tasks(string $listId, array $tasks): bool {
 
         // Update list modification time
         Database::execute(
-            'UPDATE lists SET last_modified_at = datetime("now") WHERE id = ?',
+            'UPDATE lists SET last_modified_at = ' . db_now() . ' WHERE id = ?',
             [$listId]
         );
 
@@ -342,7 +354,7 @@ function db_create_list(string $listId, ?string $ownerId, ?string $title, string
     try {
         Database::execute(
             'INSERT INTO lists (id, owner_id, title, list_type, created_at, last_modified_at)
-             VALUES (?, ?, ?, ?, datetime("now"), datetime("now"))',
+             VALUES (?, ?, ?, ?, ' . db_now() . ', ' . db_now() . ')',
             [$listId, $ownerId, $title, $listType]
         );
 
@@ -408,7 +420,7 @@ function db_update_list(string $listId, array $data): bool {
         }
 
         if (!empty($updates)) {
-            $updates[] = 'last_modified_at = datetime("now")';
+            $updates[] = 'last_modified_at = ' . db_now() . '';
             $params[] = $listId;
             Database::execute(
                 'UPDATE lists SET ' . implode(', ', $updates) . ' WHERE id = ?',
@@ -425,7 +437,7 @@ function db_update_list(string $listId, array $data): bool {
             }
             // Always update modification time when tasks change
             Database::execute(
-                'UPDATE lists SET last_modified_at = datetime("now") WHERE id = ?',
+                'UPDATE lists SET last_modified_at = ' . db_now() . ' WHERE id = ?',
                 [$listId]
             );
         }
@@ -611,13 +623,13 @@ function db_save_notification_prefs(string $userId, array $prefs): bool {
 
     return Database::execute(
         'INSERT INTO user_notification_prefs (user_id, task_completed, shared_list_updated, new_shared_task, task_assigned, updated_at)
-         VALUES (?, ?, ?, ?, ?, datetime("now"))
+         VALUES (?, ?, ?, ?, ?, ' . db_now() . ')
          ON CONFLICT(user_id) DO UPDATE SET
          task_completed = excluded.task_completed,
          shared_list_updated = excluded.shared_list_updated,
          new_shared_task = excluded.new_shared_task,
          task_assigned = excluded.task_assigned,
-         updated_at = datetime("now")',
+         updated_at = ' . db_now() . '',
         [
             $userId,
             !empty($prefs['task_completed']) ? 1 : 0,
@@ -651,7 +663,7 @@ function db_add_push_token(string $userId, string $token, ?string $platform, ?st
          ON CONFLICT(user_id, token) DO UPDATE SET
          platform = excluded.platform,
          device_name = excluded.device_name,
-         updated_at = datetime("now")',
+         updated_at = ' . db_now() . '',
         [$userId, $token, $platform, $deviceName]
     ) >= 0;
 }
@@ -746,7 +758,7 @@ function db_create_grocery_store(array $data): string {
 
     Database::execute(
         'INSERT INTO grocery_stores (id, name, city, state, phone, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, datetime("now"), datetime("now"))',
+         VALUES (?, ?, ?, ?, ?, ' . db_now() . ', ' . db_now() . ')',
         [
             $id,
             $data['name'],
@@ -809,7 +821,7 @@ function db_save_store_aisles(string $storeId, array $aisles): bool {
         }
 
         Database::execute(
-            'UPDATE grocery_stores SET updated_at = datetime("now") WHERE id = ?',
+            'UPDATE grocery_stores SET updated_at = ' . db_now() . ' WHERE id = ?',
             [$storeId]
         );
 
@@ -848,7 +860,7 @@ function db_update_grocery_store(string $storeId, array $data): bool {
 
     if (empty($updates)) return true;
 
-    $updates[] = 'updated_at = datetime("now")';
+    $updates[] = 'updated_at = ' . db_now() . '';
     $params[] = $storeId;
 
     return Database::execute(

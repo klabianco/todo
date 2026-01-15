@@ -1,11 +1,15 @@
 <?php
 /**
- * Migration Script: JSON Files to SQLite
+ * Migration Script: JSON Files to Database (SQLite or MySQL)
  *
  * Usage:
  *   php migrate-to-sqlite.php              - Run migration
  *   php migrate-to-sqlite.php --dry-run    - Show what would be migrated
  *   php migrate-to-sqlite.php --stats      - Show current JSON file stats
+ *
+ * Environment:
+ *   DB_DRIVER=mysql to use MySQL (default: sqlite)
+ *   See db/database.php for full MySQL config options
  */
 
 require_once __DIR__ . '/db/database.php';
@@ -20,7 +24,8 @@ if ($showStats) {
     exit(0);
 }
 
-echo "=== Todo App: JSON to SQLite Migration ===\n\n";
+$driver = Database::getDriver();
+echo "=== Todo App: JSON to " . strtoupper($driver) . " Migration ===\n\n";
 
 if ($dryRun) {
     echo "DRY RUN MODE - No changes will be made\n\n";
@@ -70,7 +75,8 @@ try {
     }
 
     if (!$dryRun) {
-        echo "\nMigration complete! Database: " . Database::getDbPath() . "\n";
+        $dbInfo = Database::getDriver() === 'mysql' ? 'MySQL' : Database::getDbPath();
+        echo "\nMigration complete! Database: " . $dbInfo . "\n";
         echo "\nVerify with: php db/init.php --status\n";
     }
 
