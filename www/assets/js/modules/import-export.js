@@ -18,9 +18,10 @@ export const flattenTasksForDisplay = (tasks, level = 0, parentPath = '', includ
             level: level,
             indent: indent,
             path: path,
+            scheduledTime: task.scheduledTime || null,
             subtasks: task.subtasks || []
         });
-        
+
         if (includeSubtasks && task.subtasks && task.subtasks.length > 0) {
             result.push(...flattenTasksForDisplay(task.subtasks, level + 1, path, includeSubtasks));
         }
@@ -28,81 +29,170 @@ export const flattenTasksForDisplay = (tasks, level = 0, parentPath = '', includ
     return result;
 };
 
+// Format time for display (HH:MM -> h:MM AM/PM)
+const formatTime = (timeStr) => {
+    if (!timeStr) return '';
+    const [hours, minutes] = timeStr.split(':');
+    const h = parseInt(hours, 10);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const h12 = h % 12 || 12;
+    return `${h12}:${minutes} ${ampm}`;
+};
+
+// Convert time string to minutes for sorting
+const timeToMinutes = (timeStr) => {
+    if (!timeStr || typeof timeStr !== 'string') return Infinity;
+    const match = timeStr.match(/^(\d{1,2}):(\d{2})$/);
+    if (!match) return Infinity;
+    return parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
+};
+
 // Export to PDF
-export const exportToPDF = (tasks, filename, includeSubtasks = true) => {
+export const exportToPDF = (tasks, filename, includeSubtasks = true, listType = 'todo', listTitle = 'Todo List') => {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
-    
+
     const flattened = flattenTasksForDisplay(tasks, 0, '', includeSubtasks);
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     const margin = 20;
-    const lineHeight = 7;
     let y = margin;
-    
+
     // Title
-    doc.setFontSize(18);
-    doc.text('Todo List', margin, y);
+    doc.setFontSize(20);
+    doc.setFont(undefined, 'bold');
+    doc.text(listTitle, margin, y);
     y += 10;
-    
+
     doc.setFontSize(10);
+    doc.setFont(undefined, 'normal');
     doc.setTextColor(100, 100, 100);
-    doc.text(`Exported: ${new Date().toLocaleDateString()}`, margin, y);
-    y += 10;
-    
+    doc.text(`${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`, margin, y);
+    y += 15;
+
     doc.setTextColor(0, 0, 0);
-    doc.setFontSize(11);
-    
-    // Group by completion status
-    const activeTasks = utils.filterTasks(flattened, { completed: false });
-    const completedTasks = utils.filterTasks(flattened, { completed: true });
-    
-    // Active tasks
-    if (activeTasks.length > 0) {
-        doc.setFontSize(12);
-        doc.setFont(undefined, 'bold');
-        doc.text('Active Tasks', margin, y);
-        y += 8;
-        doc.setFont(undefined, 'normal');
-        doc.setFontSize(10);
-        
-        activeTasks.forEach(task => {
-            if (y > pageHeight - margin - 10) {
+
+    // Schedule-specific formatting
+    if (listType === 'schedule') {
+        const activeTasks = utils.filterTasks(flattened, { completed: false })
+            .sort((a, b) => timeToMinutes(a.scheduledTime) - timeToMinutes(b.scheduledTime));
+        const completedTasks = utils.filterTasks(flattened, { completed: true })
+            .sort((a, b) => timeToMinutes(a.scheduledTime) - timeToMinutes(b.scheduledTime));
+
+        const timeColWidth = 35;
+        const lineHeight = 12;
+
+        // Draw schedule items
+        const drawScheduleItem = (task, isCompleted = false) => {
+            if (y > pageHeight - margin - 15) {
                 doc.addPage();
                 y = margin;
             }
-            const text = `${task.indent}${task.task}`;
-            doc.text(text, margin, y, { maxWidth: pageWidth - margin * 2 });
-            y += lineHeight;
-        });
-        y += 5;
-    }
-    
-    // Completed tasks
-    if (completedTasks.length > 0) {
-        if (y > pageHeight - margin - 15) {
-            doc.addPage();
-            y = margin;
+
+            const timeStr = task.scheduledTime ? formatTime(task.scheduledTime) : '';
+
+            // Draw time
+            doc.setFontSize(11);
+            doc.setFont(undefined, 'bold');
+            if (isCompleted) {
+                doc.setTextColor(150, 150, 150);
+            } else {
+                doc.setTextColor(59, 130, 246); // Blue color for time
+            }
+            doc.text(timeStr || '—', margin, y);
+
+            // Draw task
+            doc.setFont(undefined, 'normal');
+            if (isCompleted) {
+                doc.setTextColor(150, 150, 150);
+            } else {
+                doc.setTextColor(0, 0, 0);
+            }
+            const taskText = isCompleted ? `✓ ${task.task}` : task.task;
+            doc.text(taskText, margin + timeColWidth, y, { maxWidth: pageWidth - margin * 2 - timeColWidth });
+
+            // Draw subtle line separator
+            y += 3;
+            doc.setDrawColor(230, 230, 230);
+            doc.line(margin, y, pageWidth - margin, y);
+            y += lineHeight - 3;
+        };
+
+        // Active schedule items
+        if (activeTasks.length > 0) {
+            activeTasks.forEach(task => drawScheduleItem(task, false));
+            y += 5;
         }
-        doc.setFontSize(12);
-        doc.setFont(undefined, 'bold');
-        doc.text('Completed Tasks', margin, y);
-        y += 8;
-        doc.setFont(undefined, 'normal');
-        doc.setFontSize(10);
-        doc.setTextColor(150, 150, 150);
-        
-        completedTasks.forEach(task => {
-            if (y > pageHeight - margin - 10) {
+
+        // Completed items (if any)
+        if (completedTasks.length > 0) {
+            if (y > pageHeight - margin - 20) {
                 doc.addPage();
                 y = margin;
             }
-            const text = `${task.indent}✓ ${task.task}`;
-            doc.text(text, margin, y, { maxWidth: pageWidth - margin * 2 });
-            y += lineHeight;
-        });
+            doc.setFontSize(11);
+            doc.setFont(undefined, 'bold');
+            doc.setTextColor(150, 150, 150);
+            doc.text('Completed', margin, y);
+            y += 10;
+
+            completedTasks.forEach(task => drawScheduleItem(task, true));
+        }
+    } else {
+        // Standard todo/grocery list formatting
+        const lineHeight = 7;
+
+        // Group by completion status
+        const activeTasks = utils.filterTasks(flattened, { completed: false });
+        const completedTasks = utils.filterTasks(flattened, { completed: true });
+
+        // Active tasks
+        if (activeTasks.length > 0) {
+            doc.setFontSize(12);
+            doc.setFont(undefined, 'bold');
+            doc.text('Active Tasks', margin, y);
+            y += 8;
+            doc.setFont(undefined, 'normal');
+            doc.setFontSize(10);
+
+            activeTasks.forEach(task => {
+                if (y > pageHeight - margin - 10) {
+                    doc.addPage();
+                    y = margin;
+                }
+                const text = `${task.indent}${task.task}`;
+                doc.text(text, margin, y, { maxWidth: pageWidth - margin * 2 });
+                y += lineHeight;
+            });
+            y += 5;
+        }
+
+        // Completed tasks
+        if (completedTasks.length > 0) {
+            if (y > pageHeight - margin - 15) {
+                doc.addPage();
+                y = margin;
+            }
+            doc.setFontSize(12);
+            doc.setFont(undefined, 'bold');
+            doc.text('Completed Tasks', margin, y);
+            y += 8;
+            doc.setFont(undefined, 'normal');
+            doc.setFontSize(10);
+            doc.setTextColor(150, 150, 150);
+
+            completedTasks.forEach(task => {
+                if (y > pageHeight - margin - 10) {
+                    doc.addPage();
+                    y = margin;
+                }
+                const text = `${task.indent}✓ ${task.task}`;
+                doc.text(text, margin, y, { maxWidth: pageWidth - margin * 2 });
+                y += lineHeight;
+            });
+        }
     }
-    
+
     doc.save(filename);
 };
 
@@ -139,11 +229,13 @@ export const handleConfirmExport = async (currentFocusedTaskId) => {
     const exportOption = document.querySelector('input[name="export-option"]:checked')?.value || 'all';
     const exportFormat = document.querySelector('input[name="export-format"]:checked')?.value || 'json';
     const includeCompleted = document.querySelector('input[name="export-completed"]:checked')?.value || 'include';
-    
+
     try {
         const allTasks = await storage.loadTasks();
+        const listType = storage.getListType();
+        const listTitle = storage.getListTitle() || 'Todo List';
         let tasksToExport = [];
-        
+
         if (exportOption === 'current') {
             if (currentFocusedTaskId) {
                 const result = utils.findTaskById(allTasks, currentFocusedTaskId);
@@ -161,36 +253,37 @@ export const handleConfirmExport = async (currentFocusedTaskId) => {
         } else {
             tasksToExport = allTasks;
         }
-        
+
         if (includeCompleted === 'exclude') {
             tasksToExport = utils.filterTasks(tasksToExport, { completed: false });
         }
-        
+
         const dateStr = new Date().toISOString().split('T')[0];
         const includeSubtasks = exportOption === 'all';
-        
+        const safeTitle = listTitle.replace(/[^a-z0-9]/gi, '-').toLowerCase();
+
         if (exportFormat === 'pdf') {
-            exportToPDF(tasksToExport, `todo-list-${dateStr}.pdf`, includeSubtasks);
+            exportToPDF(tasksToExport, `${safeTitle}-${dateStr}.pdf`, includeSubtasks, listType, listTitle);
         } else if (exportFormat === 'excel') {
-            exportToExcel(tasksToExport, `todo-list-${dateStr}.xlsx`, includeSubtasks);
+            exportToExcel(tasksToExport, `${safeTitle}-${dateStr}.xlsx`, includeSubtasks);
         } else {
             const exportData = {
                 version: '1.0',
                 exportedAt: new Date().toISOString(),
                 tasks: tasksToExport
             };
-            
+
             const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `todo-list-${dateStr}.json`;
+            a.download = `${safeTitle}-${dateStr}.json`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         }
-        
+
         if (exportModal) {
             exportModal.classList.add('hidden');
             document.body.style.overflow = '';
