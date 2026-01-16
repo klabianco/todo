@@ -179,9 +179,7 @@ export const init = async () => {
         }
     }
     
-    await renderTasks();
-
-    // Apply list type behaviors for shared lists
+    // Apply list type behaviors BEFORE rendering (so showTimes/showLocations are set)
     if (isSharedList) {
         const listType = storage.getListType();
         applyListTypeBehaviors(listType);
@@ -192,6 +190,8 @@ export const init = async () => {
             storage.setListTitle(settings.personalListTitle);
         }
     }
+
+    await renderTasks();
 
     // Update the list title to show which list we're viewing
     updateListTitle();
