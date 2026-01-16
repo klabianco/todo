@@ -808,6 +808,27 @@ const setupEventListeners = async () => {
         });
     }
 
+    // Chime toggle and test button
+    const chimeToggle = document.getElementById('chime-toggle');
+    const testChimeButton = document.getElementById('test-chime-button');
+
+    if (chimeToggle) {
+        chimeToggle.addEventListener('click', () => {
+            chimeEnabled = !chimeEnabled;
+            localStorage.setItem(CHIME_ENABLED_KEY, chimeEnabled ? '1' : '0');
+            updateChimeToggleUI();
+        });
+    }
+
+    if (testChimeButton) {
+        testChimeButton.addEventListener('click', () => {
+            playScheduleChime();
+        });
+    }
+
+    // Initialize chime UI
+    updateChimeToggleUI();
+
     // Grocery store dropdown
     await initializeGroceryStoreDropdown();
     
@@ -881,6 +902,38 @@ const updateListTitle = () => {
     if (aiTitleButton) aiTitleButton.classList.remove('hidden');
 };
 
+// Update chime toggle UI to reflect current state
+const updateChimeToggleUI = () => {
+    const chimeOnIcon = document.getElementById('chime-on-icon');
+    const chimeOffIcon = document.getElementById('chime-off-icon');
+    const chimeToggle = document.getElementById('chime-toggle');
+
+    if (chimeOnIcon && chimeOffIcon) {
+        if (chimeEnabled) {
+            chimeOnIcon.classList.remove('hidden');
+            chimeOffIcon.classList.add('hidden');
+            if (chimeToggle) chimeToggle.title = 'Chime enabled - click to disable';
+        } else {
+            chimeOnIcon.classList.add('hidden');
+            chimeOffIcon.classList.remove('hidden');
+            if (chimeToggle) chimeToggle.title = 'Chime disabled - click to enable';
+        }
+    }
+};
+
+// Show/hide chime settings based on list type
+const updateChimeSettingsVisibility = (listType) => {
+    const chimeSettings = document.getElementById('chime-settings');
+    if (chimeSettings) {
+        if (listType === 'schedule') {
+            chimeSettings.classList.remove('hidden');
+            updateChimeToggleUI();
+        } else {
+            chimeSettings.classList.add('hidden');
+        }
+    }
+};
+
 // Apply list-type-specific behaviors (auto-enable toggles, show/hide time input, update badge, etc.)
 const applyListTypeBehaviors = (listType) => {
     const showLocationsToggle = document.getElementById('show-locations-toggle');
@@ -892,6 +945,9 @@ const applyListTypeBehaviors = (listType) => {
     const importTextButton = document.getElementById('import-text-button');
     const groceryStoreSelect = document.getElementById('grocery-store-select');
     const locationsLabel = showLocationsToggle?.parentElement;
+
+    // Show/hide chime settings based on list type
+    updateChimeSettingsVisibility(listType);
 
     // Update the list type badge
     if (listTypeBadge) {
@@ -1145,6 +1201,10 @@ let scheduleClockInterval = null;
 let currentScheduleTasks = [];
 let previousCurrentEventId = null;
 
+// Chime settings
+const CHIME_ENABLED_KEY = 'todo_schedule_chime_enabled';
+let chimeEnabled = localStorage.getItem(CHIME_ENABLED_KEY) !== '0'; // Default enabled
+
 // Play a soft, gentle chime using Web Audio API
 const playScheduleChime = () => {
     try {
@@ -1198,8 +1258,10 @@ const updateScheduleNowHeader = (tasks) => {
     // Check if the current event has changed (a new activity has started)
     const currentEventId = currentEvent ? currentEvent.id : null;
     if (previousCurrentEventId !== null && currentEventId !== previousCurrentEventId && currentEventId !== null) {
-        // A new event has started - play chime
-        playScheduleChime();
+        // A new event has started - play chime if enabled
+        if (chimeEnabled) {
+            playScheduleChime();
+        }
     }
     previousCurrentEventId = currentEventId;
 

@@ -2,7 +2,7 @@
 require __DIR__ . '/../config/config.php';
 require __DIR__ . '/includes/head.php';
 require __DIR__ . '/includes/footer.php';
-require __DIR__ . '/includes/theme-toggle.php';
+require __DIR__ . '/includes/settings-bar.php';
 require __DIR__ . '/includes/container.php';
 
 // Get page title - check for shared list
@@ -111,7 +111,6 @@ renderContainerStart();
                     </button>
                 </div>
                 <input type="file" id="import-file-input" accept=".json" class="hidden">
-                <?php renderThemeToggle(); ?>
                 <div id="share-url-container" class="hidden mt-2 bg-gray-100 p-2 rounded-md max-w-md mx-auto dark:bg-gray-800">
                     <div class="flex items-center">
                         <input id="share-url" type="text" readonly class="bg-white px-2 py-1 rounded text-sm flex-grow mr-2 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200" />
@@ -459,7 +458,9 @@ renderContainerStart();
         </div>
         
     <?php renderContainerEnd(); ?>
-    
+
+    <?php renderSettingsBar(); ?>
+
     <?php renderFooter(); ?>
     
     <script>
