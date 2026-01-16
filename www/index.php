@@ -111,7 +111,7 @@ renderContainerStart();
                 >
                 <button
                     type="submit"
-                    class="bg-gray-900 hover:bg-black dark:bg-white dark:hover:bg-gray-100 dark:text-gray-900 text-white py-3 px-6 rounded-r-xl transition-colors font-medium"
+                    class="bg-gray-900 hover:bg-black dark:bg-white dark:hover:bg-gray-100 dark:text-gray-900 text-white py-3 px-6 rounded-r-xl transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400 dark:disabled:bg-gray-600 dark:disabled:text-gray-400"
                 >
                     Add
                 </button>
