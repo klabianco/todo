@@ -122,8 +122,8 @@ renderContainerStart();
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-3">
                         <div class="text-2xl font-semibold text-blue-600 dark:text-blue-400" id="schedule-current-time">--:-- --</div>
-                        <div class="text-gray-600 dark:text-gray-300" id="schedule-current-event">
-                            <span class="text-gray-400 dark:text-gray-500">Loading...</span>
+                        <div class="text-gray-800 dark:text-gray-100" id="schedule-current-event">
+                            <span class="text-gray-500 dark:text-gray-400">Loading...</span>
                         </div>
                     </div>
                 </div>
