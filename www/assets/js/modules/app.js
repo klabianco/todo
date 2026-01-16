@@ -1134,15 +1134,24 @@ const formatTimeForDisplay = (timeStr) => {
     return `${h12}:${minutes} ${ampm}`;
 };
 
+// Real-time clock interval for schedule header
+let scheduleClockInterval = null;
+let currentScheduleTasks = [];
+
 // Update the schedule "Now" header with current time and event info
 const updateScheduleNowHeader = (tasks) => {
+    // Store tasks for real-time updates
+    if (tasks) {
+        currentScheduleTasks = tasks;
+    }
+
     const header = document.getElementById('schedule-now-header');
     if (!header) return;
 
     const now = new Date();
     const currentTimeStr = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 
-    const { currentEvent, nextEvent } = getCurrentScheduleEvent(tasks);
+    const { currentEvent, nextEvent } = getCurrentScheduleEvent(currentScheduleTasks);
 
     const timeEl = header.querySelector('#schedule-current-time');
     const eventEl = header.querySelector('#schedule-current-event');
@@ -1160,6 +1169,22 @@ const updateScheduleNowHeader = (tasks) => {
         } else {
             eventEl.innerHTML = `<span class="text-gray-400 dark:text-gray-500">No upcoming events</span>`;
         }
+    }
+};
+
+// Start real-time clock for schedule header
+const startScheduleClock = () => {
+    if (scheduleClockInterval) return; // Already running
+    scheduleClockInterval = setInterval(() => {
+        updateScheduleNowHeader();
+    }, 1000);
+};
+
+// Stop real-time clock
+const stopScheduleClock = () => {
+    if (scheduleClockInterval) {
+        clearInterval(scheduleClockInterval);
+        scheduleClockInterval = null;
     }
 };
 
@@ -1187,13 +1212,15 @@ const renderTasks = async () => {
     let activeTasks = 0;
     let completedTasks = 0;
 
-    // Update schedule "Now" header
+    // Update schedule "Now" header and real-time clock
     const scheduleNowHeader = document.getElementById('schedule-now-header');
     if (scheduleNowHeader) {
         if (listType === 'schedule') {
             scheduleNowHeader.classList.remove('hidden');
+            startScheduleClock();
         } else {
             scheduleNowHeader.classList.add('hidden');
+            stopScheduleClock();
         }
     }
 
