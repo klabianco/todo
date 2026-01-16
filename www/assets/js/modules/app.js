@@ -1143,6 +1143,42 @@ const formatTimeForDisplay = (timeStr) => {
 // Real-time clock interval for schedule header
 let scheduleClockInterval = null;
 let currentScheduleTasks = [];
+let previousCurrentEventId = null;
+
+// Play a soft, gentle chime using Web Audio API
+const playScheduleChime = () => {
+    try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+        // Create a gentle bell-like chime with two tones
+        const playTone = (frequency, startTime, duration) => {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(frequency, startTime);
+
+            // Gentle envelope: quick attack, slow decay
+            gainNode.gain.setValueAtTime(0, startTime);
+            gainNode.gain.linearRampToValueAtTime(0.15, startTime + 0.02);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+
+            oscillator.start(startTime);
+            oscillator.stop(startTime + duration);
+        };
+
+        const now = audioContext.currentTime;
+        // Two soft ascending tones for a pleasant chime
+        playTone(523.25, now, 0.4);         // C5
+        playTone(659.25, now + 0.15, 0.5);  // E5
+
+    } catch (error) {
+        console.log('Could not play chime:', error);
+    }
+};
 
 // Update the schedule "Now" header with current time and event info
 const updateScheduleNowHeader = (tasks) => {
@@ -1158,6 +1194,14 @@ const updateScheduleNowHeader = (tasks) => {
     const currentTimeStr = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 
     const { currentEvent, nextEvent } = getCurrentScheduleEvent(currentScheduleTasks);
+
+    // Check if the current event has changed (a new activity has started)
+    const currentEventId = currentEvent ? currentEvent.id : null;
+    if (previousCurrentEventId !== null && currentEventId !== previousCurrentEventId && currentEventId !== null) {
+        // A new event has started - play chime
+        playScheduleChime();
+    }
+    previousCurrentEventId = currentEventId;
 
     const timeEl = header.querySelector('#schedule-current-time');
     const eventEl = header.querySelector('#schedule-current-event');
@@ -1205,6 +1249,8 @@ const stopScheduleClock = () => {
         clearInterval(scheduleClockInterval);
         scheduleClockInterval = null;
     }
+    // Reset previous event tracking to prevent false triggers when returning to schedule
+    previousCurrentEventId = null;
 };
 
 // Render all tasks
