@@ -2,7 +2,6 @@
 require __DIR__ . '/../config/config.php';
 require __DIR__ . '/includes/head.php';
 require __DIR__ . '/includes/footer.php';
-require __DIR__ . '/includes/settings-bar.php';
 require __DIR__ . '/includes/container.php';
 
 // Get page title - check for shared list
@@ -458,8 +457,6 @@ renderContainerStart();
         </div>
         
     <?php renderContainerEnd(); ?>
-
-    <?php renderSettingsBar(); ?>
 
     <?php renderFooter(); ?>
     
