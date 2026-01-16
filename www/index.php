@@ -21,14 +21,17 @@ if ($shareId) {
             $pageTitle = $list['title'];
         } elseif ($list) {
             // Fallback based on list type
-            $pageTitle = match($list['list_type']) {
-                'schedule' => 'Schedule',
-                'grocery' => 'Grocery List',
-                default => 'Shared List'
-            };
+            $listType = $list['list_type'] ?? 'todo';
+            if ($listType === 'schedule') {
+                $pageTitle = 'Schedule';
+            } elseif ($listType === 'grocery') {
+                $pageTitle = 'Grocery List';
+            } else {
+                $pageTitle = 'Shared List';
+            }
         }
     } catch (Exception $e) {
-        // Silently fail, use default title
+        error_log('Error fetching list title: ' . $e->getMessage());
     }
 }
 
