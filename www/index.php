@@ -116,7 +116,19 @@ renderContainerStart();
                     Add
                 </button>
             </form>
-            
+
+            <!-- Schedule "Now" Header -->
+            <div id="schedule-now-header" class="hidden mb-6 p-4 bg-blue-50 dark:bg-blue-900/30 rounded-xl border border-blue-200 dark:border-blue-800">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="text-2xl font-semibold text-blue-600 dark:text-blue-400" id="schedule-current-time">--:-- --</div>
+                        <div class="text-gray-600 dark:text-gray-300" id="schedule-current-event">
+                            <span class="text-gray-400 dark:text-gray-500">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Task list -->
             <div id="tasks-container">
                 <!-- Active tasks -->

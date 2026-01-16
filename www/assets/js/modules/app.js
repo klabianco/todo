@@ -1084,6 +1084,86 @@ const sortTasksByTime = (taskArray) => {
     });
 };
 
+// Calculate end times for sorted schedule tasks (end = next task's start - 1 second)
+const addCalculatedEndTimes = (sortedTasks) => {
+    return sortedTasks.map((task, index) => {
+        const nextTask = sortedTasks[index + 1];
+        let endTime = null;
+        if (nextTask && nextTask.scheduledTime) {
+            // End time is 1 second before next task starts (show as same minute for display)
+            endTime = nextTask.scheduledTime;
+        }
+        return { ...task, endTime };
+    });
+};
+
+// Get current/next event for schedule "Now" header
+const getCurrentScheduleEvent = (tasks) => {
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+    let currentEvent = null;
+    let nextEvent = null;
+
+    for (let i = 0; i < tasks.length; i++) {
+        const task = tasks[i];
+        const taskMinutes = timeToMinutes(task.scheduledTime);
+        const nextTask = tasks[i + 1];
+        const nextTaskMinutes = nextTask ? timeToMinutes(nextTask.scheduledTime) : Infinity;
+
+        if (taskMinutes <= currentMinutes && currentMinutes < nextTaskMinutes) {
+            currentEvent = task;
+            nextEvent = nextTask || null;
+            break;
+        } else if (taskMinutes > currentMinutes) {
+            nextEvent = task;
+            break;
+        }
+    }
+
+    return { currentEvent, nextEvent };
+};
+
+// Format time for display (HH:MM -> h:MM AM/PM)
+const formatTimeForDisplay = (timeStr) => {
+    if (!timeStr) return '';
+    const [hours, minutes] = timeStr.split(':');
+    const h = parseInt(hours, 10);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const h12 = h % 12 || 12;
+    return `${h12}:${minutes} ${ampm}`;
+};
+
+// Update the schedule "Now" header with current time and event info
+const updateScheduleNowHeader = (tasks) => {
+    const header = document.getElementById('schedule-now-header');
+    if (!header) return;
+
+    const now = new Date();
+    const currentTimeStr = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+
+    const { currentEvent, nextEvent } = getCurrentScheduleEvent(tasks);
+
+    const timeEl = header.querySelector('#schedule-current-time');
+    const eventEl = header.querySelector('#schedule-current-event');
+
+    if (timeEl) {
+        timeEl.textContent = currentTimeStr;
+    }
+
+    if (eventEl) {
+        if (currentEvent) {
+            const endTimeStr = currentEvent.endTime ? ` until ${formatTimeForDisplay(currentEvent.endTime)}` : '';
+            eventEl.innerHTML = `<span class="font-medium">Now:</span> ${currentEvent.task}${endTimeStr}`;
+        } else if (nextEvent) {
+            const startTimeStr = formatTimeForDisplay(nextEvent.scheduledTime);
+            eventEl.innerHTML = `<span class="font-medium">Next:</span> ${nextEvent.task} at ${startTimeStr}`;
+        } else {
+            eventEl.innerHTML = `<span class="text-gray-400 dark:text-gray-500">No upcoming events</span>`;
+        }
+    }
+};
+
 // Render all tasks
 const renderTasks = async () => {
     const allTasks = await storage.loadTasks();
@@ -1108,6 +1188,16 @@ const renderTasks = async () => {
     let activeTasks = 0;
     let completedTasks = 0;
 
+    // Update schedule "Now" header
+    const scheduleNowHeader = document.getElementById('schedule-now-header');
+    if (scheduleNowHeader) {
+        if (listType === 'schedule') {
+            scheduleNowHeader.classList.remove('hidden');
+        } else {
+            scheduleNowHeader.classList.add('hidden');
+        }
+    }
+
     if (currentFocusedTaskId) {
         const result = utils.findTaskById(allTasks, currentFocusedTaskId);
 
@@ -1117,10 +1207,12 @@ const renderTasks = async () => {
             let activeSubtasks = subtasks.filter(st => !st.completed);
             let completedSubtasks = subtasks.filter(st => st.completed);
 
-            // Auto-sort by time for schedule-type lists
+            // Auto-sort by time and calculate end times for schedule-type lists
             if (listType === 'schedule') {
-                activeSubtasks = sortTasksByTime(activeSubtasks);
-                completedSubtasks = sortTasksByTime(completedSubtasks);
+                activeSubtasks = addCalculatedEndTimes(sortTasksByTime(activeSubtasks));
+                completedSubtasks = addCalculatedEndTimes(sortTasksByTime(completedSubtasks));
+                // Update Now header
+                updateScheduleNowHeader(activeSubtasks);
             }
 
             activeSubtasks.forEach(subtask => {
@@ -1150,10 +1242,12 @@ const renderTasks = async () => {
         let activeTopLevelTasks = utils.filterTasks(allTopLevelTasks, { completed: false });
         let completedTopLevelTasks = utils.filterTasks(allTopLevelTasks, { completed: true });
 
-        // Auto-sort by time for schedule-type lists
+        // Auto-sort by time and calculate end times for schedule-type lists
         if (listType === 'schedule') {
-            activeTopLevelTasks = sortTasksByTime(activeTopLevelTasks);
-            completedTopLevelTasks = sortTasksByTime(completedTopLevelTasks);
+            activeTopLevelTasks = addCalculatedEndTimes(sortTasksByTime(activeTopLevelTasks));
+            completedTopLevelTasks = addCalculatedEndTimes(sortTasksByTime(completedTopLevelTasks));
+            // Update Now header
+            updateScheduleNowHeader(activeTopLevelTasks);
         }
 
         activeTopLevelTasks.forEach(task => {
