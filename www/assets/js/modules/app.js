@@ -554,6 +554,7 @@ const setupEventListeners = async () => {
                 const success = await storage.updateListTitleOnServer(newTitle);
                 if (success) {
                     listTitleElement.textContent = newTitle;
+                    document.title = newTitle;
                 }
             }
             editTitleContainer.classList.add('hidden');
@@ -617,6 +618,7 @@ const setupEventListeners = async () => {
                     const success = await storage.updateListTitleOnServer(result.title);
                     if (success && listTitleElement) {
                         listTitleElement.textContent = result.title;
+                        document.title = result.title;
                     }
                 }
             } catch (error) {
@@ -852,23 +854,27 @@ const updateListTitle = () => {
 
     // Get the stored title (works for both personal and shared lists)
     const listTitle = storage.getListTitle();
+    let displayTitle = '';
 
     if (listTitle) {
-        listTitleElement.textContent = listTitle;
+        displayTitle = listTitle;
     } else if (storage.getIsSharedList()) {
         // Fallback for older shared lists without a title
         const listType = storage.getListType();
         if (listType === 'schedule') {
-            listTitleElement.textContent = 'Schedule';
+            displayTitle = 'Schedule';
         } else if (listType === 'grocery') {
-            listTitleElement.textContent = 'Grocery List';
+            displayTitle = 'Grocery List';
         } else {
-            listTitleElement.textContent = 'Shared List';
+            displayTitle = 'Shared List';
         }
     } else {
         // Default for personal list
-        listTitleElement.textContent = 'My List';
+        displayTitle = 'My List';
     }
+
+    listTitleElement.textContent = displayTitle;
+    document.title = displayTitle;
 
     // Always show edit and AI title buttons
     if (editTitleButton) editTitleButton.classList.remove('hidden');
