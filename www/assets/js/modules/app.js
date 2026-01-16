@@ -385,7 +385,7 @@ const setupEventListeners = async () => {
                 let taskText = inputText;
                 let scheduledTime = taskTimeInput ? taskTimeInput.value : null;
 
-                // For schedule lists, use AI to parse natural language input
+                // For schedule lists, use AI to parse natural language input (supports multiple tasks)
                 if (storage.getListType() === 'schedule') {
                     const submitButton = ui.domElements.taskForm.querySelector('button[type="submit"]');
                     try {
@@ -401,8 +401,21 @@ const setupEventListeners = async () => {
 
                         if (response.ok) {
                             const result = await response.json();
-                            taskText = result.task || inputText;
-                            scheduledTime = result.scheduledTime || null;
+                            if (result.tasks && result.tasks.length > 0) {
+                                // Add all parsed tasks
+                                for (const parsedTask of result.tasks) {
+                                    await tasks.addTask(
+                                        parsedTask.task,
+                                        focusMode.getCurrentFocusedTaskId(),
+                                        parsedTask.scheduledTime || null
+                                    );
+                                }
+                                await renderTasks();
+                                ui.domElements.taskInput.value = '';
+                                if (taskTimeInput) taskTimeInput.value = '';
+                                ui.domElements.taskInput.focus();
+                                return; // Exit early, we've handled everything
+                            }
                         }
                     } catch (error) {
                         console.error('Failed to parse task:', error);
@@ -414,6 +427,7 @@ const setupEventListeners = async () => {
                     }
                 }
 
+                // Fallback for non-schedule lists or if parsing failed
                 await tasks.addTask(taskText, focusMode.getCurrentFocusedTaskId(), scheduledTime || null);
                 await renderTasks();
                 ui.domElements.taskInput.value = '';

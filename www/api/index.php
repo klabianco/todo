@@ -1148,7 +1148,7 @@ switch ($resource) {
         break;
 
     case 'parse-task':
-        // AI-powered single task parsing - extracts time from natural language
+        // AI-powered task parsing - extracts tasks and times from natural language (supports multiple)
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             json_response(['error' => 'Method not allowed'], 405);
         }
@@ -1167,15 +1167,17 @@ switch ($resource) {
         try {
             global $aiModelFallbacks;
 
-            $systemMessage = "You are a task parser. Extract the task description and time from natural language input. Be concise.";
+            $systemMessage = "You are a task parser. Extract tasks and times from natural language input. Return a JSON array.";
 
-            $prompt = "Parse this into a task with optional time:\n\"" . $text . "\"\n\n" .
-                      "Return JSON: {\"task\": \"task description without time\", \"scheduledTime\": \"HH:MM or null\"}\n\n" .
+            $prompt = "Parse this into one or more tasks with times:\n\"" . $text . "\"\n\n" .
+                      "Return JSON: {\"tasks\": [{\"task\": \"description\", \"scheduledTime\": \"HH:MM or null\"}, ...]}\n\n" .
                       "Rules:\n" .
-                      "- Remove time references from the task text\n" .
-                      "- Convert times like '9am', '2:30pm', 'noon', 'midnight' to HH:MM (24-hour)\n" .
-                      "- If no time found, set scheduledTime to null\n" .
-                      "- Keep the task text natural and clean";
+                      "- Split multiple tasks (separated by periods, commas, 'and', or newlines)\n" .
+                      "- Remove time references from each task text\n" .
+                      "- Convert times like '8 o'clock p.m.', '5pm', '8:30', 'noon' to HH:MM (24-hour format)\n" .
+                      "- If no time found for a task, set scheduledTime to null\n" .
+                      "- Keep task text natural and clean (capitalize first letter)\n" .
+                      "- Always return an array, even for single tasks";
 
             $ai = new AI();
             $ai->setJsonResponse(true);
@@ -1191,15 +1193,23 @@ switch ($resource) {
 
             $result = parse_ai_json_response($response);
 
-            if ($result === null || !isset($result['task'])) {
+            if ($result === null || !isset($result['tasks']) || !is_array($result['tasks'])) {
                 error_log('AI parse-task invalid response: ' . substr($response, 0, 500));
                 json_response(['error' => 'Failed to parse AI response'], 500);
             }
 
-            json_response([
-                'task' => trim($result['task']),
-                'scheduledTime' => $result['scheduledTime'] ?? null
-            ]);
+            // Clean up tasks
+            $tasks = [];
+            foreach ($result['tasks'] as $task) {
+                if (!empty($task['task'])) {
+                    $tasks[] = [
+                        'task' => trim($task['task']),
+                        'scheduledTime' => $task['scheduledTime'] ?? null
+                    ];
+                }
+            }
+
+            json_response(['tasks' => $tasks]);
         } catch (Exception $e) {
             error_log('AI parse-task error: ' . $e->getMessage());
             json_response(['error' => 'Parse failed: ' . $e->getMessage()], 500);
