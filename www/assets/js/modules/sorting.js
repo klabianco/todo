@@ -162,11 +162,30 @@ export const enableAllInteractions = () => {
     hideLoadingOverlay();
 };
 
+// Helper to convert time string (HH:MM) to minutes for sorting
+const timeToMinutes = (timeStr) => {
+    if (!timeStr || typeof timeStr !== 'string') return Infinity;
+    const match = timeStr.match(/^(\d{1,2}):(\d{2})$/);
+    if (!match) return Infinity;
+    return parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
+};
+
+// Sort tasks by scheduledTime
+const sortTasksByTime = (taskArray) => {
+    return [...taskArray].sort((a, b) => {
+        const aMinutes = timeToMinutes(a.scheduledTime);
+        const bMinutes = timeToMinutes(b.scheduledTime);
+        return aMinutes - bMinutes;
+    });
+};
+
 // Handle AI sort button click
 export const handleAISortClick = async (currentFocusedTaskId, renderTasks) => {
     const aiSortButton = document.getElementById('ai-sort-button');
     if (!aiSortButton) return;
-    
+
+    const listType = storage.getListType();
+
     const loadingHTML = `
         <svg class="animate-spin h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -174,67 +193,74 @@ export const handleAISortClick = async (currentFocusedTaskId, renderTasks) => {
         </svg>
         Sorting...
     `;
-    
+
     const originalText = setButtonLoading(aiSortButton, loadingHTML);
     if (!originalText) return;
-    
+
     disableAllInteractions();
-    
+
     try {
         const allTasks = await storage.loadTasks();
         const sortInfo = getTasksToSort(allTasks, currentFocusedTaskId);
-        
+
         if (!sortInfo) {
             enableAllInteractions();
             restoreButtonState(aiSortButton, originalText);
             return;
         }
-        
+
         const { active: tasksToSort, completed: completedTasksToPreserve } = separateTasks(sortInfo.tasks);
-        
+
         if (tasksToSort.length === 0) {
             enableAllInteractions();
             restoreButtonState(aiSortButton, originalText);
             return;
         }
-        
-        // Get selected store and fetch full store data if available
-        const selectedStore = groceryStores.getSelectedGroceryStore();
-        let storeData = null;
-        if (selectedStore && selectedStore.id) {
-            try {
-                const stores = await groceryStores.loadGroceryStores();
-                const fullStore = stores.find(s => s.id === selectedStore.id);
-                if (fullStore && fullStore.aisle_layout) {
-                    storeData = {
-                        id: fullStore.id,
-                        name: fullStore.name,
-                        aisle_layout: fullStore.aisle_layout
-                    };
+
+        let sortedActiveTasks;
+
+        // For schedule lists, sort by time (no AI needed)
+        if (listType === 'schedule') {
+            sortedActiveTasks = sortTasksByTime(tasksToSort);
+        } else {
+            // Get selected store and fetch full store data if available
+            const selectedStore = groceryStores.getSelectedGroceryStore();
+            let storeData = null;
+            if (selectedStore && selectedStore.id) {
+                try {
+                    const stores = await groceryStores.loadGroceryStores();
+                    const fullStore = stores.find(s => s.id === selectedStore.id);
+                    if (fullStore && fullStore.aisle_layout) {
+                        storeData = {
+                            id: fullStore.id,
+                            name: fullStore.name,
+                            aisle_layout: fullStore.aisle_layout
+                        };
+                    }
+                } catch (error) {
+                    console.error('Error loading store data for sorting:', error);
                 }
-            } catch (error) {
-                console.error('Error loading store data for sorting:', error);
             }
+
+            // Call AI aisle assignment API, then sort programmatically
+            const response = await fetch('/api/sort', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    tasks: tasksToSort,
+                    store: storeData
+                })
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Sort API error:', errorText);
+                throw new Error(`Failed to sort tasks: ${response.status}`);
+            }
+
+            const { tasks: annotatedActiveTasks = tasksToSort } = await response.json();
+            sortedActiveTasks = sortTasksByLocation(annotatedActiveTasks);
         }
-        
-        // Call AI aisle assignment API, then sort programmatically
-        const response = await fetch('/api/sort', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                tasks: tasksToSort,
-                store: storeData
-            })
-        });
-        
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Sort API error:', errorText);
-            throw new Error(`Failed to sort tasks: ${response.status}`);
-        }
-        
-        const { tasks: annotatedActiveTasks = tasksToSort } = await response.json();
-        const sortedActiveTasks = sortTasksByLocation(annotatedActiveTasks);
         
         // Reload and update tasks
         const updatedTasks = await storage.loadTasks();

@@ -919,9 +919,9 @@ const applyListTypeBehaviors = (listType) => {
             taskInput.classList.add('rounded-l-lg');
             taskInput.placeholder = 'e.g., "Meeting at 3pm" or "Lunch with team at noon"';
         }
-        // Show import button and times toggle for schedules, hide other controls
+        // Show import button, sort button, and times toggle for schedules, hide other controls
         if (importTextButton) importTextButton.classList.remove('hidden');
-        if (aiSortButton) aiSortButton.classList.add('hidden');
+        if (aiSortButton) aiSortButton.classList.remove('hidden');
         if (groceryStoreSelect) groceryStoreSelect.classList.add('hidden');
         if (locationsLabel) locationsLabel.classList.add('hidden');
         if (timesLabel) timesLabel.classList.remove('hidden');
