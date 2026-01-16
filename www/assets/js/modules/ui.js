@@ -189,27 +189,16 @@ export const createTaskElement = (
 
     // Optional time badge (toggleable; when ON show N/A if not assigned)
     if (showTimes) {
-        const startTime = task?.scheduledTime || '';
-        const endTime = task?.endTime || '';
-        const hasTime = startTime.trim() !== '';
-
-        // Format time for display (HH:MM -> h:MM AM/PM)
-        const formatTime = (timeStr) => {
-            if (!timeStr) return '';
-            const [hours, minutes] = timeStr.split(':');
+        const timeRaw = task?.scheduledTime || '';
+        const hasTime = timeRaw.trim() !== '';
+        let timeLabel = 'N/A';
+        if (hasTime) {
+            // Format time for display (HH:MM -> h:MM AM/PM)
+            const [hours, minutes] = timeRaw.split(':');
             const h = parseInt(hours, 10);
             const ampm = h >= 12 ? 'PM' : 'AM';
             const h12 = h % 12 || 12;
-            return `${h12}:${minutes} ${ampm}`;
-        };
-
-        let timeLabel = 'N/A';
-        if (hasTime) {
-            timeLabel = formatTime(startTime);
-            // Show range if end time exists
-            if (endTime) {
-                timeLabel += ` - ${formatTime(endTime)}`;
-            }
+            timeLabel = `${h12}:${minutes} ${ampm}`;
         }
 
         const timeBadge = document.createElement('span');
