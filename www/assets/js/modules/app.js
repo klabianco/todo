@@ -1162,12 +1162,12 @@ const updateScheduleNowHeader = (tasks) => {
 
     if (eventEl) {
         if (currentEvent) {
-            eventEl.innerHTML = `<span class="font-medium">Now:</span> ${currentEvent.task}`;
+            eventEl.textContent = currentEvent.task;
         } else if (nextEvent) {
             const startTimeStr = formatTimeForDisplay(nextEvent.scheduledTime);
-            eventEl.innerHTML = `<span class="font-medium">Next:</span> ${nextEvent.task} at ${startTimeStr}`;
+            eventEl.innerHTML = `<span class="text-gray-500 dark:text-gray-400">Next:</span> ${nextEvent.task} at ${startTimeStr}`;
         } else {
-            eventEl.innerHTML = `<span class="text-gray-400 dark:text-gray-500">No upcoming events</span>`;
+            eventEl.innerHTML = `<span class="text-gray-500 dark:text-gray-400">No upcoming events</span>`;
         }
     }
 };
