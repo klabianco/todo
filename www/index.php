@@ -4,8 +4,35 @@ require __DIR__ . '/includes/head.php';
 require __DIR__ . '/includes/footer.php';
 require __DIR__ . '/includes/theme-toggle.php';
 require __DIR__ . '/includes/container.php';
+require __DIR__ . '/api/db/Database.php';
 
-renderHead('Todo', ['sortablejs', 'jspdf', 'xlsx'], true);
+// Get page title - check for shared list
+$pageTitle = 'Todo';
+$shareId = $_GET['share'] ?? null;
+
+if ($shareId) {
+    try {
+        $db = Database::getInstance();
+        $stmt = $db->prepare('SELECT title, list_type FROM lists WHERE share_id = ?');
+        $stmt->execute([$shareId]);
+        $list = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($list && !empty($list['title'])) {
+            $pageTitle = $list['title'];
+        } elseif ($list) {
+            // Fallback based on list type
+            $pageTitle = match($list['list_type']) {
+                'schedule' => 'Schedule',
+                'grocery' => 'Grocery List',
+                default => 'Shared List'
+            };
+        }
+    } catch (Exception $e) {
+        // Silently fail, use default title
+    }
+}
+
+renderHead($pageTitle, ['sortablejs', 'jspdf', 'xlsx'], true);
 renderContainerStart();
 ?>
         <header class="text-center mb-8">

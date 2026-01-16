@@ -23,6 +23,12 @@ function renderHead($title = 'Todo', $extraScripts = [], $includeThemeScript = f
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title><?php echo htmlspecialchars($title); ?></title>
+    <!-- Open Graph meta tags for social sharing -->
+    <meta property="og:title" content="<?php echo htmlspecialchars($title); ?>">
+    <meta property="og:type" content="website">
+    <meta property="og:description" content="<?php echo htmlspecialchars($title); ?>">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="<?php echo htmlspecialchars($title); ?>">
     <!-- Tailwind CSS (production version) -->
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <?php foreach ($scriptsToInclude as $script): ?>
