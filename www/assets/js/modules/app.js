@@ -919,12 +919,12 @@ const applyListTypeBehaviors = (listType) => {
             taskInput.classList.add('rounded-l-lg');
             taskInput.placeholder = 'e.g., "Meeting at 3pm" or "Lunch with team at noon"';
         }
-        // Show import button for schedules, hide other controls
+        // Show import button and times toggle for schedules, hide other controls
         if (importTextButton) importTextButton.classList.remove('hidden');
         if (aiSortButton) aiSortButton.classList.add('hidden');
         if (groceryStoreSelect) groceryStoreSelect.classList.add('hidden');
         if (locationsLabel) locationsLabel.classList.add('hidden');
-        if (timesLabel) timesLabel.classList.add('hidden');
+        if (timesLabel) timesLabel.classList.remove('hidden');
     } else if (listType === 'grocery') {
         // Grocery: auto-enable locations, show grocery controls, hide time input
         ui.setShowLocations(true);
