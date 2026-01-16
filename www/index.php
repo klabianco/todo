@@ -4,7 +4,7 @@ require __DIR__ . '/includes/head.php';
 require __DIR__ . '/includes/footer.php';
 require __DIR__ . '/includes/theme-toggle.php';
 require __DIR__ . '/includes/container.php';
-require __DIR__ . '/api/db/Database.php';
+require __DIR__ . '/api/db/database.php';
 
 // Get page title - check for shared list
 $pageTitle = 'Todo';
