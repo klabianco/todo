@@ -1153,8 +1153,7 @@ const updateScheduleNowHeader = (tasks) => {
 
     if (eventEl) {
         if (currentEvent) {
-            const endTimeStr = currentEvent.endTime ? ` until ${formatTimeForDisplay(currentEvent.endTime)}` : '';
-            eventEl.innerHTML = `<span class="font-medium">Now:</span> ${currentEvent.task}${endTimeStr}`;
+            eventEl.innerHTML = `<span class="font-medium">Now:</span> ${currentEvent.task}`;
         } else if (nextEvent) {
             const startTimeStr = formatTimeForDisplay(nextEvent.scheduledTime);
             eventEl.innerHTML = `<span class="font-medium">Next:</span> ${nextEvent.task} at ${startTimeStr}`;
