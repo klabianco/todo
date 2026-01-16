@@ -4,7 +4,6 @@ require __DIR__ . '/includes/head.php';
 require __DIR__ . '/includes/footer.php';
 require __DIR__ . '/includes/theme-toggle.php';
 require __DIR__ . '/includes/container.php';
-require __DIR__ . '/api/db/database.php';
 
 // Get page title - check for shared list
 $pageTitle = 'Todo';
@@ -12,8 +11,23 @@ $shareId = $_GET['share'] ?? null;
 
 if ($shareId) {
     try {
-        $db = Database::getInstance();
-        $stmt = $db->prepare('SELECT title, list_type FROM lists WHERE share_id = ?');
+        // Connect to database using environment variables from config.php
+        $driver = $_SERVER['DB_DRIVER'] ?? 'sqlite';
+
+        if ($driver === 'mysql') {
+            $host = $_SERVER['DB_HOST'] ?? 'localhost';
+            $port = $_SERVER['DB_PORT'] ?? '3306';
+            $dbname = $_SERVER['DB_NAME'] ?? 'todo';
+            $user = $_SERVER['DB_USER'] ?? 'root';
+            $pass = $_SERVER['DB_PASS'] ?? '';
+            $dsn = "mysql:host={$host};port={$port};dbname={$dbname};charset=utf8mb4";
+            $db = new PDO($dsn, $user, $pass, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+        } else {
+            $dbPath = __DIR__ . '/api/db/todo.db';
+            $db = new PDO("sqlite:{$dbPath}", null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+        }
+
+        $stmt = $db->prepare('SELECT title, list_type FROM lists WHERE id = ?');
         $stmt->execute([$shareId]);
         $list = $stmt->fetch(PDO::FETCH_ASSOC);
 
