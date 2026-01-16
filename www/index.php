@@ -53,7 +53,7 @@ renderContainerStart();
 ?>
         <header class="text-center mb-8">
             <div class="flex items-center justify-center gap-2">
-                <h1 id="list-title" class="text-2xl font-semibold text-gray-900 dark:text-white">My List</h1>
+                <h1 id="list-title" class="text-2xl font-semibold text-gray-900 dark:text-white">List</h1>
                 <button id="edit-title-button" class="hidden text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-white p-1" title="Edit list name">
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>

@@ -879,19 +879,16 @@ const updateListTitle = () => {
 
     if (listTitle) {
         displayTitle = listTitle;
-    } else if (storage.getIsSharedList()) {
-        // Fallback for older shared lists without a title
+    } else {
+        // Simple fallback based on list type
         const listType = storage.getListType();
         if (listType === 'schedule') {
             displayTitle = 'Schedule';
         } else if (listType === 'grocery') {
-            displayTitle = 'Grocery List';
+            displayTitle = 'Groceries';
         } else {
-            displayTitle = 'Shared List';
+            displayTitle = 'List';
         }
-    } else {
-        // Default for personal list
-        displayTitle = 'My List';
     }
 
     listTitleElement.textContent = displayTitle;
