@@ -379,10 +379,41 @@ const setupEventListeners = async () => {
     if (ui.domElements.taskForm) {
         ui.domElements.taskForm.addEventListener('submit', async e => {
             e.preventDefault();
-            const taskText = ui.domElements.taskInput.value.trim();
-            const scheduledTime = taskTimeInput ? taskTimeInput.value : null;
+            const inputText = ui.domElements.taskInput.value.trim();
 
-            if (taskText) {
+            if (inputText) {
+                let taskText = inputText;
+                let scheduledTime = taskTimeInput ? taskTimeInput.value : null;
+
+                // For schedule lists, use AI to parse natural language input
+                if (storage.getListType() === 'schedule') {
+                    const submitButton = ui.domElements.taskForm.querySelector('button[type="submit"]');
+                    try {
+                        ui.domElements.taskInput.disabled = true;
+                        ui.domElements.taskInput.placeholder = 'Parsing...';
+                        if (submitButton) submitButton.disabled = true;
+
+                        const response = await fetch('/api/parse-task', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ text: inputText })
+                        });
+
+                        if (response.ok) {
+                            const result = await response.json();
+                            taskText = result.task || inputText;
+                            scheduledTime = result.scheduledTime || null;
+                        }
+                    } catch (error) {
+                        console.error('Failed to parse task:', error);
+                        // Fall back to using input as-is
+                    } finally {
+                        ui.domElements.taskInput.disabled = false;
+                        ui.domElements.taskInput.placeholder = 'e.g., "Meeting at 3pm" or "Lunch with team at noon"';
+                        if (submitButton) submitButton.disabled = false;
+                    }
+                }
+
                 await tasks.addTask(taskText, focusMode.getCurrentFocusedTaskId(), scheduledTime || null);
                 await renderTasks();
                 ui.domElements.taskInput.value = '';
@@ -864,16 +895,15 @@ const applyListTypeBehaviors = (listType) => {
     const timesLabel = showTimesToggle?.parentElement;
 
     if (listType === 'schedule') {
-        // Schedule: auto-enable times, show time input and import button, hide other controls
+        // Schedule: auto-enable times, hide time input (AI parses natural language), hide other controls
         ui.setShowTimes(true);
         if (showTimesToggle) showTimesToggle.checked = true;
-        if (taskTimeInput) {
-            taskTimeInput.classList.remove('hidden');
-            // Remove left rounding from task input since time input is now first
-            if (taskInput) {
-                taskInput.classList.remove('rounded-l-lg');
-                taskInput.placeholder = 'Add activity...';
-            }
+        // Hide time input - AI will parse time from natural language
+        if (taskTimeInput) taskTimeInput.classList.add('hidden');
+        // Restore left rounding and set natural language placeholder
+        if (taskInput) {
+            taskInput.classList.add('rounded-l-lg');
+            taskInput.placeholder = 'e.g., "Meeting at 3pm" or "Lunch with team at noon"';
         }
         // Show import button for schedules, hide other controls
         if (importTextButton) importTextButton.classList.remove('hidden');

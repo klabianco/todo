@@ -1147,6 +1147,65 @@ switch ($resource) {
         }
         break;
 
+    case 'parse-task':
+        // AI-powered single task parsing - extracts time from natural language
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            json_response(['error' => 'Method not allowed'], 405);
+        }
+
+        require __DIR__ . '/../../config/config.php';
+        require __DIR__ . '/includes/ai-helpers.php';
+        set_ai_execution_time(30);
+
+        $data = get_request_body();
+        $text = $data['text'] ?? '';
+
+        if (empty(trim($text))) {
+            json_response(['error' => 'Text is required'], 400);
+        }
+
+        try {
+            global $aiModelFallbacks;
+
+            $systemMessage = "You are a task parser. Extract the task description and time from natural language input. Be concise.";
+
+            $prompt = "Parse this into a task with optional time:\n\"" . $text . "\"\n\n" .
+                      "Return JSON: {\"task\": \"task description without time\", \"scheduledTime\": \"HH:MM or null\"}\n\n" .
+                      "Rules:\n" .
+                      "- Remove time references from the task text\n" .
+                      "- Convert times like '9am', '2:30pm', 'noon', 'midnight' to HH:MM (24-hour)\n" .
+                      "- If no time found, set scheduledTime to null\n" .
+                      "- Keep the task text natural and clean";
+
+            $ai = new AI();
+            $ai->setJsonResponse(true);
+            $ai->setSystemMessage($systemMessage);
+            $ai->setPrompt($prompt);
+
+            $response = try_ai_models($ai, $aiModelFallbacks);
+
+            if (is_array($response) && isset($response['error'])) {
+                error_log('AI parse-task failed: ' . $response['error']);
+                json_response(['error' => 'Failed to parse task: ' . $response['error']], 500);
+            }
+
+            $result = parse_ai_json_response($response);
+
+            if ($result === null || !isset($result['task'])) {
+                error_log('AI parse-task invalid response: ' . substr($response, 0, 500));
+                json_response(['error' => 'Failed to parse AI response'], 500);
+            }
+
+            json_response([
+                'task' => trim($result['task']),
+                'scheduledTime' => $result['scheduledTime'] ?? null
+            ]);
+        } catch (Exception $e) {
+            error_log('AI parse-task error: ' . $e->getMessage());
+            json_response(['error' => 'Parse failed: ' . $e->getMessage()], 500);
+        }
+        break;
+
     case 'grocery-stores':
     case 'store-photos':
         // Grocery stores endpoint - shared across all users
