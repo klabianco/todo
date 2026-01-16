@@ -1166,14 +1166,27 @@ const updateScheduleNowHeader = (tasks) => {
         timeEl.textContent = currentTimeStr;
     }
 
+    const nextPreviewEl = header.querySelector('#schedule-next-preview');
+
     if (eventEl) {
         if (currentEvent) {
             eventEl.textContent = currentEvent.task;
+            // Show next preview when there's a current event
+            if (nextPreviewEl) {
+                if (nextEvent) {
+                    const nextTimeStr = formatTimeForDisplay(nextEvent.scheduledTime);
+                    nextPreviewEl.textContent = `Next: ${nextEvent.task} at ${nextTimeStr}`;
+                } else {
+                    nextPreviewEl.textContent = '';
+                }
+            }
         } else if (nextEvent) {
             const startTimeStr = formatTimeForDisplay(nextEvent.scheduledTime);
             eventEl.innerHTML = `<span class="text-gray-500 dark:text-gray-400">Next:</span> ${nextEvent.task} at ${startTimeStr}`;
+            if (nextPreviewEl) nextPreviewEl.textContent = '';
         } else {
             eventEl.innerHTML = `<span class="text-gray-500 dark:text-gray-400">No upcoming events</span>`;
+            if (nextPreviewEl) nextPreviewEl.textContent = '';
         }
     }
 };

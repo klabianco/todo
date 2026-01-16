@@ -146,12 +146,13 @@ renderContainerStart();
 
             <!-- Schedule "Now" Header -->
             <div id="schedule-now-header" class="hidden mb-6 p-4 bg-blue-50 dark:bg-blue-900/30 rounded-xl border border-blue-200 dark:border-blue-800">
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-3">
-                        <div class="text-2xl font-semibold text-blue-600 dark:text-blue-400" id="schedule-current-time">--:-- --</div>
+                <div class="flex items-center gap-3">
+                    <div class="text-2xl font-semibold text-blue-600 dark:text-blue-400" id="schedule-current-time">--:-- --</div>
+                    <div class="flex flex-col">
                         <div class="text-gray-800 dark:text-gray-100" id="schedule-current-event">
                             <span class="text-gray-500 dark:text-gray-400">Loading...</span>
                         </div>
+                        <div class="text-sm text-gray-400 dark:text-gray-500" id="schedule-next-preview"></div>
                     </div>
                 </div>
             </div>
