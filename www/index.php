@@ -453,13 +453,15 @@ renderContainerStart();
                             </div>
                             <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 text-xs text-gray-600 dark:text-gray-400">
                                 <p class="font-medium mb-2">Setup Instructions:</p>
+                                <p class="text-yellow-600 dark:text-yellow-400 mb-2">⚠️ Requires IFTTT Pro subscription</p>
                                 <ol class="list-decimal list-inside space-y-1">
                                     <li>Go to <a href="https://ifttt.com/create" target="_blank" class="text-blue-500 hover:underline">ifttt.com/create</a></li>
-                                    <li>Click "Add" next to "If This" → Choose "Webhooks" → "Receive a web request"</li>
-                                    <li>Enter event name: <code class="bg-gray-200 dark:bg-gray-600 px-1 rounded">schedule_event</code></li>
-                                    <li>Click "Add" next to "Then That" → Choose "Google Assistant" → "Broadcast to all devices"</li>
-                                    <li>Set message to: <code class="bg-gray-200 dark:bg-gray-600 px-1 rounded">{{Value1}}</code></li>
-                                    <li>Get your key from <a href="https://ifttt.com/maker_webhooks/settings" target="_blank" class="text-blue-500 hover:underline">Webhooks settings</a></li>
+                                    <li>"If This" → Search "Webhooks" → Select "Receive a web request"</li>
+                                    <li>Event name: <code class="bg-gray-200 dark:bg-gray-600 px-1 rounded">schedule_event</code></li>
+                                    <li>"Then That" → Search "Google Assistant" → Select "Broadcast to all devices"</li>
+                                    <li>Message: <code class="bg-gray-200 dark:bg-gray-600 px-1 rounded">{{Value1}}</code></li>
+                                    <li>Save, then get your key from <a href="https://ifttt.com/maker_webhooks/settings" target="_blank" class="text-blue-500 hover:underline">Webhooks settings</a></li>
+                                    <li>Your URL: <code class="bg-gray-200 dark:bg-gray-600 px-1 rounded text-xs">https://maker.ifttt.com/trigger/schedule_event/with/key/YOUR_KEY</code></li>
                                 </ol>
                             </div>
                         </div>
