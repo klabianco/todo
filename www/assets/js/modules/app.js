@@ -822,10 +822,8 @@ const setupEventListeners = async () => {
 
     if (testChimeButton) {
         testChimeButton.addEventListener('click', () => {
-            // Test with current event name or a sample message
             const { currentEvent } = getCurrentScheduleEvent(currentScheduleTasks);
-            const eventName = currentEvent ? currentEvent.task : 'your next activity';
-            playScheduleChime(eventName);
+            playScheduleChime(currentEvent?.task || null);
         });
     }
 
