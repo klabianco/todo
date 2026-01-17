@@ -822,7 +822,10 @@ const setupEventListeners = async () => {
 
     if (testChimeButton) {
         testChimeButton.addEventListener('click', () => {
-            playScheduleChime();
+            // Test with current event name or a sample message
+            const { currentEvent } = getCurrentScheduleEvent(currentScheduleTasks);
+            const eventName = currentEvent ? currentEvent.task : 'your next activity';
+            playScheduleChime(eventName);
         });
     }
 
@@ -1202,8 +1205,8 @@ let previousCurrentEventId = null;
 const CHIME_ENABLED_KEY = 'todo_schedule_chime_enabled';
 let chimeEnabled = localStorage.getItem(CHIME_ENABLED_KEY) !== '0'; // Default enabled
 
-// Play a soft, gentle chime using Web Audio API
-const playScheduleChime = () => {
+// Play a soft, gentle chime using Web Audio API (fallback)
+const playChimeSound = () => {
     try {
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
@@ -1237,6 +1240,39 @@ const playScheduleChime = () => {
     }
 };
 
+// Announce event using AI text-to-speech
+const announceEvent = async (eventName) => {
+    try {
+        const response = await fetch('/api/speak', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: `Time for ${eventName}` })
+        });
+
+        if (!response.ok) {
+            throw new Error('TTS request failed');
+        }
+
+        const data = await response.json();
+
+        // Play the audio
+        const audio = new Audio(`data:audio/mp3;base64,${data.audio}`);
+        await audio.play();
+    } catch (error) {
+        console.log('TTS failed, falling back to chime:', error);
+        playChimeSound();
+    }
+};
+
+// Play schedule notification (uses TTS with chime fallback)
+const playScheduleChime = (eventName = null) => {
+    if (eventName) {
+        announceEvent(eventName);
+    } else {
+        playChimeSound();
+    }
+};
+
 // Update the schedule "Now" header with current time and event info
 const updateScheduleNowHeader = (tasks) => {
     // Store tasks for real-time updates
@@ -1255,9 +1291,9 @@ const updateScheduleNowHeader = (tasks) => {
     // Check if the current event has changed (a new activity has started)
     const currentEventId = currentEvent ? currentEvent.id : null;
     if (previousCurrentEventId !== null && currentEventId !== previousCurrentEventId && currentEventId !== null) {
-        // A new event has started - play chime if enabled
+        // A new event has started - announce it if enabled
         if (chimeEnabled) {
-            playScheduleChime();
+            playScheduleChime(currentEvent.task);
         }
     }
     previousCurrentEventId = currentEventId;

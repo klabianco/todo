@@ -1216,6 +1216,65 @@ switch ($resource) {
         }
         break;
 
+    case 'speak':
+        // Text-to-speech using OpenAI TTS API
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            json_response(['error' => 'Method not allowed'], 405);
+        }
+
+        require __DIR__ . '/../../config/config.php';
+
+        $data = get_request_body();
+        $text = $data['text'] ?? '';
+
+        if (empty(trim($text))) {
+            json_response(['error' => 'Text is required'], 400);
+        }
+
+        try {
+            $apiKey = $_SERVER['OPENAI_API_KEY'];
+
+            // Call OpenAI TTS API
+            $ch = curl_init('https://api.openai.com/v1/audio/speech');
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_POST => true,
+                CURLOPT_HTTPHEADER => [
+                    'Authorization: Bearer ' . $apiKey,
+                    'Content-Type: application/json'
+                ],
+                CURLOPT_POSTFIELDS => json_encode([
+                    'model' => 'tts-1',
+                    'input' => $text,
+                    'voice' => 'nova', // Options: alloy, echo, fable, onyx, nova, shimmer
+                    'response_format' => 'mp3',
+                    'speed' => 1.0
+                ])
+            ]);
+
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($httpCode !== 200) {
+                error_log('TTS API error: ' . $response);
+                json_response(['error' => 'TTS failed'], 500);
+            }
+
+            // Return audio as base64
+            header('Content-Type: application/json');
+            echo json_encode([
+                'audio' => base64_encode($response),
+                'format' => 'mp3'
+            ]);
+            exit;
+
+        } catch (Exception $e) {
+            error_log('TTS error: ' . $e->getMessage());
+            json_response(['error' => 'TTS failed: ' . $e->getMessage()], 500);
+        }
+        break;
+
     case 'grocery-stores':
     case 'store-photos':
         // Grocery stores endpoint - shared across all users
