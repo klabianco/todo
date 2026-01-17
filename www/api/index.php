@@ -799,6 +799,13 @@ switch ($resource) {
                           "Rules:\n- One entry per item id.\n- Do NOT reorder or omit items.\n";
             }
 
+            // Log prompt for debugging
+            $logFile = __DIR__ . '/sort-debug.log';
+            $logEntry = "\n\n=== SORT REQUEST " . date('Y-m-d H:i:s') . " ===\n";
+            $logEntry .= "SYSTEM MESSAGE:\n" . $locationSystemMessage . "\n\n";
+            $logEntry .= "PROMPT:\n" . $locationPrompt . "\n";
+            file_put_contents($logFile, $logEntry, FILE_APPEND);
+
             // Call Location Agent
             $ai = new AI();
             $ai->setJsonResponse(true);
@@ -806,6 +813,10 @@ switch ($resource) {
             $ai->setPrompt($locationPrompt);
 
             $locationResponse = try_ai_models($ai, $aiModelFallbacks);
+
+            // Log response
+            $logEntry = "\nRESPONSE:\n" . (is_string($locationResponse) ? $locationResponse : json_encode($locationResponse, JSON_PRETTY_PRINT)) . "\n";
+            file_put_contents($logFile, $logEntry, FILE_APPEND);
 
             if (is_array($locationResponse) && isset($locationResponse['error'])) {
                 error_log('AI location agent failed: ' . $locationResponse['error']);
@@ -815,6 +826,10 @@ switch ($resource) {
             $locationResult = parse_ai_json_response($locationResponse);
             $locationAssignments = extract_aisle_assignments($locationResult);
 
+            // Log parsed assignments
+            $logEntry = "\nPARSED ASSIGNMENTS:\n" . json_encode($locationAssignments, JSON_PRETTY_PRINT) . "\n";
+            file_put_contents($logFile, $logEntry, FILE_APPEND);
+
             if ($locationAssignments === null || !is_array($locationAssignments)) {
                 error_log('AI location agent invalid response: ' . substr($locationResponse, 0, 1000));
                 json_response(['tasks' => $tasks, 'error' => 'Location agent returned invalid format']);
@@ -822,6 +837,12 @@ switch ($resource) {
 
             // Apply location assignments to tasks
             $tasksWithLocations = apply_location_assignments_to_tasks($tasks, $locationAssignments, $locationIndexByName, $unknownIndex);
+
+            // Log final tasks with locations
+            $logEntry = "\nTASKS WITH LOCATIONS:\n" . json_encode(array_map(function($t) {
+                return ['id' => $t['id'] ?? null, 'task' => $t['task'] ?? null, 'location' => $t['location'] ?? null];
+            }, $tasksWithLocations), JSON_PRETTY_PRINT) . "\n";
+            file_put_contents($logFile, $logEntry, FILE_APPEND);
 
             // Sort by location for Pass 2
             usort($tasksWithLocations, function($a, $b) {
