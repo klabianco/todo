@@ -23,12 +23,14 @@ function renderHead($title = 'Todo', $extraScripts = [], $includeThemeScript = f
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title><?php echo htmlspecialchars($title); ?></title>
+    <meta name="description" content="A simple and shareable todo list app with scheduling, grocery lists, and more.">
     <!-- Open Graph meta tags for social sharing -->
     <meta property="og:title" content="<?php echo htmlspecialchars($title); ?>">
     <meta property="og:type" content="website">
-    <meta property="og:description" content="<?php echo htmlspecialchars($title); ?>">
+    <meta property="og:description" content="A simple and shareable todo list app with scheduling, grocery lists, and more.">
     <meta name="twitter:card" content="summary">
     <meta name="twitter:title" content="<?php echo htmlspecialchars($title); ?>">
+    <meta name="twitter:description" content="A simple and shareable todo list app with scheduling, grocery lists, and more.">
     <!-- Tailwind CSS (production version) -->
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <!-- Font Awesome icons -->
