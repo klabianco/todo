@@ -192,6 +192,9 @@ export const createTaskElement = (
         const timeRaw = task?.scheduledTime || '';
         const hasTime = timeRaw.trim() !== '';
         let timeLabel = 'N/A';
+        let timeIcon = '';
+        let timeOfDay = '';
+
         if (hasTime) {
             // Format time for display (HH:MM -> h:MM AM/PM)
             const [hours, minutes] = timeRaw.split(':');
@@ -199,16 +202,31 @@ export const createTaskElement = (
             const ampm = h >= 12 ? 'PM' : 'AM';
             const h12 = h % 12 || 12;
             timeLabel = `${h12}:${minutes} ${ampm}`;
+
+            // Determine time of day icon
+            if (h >= 5 && h < 12) {
+                // Morning (5am - 11:59am) - sunrise icon
+                timeOfDay = 'morning';
+                timeIcon = `<svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd"/></svg>`;
+            } else if (h >= 12 && h < 18) {
+                // Afternoon (12pm - 5:59pm) - sun icon
+                timeOfDay = 'afternoon';
+                timeIcon = `<svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd"/></svg>`;
+            } else {
+                // Evening/Night (6pm - 4:59am) - moon icon
+                timeOfDay = 'evening';
+                timeIcon = `<svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/></svg>`;
+            }
         }
 
         const timeBadge = document.createElement('span');
-        timeBadge.className = `flex-shrink-0 text-xs px-2 py-0.5 rounded border ${
+        timeBadge.className = `flex-shrink-0 text-xs px-2 py-0.5 rounded border flex items-center ${
             !hasTime
                 ? 'border-gray-200 bg-white text-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-500'
                 : 'border-blue-200 bg-blue-50 text-blue-600 dark:border-blue-600 dark:bg-blue-900 dark:text-blue-300'
         }`;
-        timeBadge.textContent = timeLabel;
-        timeBadge.title = 'Scheduled time';
+        timeBadge.innerHTML = hasTime ? timeIcon + timeLabel : timeLabel;
+        timeBadge.title = hasTime ? `Scheduled time (${timeOfDay})` : 'Scheduled time';
         badgesContainer.appendChild(timeBadge);
     }
 
