@@ -1275,55 +1275,6 @@ switch ($resource) {
         }
         break;
 
-    case 'ifttt-broadcast':
-        // Broadcast to Google Home via IFTTT webhook
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            json_response(['error' => 'Method not allowed'], 405);
-        }
-
-        $data = get_request_body();
-        $webhookUrl = $data['webhookUrl'] ?? '';
-        $message = $data['message'] ?? '';
-
-        if (empty($webhookUrl)) {
-            json_response(['error' => 'Webhook URL is required'], 400);
-        }
-
-        // Validate it's an IFTTT webhook URL
-        if (strpos($webhookUrl, 'maker.ifttt.com') === false) {
-            json_response(['error' => 'Invalid IFTTT webhook URL'], 400);
-        }
-
-        try {
-            $ch = curl_init($webhookUrl);
-            curl_setopt_array($ch, [
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_POST => true,
-                CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-                CURLOPT_POSTFIELDS => json_encode([
-                    'value1' => $message,
-                    'value2' => date('g:i A'),
-                    'value3' => ''
-                ]),
-                CURLOPT_TIMEOUT => 10
-            ]);
-
-            $response = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-
-            if ($httpCode >= 200 && $httpCode < 300) {
-                json_response(['success' => true]);
-            } else {
-                error_log('IFTTT webhook failed: ' . $response);
-                json_response(['error' => 'IFTTT webhook failed'], 500);
-            }
-        } catch (Exception $e) {
-            error_log('IFTTT error: ' . $e->getMessage());
-            json_response(['error' => 'IFTTT failed: ' . $e->getMessage()], 500);
-        }
-        break;
-
     case 'grocery-stores':
     case 'store-photos':
         // Grocery stores endpoint - shared across all users

@@ -432,50 +432,6 @@ renderContainerStart();
                     </div>
                 </div>
 
-                <!-- IFTTT Settings Modal -->
-                <div id="ifttt-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg max-w-md w-full">
-                        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                            <h2 class="text-xl font-bold text-gray-800 dark:text-gray-200">Google Home Settings</h2>
-                        </div>
-                        <div class="p-6">
-                            <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                                Connect to Google Home speakers via IFTTT to broadcast schedule announcements.
-                            </p>
-                            <div class="mb-4">
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">IFTTT Webhook URL</label>
-                                <input
-                                    type="url"
-                                    id="ifttt-webhook-url"
-                                    placeholder="https://maker.ifttt.com/trigger/schedule_event/with/key/YOUR_KEY"
-                                    class="w-full px-4 py-2 border-0 bg-gray-50 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-300 dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-400 dark:focus:ring-gray-500 text-sm"
-                                >
-                            </div>
-                            <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 text-xs text-gray-600 dark:text-gray-400">
-                                <p class="font-medium mb-2">Setup Instructions:</p>
-                                <p class="text-yellow-600 dark:text-yellow-400 mb-2">⚠️ Requires IFTTT Pro subscription</p>
-                                <ol class="list-decimal list-inside space-y-1">
-                                    <li>Go to <a href="https://ifttt.com/create" target="_blank" class="text-blue-500 hover:underline">ifttt.com/create</a></li>
-                                    <li>"If This" → Search "Webhooks" → Select "Receive a web request"</li>
-                                    <li>Event name: <code class="bg-gray-200 dark:bg-gray-600 px-1 rounded">schedule_event</code></li>
-                                    <li>"Then That" → Search "Google Assistant" → Select "Broadcast to all devices"</li>
-                                    <li>Message: <code class="bg-gray-200 dark:bg-gray-600 px-1 rounded">{{Value1}}</code></li>
-                                    <li>Save, then get your key from <a href="https://ifttt.com/maker_webhooks/settings" target="_blank" class="text-blue-500 hover:underline">Webhooks settings</a></li>
-                                    <li>Your URL: <code class="bg-gray-200 dark:bg-gray-600 px-1 rounded text-xs">https://maker.ifttt.com/trigger/schedule_event/with/key/YOUR_KEY</code></li>
-                                </ol>
-                            </div>
-                        </div>
-                        <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
-                            <button id="cancel-ifttt" class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
-                                Cancel
-                            </button>
-                            <button id="save-ifttt" class="px-4 py-2 bg-gray-900 hover:bg-black dark:bg-white dark:hover:bg-gray-100 dark:text-gray-900 text-white font-medium rounded-md">
-                                Save
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Completed tasks section -->
                 <div id="completed-section" class="mt-10 pt-8 border-t border-gray-100 dark:border-gray-700/50" style="display: none;">
                     <button id="completed-toggle" class="flex justify-between items-center w-full mb-4 text-left hover:opacity-80 transition-opacity">
