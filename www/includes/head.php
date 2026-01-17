@@ -31,6 +31,8 @@ function renderHead($title = 'Todo', $extraScripts = [], $includeThemeScript = f
     <meta name="twitter:title" content="<?php echo htmlspecialchars($title); ?>">
     <!-- Tailwind CSS (production version) -->
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <!-- Font Awesome icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <?php foreach ($scriptsToInclude as $script): ?>
     <?php echo $script . "\n    "; ?>
     <?php endforeach; ?>
