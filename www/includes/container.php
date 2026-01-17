@@ -5,7 +5,7 @@
  */
 function renderContainerStart($maxWidth = 'max-w-2xl') {
     ?>
-    <div class="container mx-auto px-6 py-8 <?php echo htmlspecialchars($maxWidth); ?>">
+    <div class="container mx-auto <?php echo htmlspecialchars($maxWidth); ?>">
 <?php
 }
 
