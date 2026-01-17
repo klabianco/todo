@@ -1264,12 +1264,16 @@ const announceEvent = async (eventName) => {
     }
 };
 
-// Play schedule notification (uses TTS with chime fallback)
-const playScheduleChime = (eventName = null) => {
+// Play schedule notification (chime first, then TTS announcement)
+const playScheduleChime = async (eventName = null) => {
+    // Always play the chime first
+    playChimeSound();
+
+    // Then announce with TTS if we have an event name
     if (eventName) {
-        announceEvent(eventName);
-    } else {
-        playChimeSound();
+        // Wait a moment for the chime to finish
+        await new Promise(resolve => setTimeout(resolve, 600));
+        await announceEvent(eventName);
     }
 };
 
