@@ -219,23 +219,14 @@ export const createTaskElement = (
             }
         }
 
-        // Add icon outside the badge (to the left)
-        if (hasTime && timeIcon) {
-            const iconSpan = document.createElement('span');
-            iconSpan.className = 'flex-shrink-0';
-            iconSpan.innerHTML = timeIcon.replace('mr-1', ''); // Remove margin since it's separate now
-            iconSpan.title = timeOfDay.charAt(0).toUpperCase() + timeOfDay.slice(1);
-            badgesContainer.appendChild(iconSpan);
-        }
-
         const timeBadge = document.createElement('span');
-        timeBadge.className = `flex-shrink-0 text-xs px-2 py-0.5 rounded border ${
+        timeBadge.className = `flex-shrink-0 text-xs px-2 py-0.5 rounded border flex items-center gap-1 ${
             !hasTime
                 ? 'border-gray-200 bg-white text-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-500'
                 : 'border-blue-200 bg-blue-50 text-blue-600 dark:border-blue-600 dark:bg-blue-900 dark:text-blue-300'
         }`;
-        timeBadge.textContent = timeLabel;
-        timeBadge.title = 'Scheduled time';
+        timeBadge.innerHTML = hasTime && timeIcon ? `${timeIcon} ${timeLabel}` : timeLabel;
+        timeBadge.title = hasTime ? `Scheduled time (${timeOfDay})` : 'Scheduled time';
         badgesContainer.appendChild(timeBadge);
     }
 
