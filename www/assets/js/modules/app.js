@@ -830,6 +830,45 @@ const setupEventListeners = async () => {
     // Initialize chime UI
     updateChimeToggleUI();
 
+    // IFTTT settings modal
+    const iftttSettingsButton = document.getElementById('ifttt-settings-button');
+    const iftttModal = document.getElementById('ifttt-modal');
+    const iftttWebhookInput = document.getElementById('ifttt-webhook-url');
+    const cancelIftttButton = document.getElementById('cancel-ifttt');
+    const saveIftttButton = document.getElementById('save-ifttt');
+
+    if (iftttSettingsButton && iftttModal) {
+        iftttSettingsButton.addEventListener('click', () => {
+            if (iftttWebhookInput) {
+                iftttWebhookInput.value = iftttWebhookUrl;
+            }
+            iftttModal.classList.remove('hidden');
+        });
+    }
+
+    if (cancelIftttButton && iftttModal) {
+        cancelIftttButton.addEventListener('click', () => {
+            iftttModal.classList.add('hidden');
+        });
+    }
+
+    if (saveIftttButton && iftttModal && iftttWebhookInput) {
+        saveIftttButton.addEventListener('click', () => {
+            iftttWebhookUrl = iftttWebhookInput.value.trim();
+            localStorage.setItem(IFTTT_WEBHOOK_KEY, iftttWebhookUrl);
+            iftttModal.classList.add('hidden');
+        });
+    }
+
+    // Close IFTTT modal on outside click
+    if (iftttModal) {
+        iftttModal.addEventListener('click', (e) => {
+            if (e.target === iftttModal) {
+                iftttModal.classList.add('hidden');
+            }
+        });
+    }
+
     // Grocery store dropdown
     await initializeGroceryStoreDropdown();
     
@@ -1201,7 +1240,9 @@ let previousCurrentEventId = null;
 
 // Chime settings
 const CHIME_ENABLED_KEY = 'todo_schedule_chime_enabled';
+const IFTTT_WEBHOOK_KEY = 'todo_ifttt_webhook_url';
 let chimeEnabled = localStorage.getItem(CHIME_ENABLED_KEY) !== '0'; // Default enabled
+let iftttWebhookUrl = localStorage.getItem(IFTTT_WEBHOOK_KEY) || '';
 
 // Play a soft, gentle chime using Web Audio API (fallback)
 const playChimeSound = () => {
@@ -1238,6 +1279,25 @@ const playChimeSound = () => {
     }
 };
 
+// Broadcast to Google Home via IFTTT webhook
+const broadcastToGoogleHome = async (message) => {
+    if (!iftttWebhookUrl) return;
+
+    try {
+        // IFTTT webhooks need to be called via our server to avoid CORS
+        await fetch('/api/ifttt-broadcast', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                webhookUrl: iftttWebhookUrl,
+                message: message
+            })
+        });
+    } catch (error) {
+        console.log('IFTTT broadcast failed:', error);
+    }
+};
+
 // Announce event using AI text-to-speech
 const announceEvent = async (eventName) => {
     try {
@@ -1262,7 +1322,7 @@ const announceEvent = async (eventName) => {
     }
 };
 
-// Play schedule notification (chime first, then TTS announcement)
+// Play schedule notification (chime first, then TTS announcement, then Google Home)
 const playScheduleChime = async (eventName = null) => {
     // Always play the chime first
     playChimeSound();
@@ -1272,6 +1332,9 @@ const playScheduleChime = async (eventName = null) => {
         // Wait a moment for the chime to finish
         await new Promise(resolve => setTimeout(resolve, 600));
         await announceEvent(eventName);
+
+        // Also broadcast to Google Home if configured
+        broadcastToGoogleHome(`Time for ${eventName}`);
     }
 };
 
